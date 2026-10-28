@@ -1,6 +1,16 @@
+import { demoAccounts, legacyDemoCredentials, legacyDemoEmailMap, mockEmailVerificationCode } from '../mock/accounts';
+
 const USERS_STORAGE_KEY = 'salo-registered-users-v1';
 const wait = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
 const normalizeEmail = (email = '') => email.trim().toLowerCase();
+const getDemoAccount = (email, password) => {
+  const normalizedEmail = normalizeEmail(email);
+  const canonicalEmail = legacyDemoEmailMap[normalizedEmail] || normalizedEmail;
+  const account = demoAccounts.find((entry) => normalizeEmail(entry.email) === canonicalEmail && entry.password === password);
+  if (account) return account;
+  const legacyCredential = legacyDemoCredentials.find((entry) => normalizeEmail(entry.email) === canonicalEmail && entry.password === password);
+  return demoAccounts.find((entry) => entry.user.id === legacyCredential?.accountId) || null;
+};
 
 const readUsers = () => {
   try {
@@ -13,6 +23,18 @@ const readUsers = () => {
 };
 
 export const authService = {
+  getDemoAccounts() {
+    return demoAccounts;
+  },
+
+  getDemoAccount(email, password) {
+    return getDemoAccount(email, password);
+  },
+
+  verifyEmailCode(code) {
+    return code === mockEmailVerificationCode;
+  },
+
   async isEmailRegistered(email) {
     await wait();
     return readUsers().some((user) => normalizeEmail(user.email) === normalizeEmail(email));

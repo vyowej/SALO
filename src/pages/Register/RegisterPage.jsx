@@ -179,9 +179,9 @@ export default function RegisterPage() {
             <section className="register-step" aria-labelledby="register-name-heading">
               <h2 id="register-name-heading">What’s your name?</h2>
               <div className="register-name-fields">
-                <div className="field"><label htmlFor="register-first-name">First name</label><input id="register-first-name" autoComplete="given-name" value={user.first_name} onChange={(event) => updateUser('first_name', event.target.value)} required /></div>
-                <div className="field"><label htmlFor="register-middle-name">Middle name <span>(optional)</span></label><input id="register-middle-name" autoComplete="additional-name" value={user.middle_name} onChange={(event) => updateUser('middle_name', event.target.value)} /></div>
-                <div className="field"><label htmlFor="register-last-name">Last name</label><input id="register-last-name" autoComplete="family-name" value={user.last_name} onChange={(event) => updateUser('last_name', event.target.value)} required /></div>
+                <div className="field"><label htmlFor="register-first-name">First name</label><input id="register-first-name" autoComplete="given-name" value={user.first_name} onChange={(event) => updateUser('first_name', event.target.value)} placeholder="Enter your first name" required /></div>
+                <div className="field"><label htmlFor="register-middle-name">Middle name <span>(optional)</span></label><input id="register-middle-name" autoComplete="additional-name" value={user.middle_name} onChange={(event) => updateUser('middle_name', event.target.value)} placeholder="Enter your middle name" /></div>
+                <div className="field"><label htmlFor="register-last-name">Last name</label><input id="register-last-name" autoComplete="family-name" value={user.last_name} onChange={(event) => updateUser('last_name', event.target.value)} placeholder="Enter your last name" required /></div>
                 <div className="field"><label htmlFor="register-suffix">Suffix <span>(optional)</span></label><select id="register-suffix" value={user.suffix} onChange={(event) => updateUser('suffix', event.target.value)}><option value="">None</option>{['Jr.', 'Sr.', 'II', 'III', 'IV'].map((suffix) => <option key={suffix}>{suffix}</option>)}</select></div>
               </div>
               {[user.first_name, user.middle_name, user.last_name].some((name) => name && !namePattern.test(name.trim())) ? <p className="register-inline-validation" role="status">Use letters, spaces, hyphens, apostrophes, or periods for names.</p> : null}
@@ -198,7 +198,7 @@ export default function RegisterPage() {
             <section className="register-step" aria-labelledby="register-email-heading">
               <h2 id="register-email-heading">What’s your email?</h2>
               <p className="register-step__copy">We’ll use it for sign-in and order updates.</p>
-              <div className="field"><label htmlFor="register-email">Email address</label><input id="register-email" type="email" autoComplete="email" value={user.email} onChange={(event) => updateUser('email', event.target.value)} aria-describedby="register-email-status" required /></div>
+              <div className="field"><label htmlFor="register-email">Email address</label><input id="register-email" type="email" autoComplete="email" value={user.email} onChange={(event) => updateUser('email', event.target.value)} placeholder="Enter your email address" aria-describedby="register-email-status" required /></div>
               {visibleEmailStatus.message ? <p id="register-email-status" className={`register-email-status register-email-status--${visibleEmailStatus.state}`} role="status">{visibleEmailStatus.state === 'checking' ? <RotateCw size={14} /> : null}{visibleEmailStatus.message}{visibleEmailStatus.state === 'taken' ? <Link to="/login">Log in</Link> : null}</p> : null}
             </section>
           ) : null}
@@ -222,7 +222,7 @@ export default function RegisterPage() {
         </form>
 
         <div className="auth-card__actions"><span>Already have an account?</span><Link to="/login" className="text-link">Log in</Link></div>
-        <div className="register-address-note"><MapPin size={14} /> Your address is saved securely in this mock preview.</div>
+        <div className="register-address-note"><MapPin size={14} /> Address details are stored in this browser preview.</div>
       </section>
     </div>
   );

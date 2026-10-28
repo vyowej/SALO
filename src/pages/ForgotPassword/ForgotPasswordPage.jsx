@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}>
           <div className="field">
             <label htmlFor="reset-email">Email address</label>
-            <input id="reset-email" type="email" autoComplete="email" required />
+            <input id="reset-email" type="email" autoComplete="email" placeholder="Enter your email address" required />
           </div>
           {submitted ? <p className="form-success" role="status">If this email has an account, you’ll receive a reset link shortly.</p> : null}
           <Button variant="primary" size="lg" type="submit">Send reset link</Button>

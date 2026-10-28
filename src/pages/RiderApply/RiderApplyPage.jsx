@@ -38,15 +38,16 @@ export default function RiderApplyPage() {
           <form className="checkout-form">
             <div className="field">
               <label htmlFor="rider-name">Full name</label>
-              <input id="rider-name" defaultValue="Rey Cruz" />
+              <input id="rider-name" placeholder="Enter your full name" />
             </div>
             <div className="field">
               <label htmlFor="rider-city">Preferred city</label>
-              <input id="rider-city" defaultValue="Quezon City" />
+              <input id="rider-city" placeholder="Enter your preferred city" />
             </div>
             <div className="field">
               <label htmlFor="rider-vehicle">Vehicle type</label>
-              <select id="rider-vehicle" defaultValue="motorcycle">
+              <select id="rider-vehicle" defaultValue="">
+                <option value="" disabled>Select a vehicle type</option>
                 <option value="motorcycle">Motorcycle</option>
                 <option value="bicycle">Bicycle</option>
                 <option value="car">Car</option>
@@ -54,11 +55,11 @@ export default function RiderApplyPage() {
             </div>
             <div className="field">
               <label htmlFor="rider-schedule">Available hours</label>
-              <input id="rider-schedule" defaultValue="6:00 PM - 12:00 AM" />
+              <input id="rider-schedule" placeholder="Enter your available hours" />
             </div>
             <div className="field">
               <label htmlFor="rider-note">Why do you want to ride with SALO?</label>
-              <textarea id="rider-note" defaultValue="I love helping local food reach the right homes quickly and safely." />
+              <textarea id="rider-note" placeholder="Tell us why you would like to ride with SALO." />
             </div>
             <Button variant="primary" size="lg" type="submit">Submit rider application</Button>
           </form>

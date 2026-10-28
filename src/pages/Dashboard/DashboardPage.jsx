@@ -1,33 +1,28 @@
 import { useEffect, useState } from 'react';
 import { restaurantService } from '../../services/restaurantService';
+import { ownerService } from '../../services/ownerService';
 import { Button } from '../../components/ui/Button';
 import '../Page.css';
 
-const metrics = [
-  { label: 'Gross sales', value: '₱128,420', change: '+12.4%' },
-  { label: 'Orders today', value: '342', change: '+18%' },
-  { label: 'Reservations', value: '58', change: '+9%' },
-  { label: 'Avg. prep time', value: '21 min', change: '-3 min' },
-];
-
-const queue = [
-  { customer: 'Nina L.', item: 'Family Hapag Platter', eta: '12 mins' },
-  { customer: 'Jojo T.', item: 'Chicken Adobo Bowl', eta: '8 mins' },
-  { customer: 'Lena R.', item: 'Halo-Halo x2', eta: '5 mins' },
-];
-
 export default function DashboardPage() {
   const [restaurants, setRestaurants] = useState([]);
+  const [overview, setOverview] = useState(null);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
-      const data = await restaurantService.getAllRestaurants();
-      if (active) setRestaurants(data.slice(0, 4));
+      const [data, dashboardData] = await Promise.all([
+        restaurantService.getAllRestaurants(),
+        ownerService.getOverview('Today'),
+      ]);
+      if (active) {
+        setRestaurants(data.slice(0, 4));
+        setOverview(dashboardData);
+      }
     };
 
-    load();
+    load().catch((error) => console.error('Unable to load restaurant dashboard.', error));
     return () => {
       active = false;
     };
@@ -44,11 +39,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="dashboard-grid stat-grid">
-        {metrics.map((metric) => (
+        {(overview?.metrics || []).map((metric) => (
           <div key={metric.label} className="stat-card">
             <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <small>{metric.change}</small>
+            <strong>{metric.format === 'currency' ? `₱${Number(metric.value).toLocaleString('en-PH')}` : metric.value}</strong>
+            <small>{metric.delta}</small>
           </div>
         ))}
       </div>
@@ -57,40 +52,27 @@ export default function DashboardPage() {
         <div className="info-card dashboard-card">
           <div className="card-header-row">
             <h3>Today’s highlights</h3>
-            <span className="status-badge status-badge--success">Live</span>
+            <span className="status-badge status-badge--success">Preview</span>
           </div>
 
           <ul className="list-plain">
-            <li>
-              <strong>Peak time:</strong>
-              <span>7:00 PM - 8:30 PM</span>
-            </li>
-            <li>
-              <strong>Top seller:</strong>
-              <span>Chicken adobo bowl</span>
-            </li>
-            <li>
-              <strong>Table occupancy:</strong>
-              <span>74% across 18 active tables</span>
-            </li>
-            <li>
-              <strong>Promotion:</strong>
-              <span>Lunch combo uplift +22%</span>
-            </li>
+            {(overview?.highlights || []).map((highlight) => (
+              <li key={highlight.label}><strong>{highlight.label}:</strong><span>{highlight.value}</span></li>
+            ))}
           </ul>
         </div>
 
         <div className="summary-card dashboard-card">
           <div className="card-header-row">
             <h3>Order queue</h3>
-            <span className="muted-label">12 pending</span>
+            <span className="muted-label">{overview?.metrics.find((metric) => metric.label === 'Pending orders')?.value ?? '—'} pending</span>
           </div>
           <div className="activity-list">
-            {queue.map((entry) => (
-              <div key={entry.customer} className="activity-row">
+            {(overview?.activityQueue || []).map((entry) => (
+              <div key={entry.id} className="activity-row">
                 <div>
                   <strong>{entry.customer}</strong>
-                  <div>{entry.item}</div>
+                  <div>{entry.items}</div>
                 </div>
                 <span>{entry.eta}</span>
               </div>

@@ -1,8 +1,7 @@
 import { useRef } from 'react';
+import { locationService } from '../../services/locationService';
 
-const defaultCenter = { latitude: 14.6516, longitude: 121.0493 };
-
-export function MapView({ center = defaultCenter, pin = center, onPinChange, markers = [] }) {
+export function MapView({ center = locationService.getDefaultMapCenter(), pin = center, onPinChange, markers = [] }) {
   const mapRef = useRef(null);
   const normalizedPin = {
     x: Math.min(92, Math.max(8, 50 + ((pin.longitude - center.longitude) * 950))),

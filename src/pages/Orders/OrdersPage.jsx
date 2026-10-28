@@ -78,7 +78,7 @@ export default function OrdersPage() {
           <article key={order.id} className="order-card orders-card">
             <div className="orders-card__header"><div><strong>{order.restaurant}</strong><small>{order.id} · {order.date}</small></div><span className={`status-badge ${isCompleted(order) ? 'status-badge--success' : 'status-badge--pending'}`}>{order.status === 'Delivered' ? 'Completed' : order.status}</span></div>
             <p className="orders-card__items">{order.items}</p>
-            {order.status !== 'Completed' && order.status !== 'Delivered' && order.status !== 'Cancelled' ? <p className="orders-card__eta">Estimated arrival {order.eta || '25–35 min'}</p> : null}
+            {order.status !== 'Completed' && order.status !== 'Delivered' && order.status !== 'Cancelled' && order.eta ? <p className="orders-card__eta">Estimated arrival {order.eta}</p> : null}
             <div className="orders-card__footer"><strong>{formatPeso(order.total)}</strong><div>{isCompleted(order) ? <button type="button" className="btn btn--ghost btn--md" onClick={() => reorder(order)}><RotateCw size={14} /> Reorder</button> : null}<Link to={`/orders/${order.id}`} className="btn btn--primary btn--md">{isCompleted(order) ? 'View receipt' : 'Track my order'}</Link></div></div>
           </article>
         ))}

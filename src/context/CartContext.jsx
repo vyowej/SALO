@@ -111,12 +111,14 @@ export function CartProvider({ children }) {
     setRestaurantCarts((current) => {
       const nextCart = { ...current };
       delete nextCart[restaurantId];
+
+      if (activeRestaurantId === restaurantId) {
+        setActiveRestaurantId(Object.keys(nextCart).find((id) => nextCart[id]?.length) || '');
+      }
+
       return nextCart;
     });
-    if (activeRestaurantId === restaurantId) {
-      setActiveRestaurantId(Object.keys(restaurantCarts).find((id) => id !== restaurantId && restaurantCarts[id]?.length) || '');
-    }
-  }, [activeRestaurantId, restaurantCarts]);
+  }, [activeRestaurantId]);
 
   const effectiveActiveRestaurantId = useMemo(() => restaurantCarts[activeRestaurantId]?.length
     ? activeRestaurantId

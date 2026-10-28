@@ -56,19 +56,21 @@ Only the mock location provider is implemented. Other provider names fail explic
 
 ## Mock behavior and assumptions
 
-- Restaurant, menu, address hierarchy, and profile fixtures live under `src/mock`; pages use `src/services`.
+- All fabricated preview records and demo credentials live under `src/mock`; screens request them through the adapters in `src/services`.
+- Forms start without sample personal details or reservation selections. Placeholders describe the expected input.
 - Account, address, cart, and order state persist in browser local storage. Clearing site data resets the preview.
 - Order statuses advance automatically so the tracking screen can be demonstrated without a backend.
 - Checkout supports Cash on Delivery for delivery and Pay at pick-up for pickup; no payment is processed.
 - Address fixtures provide representative Philippine regions and cities, not an exhaustive official directory.
 - Delivery ranges, fees, voucher codes, ETA values, and reservation behavior are demonstration data, not production promises.
+- See [src/mock/README.md](./src/mock/README.md) for a fixture inventory and backend replacement steps.
 
 ## Project structure
 
 - `src/components` — reusable UI, location, restaurant, and layout components
 - `src/pages` — route-based screens
-- `src/services` — mock service adapters for auth, addresses, locations, and orders
-- `src/mock` — local restaurant, location, and settings fixtures
+- `src/services` — service adapters consumed by pages and components
+- `src/mock` — demo accounts, fabricated records, and preview configuration
 - `src/context` — authentication, cart, and selected-location state
 - `src/styles` — shared design tokens and global CSS
 - `docs/LOCATION_API_NOTES.md` — future location-provider integration notes

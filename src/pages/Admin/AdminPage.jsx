@@ -1,19 +1,20 @@
+import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
+import { adminService } from '../../services/adminService';
+import { formatPeso } from '../../utils/formatPeso';
 import '../Page.css';
 
-const alerts = [
-  { label: 'Restaurant onboarding', detail: '3 vendors have incomplete documents', tone: 'warning' },
-  { label: 'Rider coverage', detail: 'Metro Manila coverage stable but Cebu needs 2 more riders', tone: 'info' },
-  { label: 'Payment reconciliation', detail: '1 settlement is pending review', tone: 'danger' },
-];
-
-const vendors = [
-  { name: 'Mang Toma’s Kitchen', status: 'Healthy', score: '96%' },
-  { name: 'Harana Grill House', status: 'Review', score: '84%' },
-  { name: 'Dagat Kusina', status: 'Healthy', score: '92%' },
-];
-
 export default function AdminPage() {
+  const [overview, setOverview] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    adminService.getOverview().then((data) => {
+      if (active) setOverview(data);
+    }).catch((error) => console.error('Unable to load admin dashboard.', error));
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="section-shell admin-shell">
       <div className="page-header">
@@ -25,26 +26,13 @@ export default function AdminPage() {
       </div>
 
       <div className="dashboard-grid stat-grid">
-        <div className="stat-card">
-          <span>Restaurants</span>
-          <strong>248</strong>
-          <small>+14 this month</small>
-        </div>
-        <div className="stat-card">
-          <span>Active riders</span>
-          <strong>318</strong>
-          <small>92% availability</small>
-        </div>
-        <div className="stat-card">
-          <span>Disputes</span>
-          <strong>8</strong>
-          <small>Down 6%</small>
-        </div>
-        <div className="stat-card">
-          <span>GMV</span>
-          <strong>₱4.2M</strong>
-          <small>+17.8% MoM</small>
-        </div>
+        {(overview?.workspaceStats || []).map((stat) => (
+          <div className="stat-card" key={stat.label}>
+            <span>{stat.label}</span>
+            <strong>{stat.format === 'currency' ? formatPeso(stat.value) : stat.value}</strong>
+            <small>{stat.detail}</small>
+          </div>
+        ))}
       </div>
 
       <div className="dashboard-grid dashboard-columns">
@@ -54,7 +42,7 @@ export default function AdminPage() {
             <span className="muted-label">Needs action</span>
           </div>
           <div className="alert-list">
-            {alerts.map((alert) => (
+            {(overview?.operations || []).map((alert) => (
               <div key={alert.label} className={['alert-item', `alert-item--${alert.tone}`].join(' ')}>
                 <strong>{alert.label}</strong>
                 <span>{alert.detail}</span>
@@ -66,10 +54,10 @@ export default function AdminPage() {
         <div className="summary-card dashboard-card">
           <div className="card-header-row">
             <h3>Partner health</h3>
-            <span className="muted-label">Updated 3m ago</span>
+            <span className="muted-label">Preview data</span>
           </div>
           <div className="activity-list">
-            {vendors.map((vendor) => (
+            {(overview?.vendorHealth || []).map((vendor) => (
               <div key={vendor.name} className="activity-row">
                 <div>
                   <strong>{vendor.name}</strong>

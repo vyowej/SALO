@@ -3,13 +3,10 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Clock3, MapPin, RotateCw, Utensils, X } from 'lucide-react';
 import { restaurantService } from '../../services/restaurantService';
 import RestaurantCard from '../../components/restaurant/RestaurantCard';
-import { categories } from '../../mock/restaurants';
 import { formatPeso } from '../../utils/formatPeso';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { useAuth } from '../../context/AuthContext';
 import './CustomerHome.css';
-
-const filters = ['Open now', 'Filipino only', 'Pork-free', 'Halal-certified', 'Vegetarian', 'Reservations', 'Free delivery'];
 
 function greetingForHour(hour) {
   if (hour < 12) return 'Magandang Umaga';
@@ -21,6 +18,8 @@ export default function CustomerHomePage() {
   const { user, emailVerified, verifyEmail } = useAuth();
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [homeContent, setHomeContent] = useState({ filters: [], promotions: [], estimatedArrival: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
@@ -44,12 +43,16 @@ export default function CustomerHomePage() {
     setLoading(true);
     setError('');
     try {
-      const [restaurantData, orderData] = await Promise.all([
+      const [restaurantData, orderData, categoryData, contentData] = await Promise.all([
         restaurantService.getAllRestaurants(),
         restaurantService.getOrders(),
+        restaurantService.getCategories(),
+        restaurantService.getCustomerHomeContent(),
       ]);
       setRestaurants(restaurantData);
       setOrders(orderData);
+      setCategories(categoryData);
+      setHomeContent(contentData);
     } catch (loadError) {
       console.error('Unable to load customer home data.', loadError);
       setError('We couldn’t load restaurants right now.');
@@ -60,11 +63,18 @@ export default function CustomerHomePage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([restaurantService.getAllRestaurants(), restaurantService.getOrders()])
-      .then(([restaurantData, orderData]) => {
+    Promise.all([
+      restaurantService.getAllRestaurants(),
+      restaurantService.getOrders(),
+      restaurantService.getCategories(),
+      restaurantService.getCustomerHomeContent(),
+    ])
+      .then(([restaurantData, orderData, categoryData, contentData]) => {
         if (!active) return;
         setRestaurants(restaurantData);
         setOrders(orderData);
+        setCategories(categoryData);
+        setHomeContent(contentData);
       })
       .catch((loadError) => {
         console.error('Unable to load customer home data.', loadError);
@@ -112,7 +122,7 @@ export default function CustomerHomePage() {
     setVerificationError('');
     try {
       if (!await verifyEmail(verificationCode)) {
-        setVerificationError('That code didn’t match. Try 123456 for this preview.');
+        setVerificationError('That code does not match. Please check it and try again.');
         return;
       }
       setVerificationOpen(false);
@@ -143,7 +153,7 @@ export default function CustomerHomePage() {
 
       {!emailVerified && !verifyBannerDismissed ? (
         <aside className="verify-email-banner" role="status">
-          <span><strong>Verify your email to place orders</strong><small>Enter the mock code to unlock checkout.</small></span>
+          <span><strong>Verify your email to place orders</strong><small>Verify your email to continue to checkout.</small></span>
           <button type="button" className="btn btn--secondary btn--md" onClick={() => setVerificationOpen(true)}>Verify email</button>
           <button type="button" className="verify-email-banner__dismiss" onClick={dismissVerifyBanner} aria-label="Dismiss email verification reminder"><X size={16} /></button>
         </aside>
@@ -154,7 +164,7 @@ export default function CustomerHomePage() {
           <div className="active-order-card__icon"><Clock3 size={18} /></div>
           <div className="active-order-card__body">
             <strong>{activeOrder.restaurant}</strong>
-            <span>{activeOrder.status} · Estimated arrival in 18–25 min</span>
+            <span>{activeOrder.status} · Estimated arrival in {homeContent.estimatedArrival}</span>
             <div className="order-progress" aria-label={`Order status: ${activeOrder.status}`}><i /></div>
           </div>
           <Link to={`/orders/${activeOrder.id}`} className="btn btn--secondary btn--md">Track</Link>
@@ -174,22 +184,19 @@ export default function CustomerHomePage() {
       </section>
 
       <section className="promo-rail" aria-label="Promotions">
-        <article className="promo-card promo-card--orange">
-          <span className="promo-card__sponsor">SALO PICK · PLATFORM-FUNDED</span>
-          <h3>Gather more, save ₱120</h3>
-          <p>Get a little something off your next order over ₱500.</p>
-        </article>
-        <article className="promo-card promo-card--green">
-          <span className="promo-card__sponsor">MANG TOMA’S KITCHEN · RESTAURANT-FUNDED</span>
-          <h3>Free delivery on family favorites</h3>
-          <p>Share a comforting meal with everyone at home.</p>
-        </article>
+        {homeContent.promotions.map((promotion) => (
+          <article key={promotion.title} className={`promo-card promo-card--${promotion.tone}`}>
+            <span className="promo-card__sponsor">{promotion.sponsor}</span>
+            <h3>{promotion.title}</h3>
+            <p>{promotion.description}</p>
+          </article>
+        ))}
       </section>
 
       <section className="customer-home__restaurants">
         <div className="section-title-row"><div><span className="eyebrow">Made for your neighborhood</span><h2>Now open for order</h2><p className="customer-home__section-copy">Open kitchens first, with more neighborhood spots below.</p></div><Link to="/restaurants">See all <ArrowRight size={14} /></Link></div>
         <div className="filter-rail" aria-label="Restaurant filters">
-          {filters.map((filter) => (
+        {homeContent.filters.map((filter) => (
             <button key={filter} type="button" className={['chip', activeFilter === filter ? 'chip--selected' : ''].filter(Boolean).join(' ')} onClick={() => setActiveFilter(activeFilter === filter ? '' : filter)}>{filter}</button>
           ))}
           <select aria-label="Sort restaurants" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
@@ -231,7 +238,7 @@ export default function CustomerHomePage() {
             <header className="modal__header"><div><h2 id="verification-title">Verify your email</h2><p>We sent a one-time code to {user?.email}.</p></div><button type="button" className="icon-button" aria-label="Close verification dialog" onClick={() => setVerificationOpen(false)}><X size={17} /></button></header>
             <form className="modal__body verification-form" onSubmit={submitVerification}>
               <div className="field"><label htmlFor="verification-code">6-digit code</label><input id="verification-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} required /></div>
-              <p className="verification-hint">Preview code: <strong>123456</strong></p>
+              <p className="verification-hint">Enter the one-time verification code.</p>
               {verificationError ? <p className="form-error" role="alert">{verificationError}</p> : null}
               <button type="submit" className="btn btn--primary btn--full"><Check size={16} /> Verify email</button>
             </form>

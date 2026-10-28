@@ -1,4 +1,5 @@
 import { savedAddresses as mockAddresses } from '../mock/restaurants';
+import { defaultMockAddress } from '../mock/locationData';
 
 const ADDRESSES_KEY = 'salo-saved-addresses-v1';
 const SELECTED_ADDRESS_KEY = 'salo-selected-address-v1';
@@ -13,14 +14,14 @@ const normalizeAddress = (address, index = 0) => ({
     address.city_municipality,
     address.province,
   ].filter(Boolean).join(', '),
-  region: address.region || 'National Capital Region (NCR)',
-  province: address.province || 'Metro Manila',
-  city_municipality: address.city_municipality || 'Quezon City',
-  barangay: address.barangay || 'Bagong Pag-asa',
+  region: address.region || defaultMockAddress.region,
+  province: address.province || defaultMockAddress.province,
+  city_municipality: address.city_municipality || defaultMockAddress.city_municipality,
+  barangay: address.barangay || defaultMockAddress.barangay,
   street: address.street || '',
   house_no: address.house_no || '',
-  latitude: Number(address.latitude) || 14.6516,
-  longitude: Number(address.longitude) || 121.0493,
+  latitude: Number(address.latitude) || defaultMockAddress.latitude,
+  longitude: Number(address.longitude) || defaultMockAddress.longitude,
   is_main: address.is_main ?? Boolean(address.primary),
   primary: address.is_main ?? Boolean(address.primary),
   rider_note: address.rider_note || '',

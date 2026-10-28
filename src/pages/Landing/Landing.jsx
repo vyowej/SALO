@@ -1,35 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Calendar } from 'lucide-react';
-import Button from '../../components/ui/Button';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CalendarDays, Search } from 'lucide-react';
 import RestaurantCard from '../../components/restaurant/RestaurantCard';
 import RestaurantCardSkeleton from '../../components/restaurant/RestaurantCardSkeleton';
 import { restaurantService } from '../../services/restaurantService';
 import { useReveal } from '../../hooks/useReveal';
+import foodBg from '../../assets/food_bg.png';
 import './Landing.css';
-
-const heroCards = [
-  {
-    title: 'Bahay ng Hapag',
-    subtitle: 'Family feast',
-    accent: 'M',
-  },
-  {
-    title: 'Harana Grill',
-    subtitle: 'Fire-kissed favorites',
-    accent: 'H',
-  },
-  {
-    title: 'Pista at Kape',
-    subtitle: 'Coffee and dessert',
-    accent: 'P',
-  },
-];
 
 export function LandingPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [restaurants, setRestaurants] = useState([]);
+  const [landingContent, setLandingContent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useReveal();
@@ -51,10 +34,10 @@ export function LandingPage() {
 
     const loadRestaurants = async () => {
       setIsLoading(true);
-      const data = await restaurantService.getFeaturedRestaurants();
+      const data = await restaurantService.getAllRestaurants();
 
       if (isMounted) {
-        setRestaurants(data);
+        setRestaurants(data.slice(0, 4));
         setIsLoading(false);
       }
     };
@@ -66,134 +49,113 @@ export function LandingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    restaurantService.getLandingContent().then((content) => {
+      if (active) setLandingContent(content);
+    }).catch((error) => console.error('Unable to load landing page content.', error));
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="landing-page">
       <section className="landing-hero section-shell" data-reveal>
-        <div className="landing-hero__copy">
-          <span className="eyebrow">Mabuhay! Salo for every table</span>
-          <h1>
-            <span>Order.</span>
-            <span>Reserve.</span>
-            <span>Gather.</span>
-          </h1>
-          <p>Filipino favorites, easy reservations, and delivery from the neighborhood’s best tables.</p>
+        <div className="hero-photo-shell">
+          <img src={foodBg} alt="" />
+          <div className="landing-hero__copy">
+            <span className="eyebrow landing-hero__eyebrow">MADE FOR GATHERING</span>
+            <h1>
+              Good food tastes <span>better together.</span>
+            </h1>
+            <p>Discover local favorites, order what you love, or save your seat—all in one place.</p>
 
-          <div className="landing-hero__actions">
-            <Button variant="primary" size="lg" onClick={() => navigate('/register')}>Start ordering</Button>
-          </div>
-        </div>
-
-        <div className="landing-hero__visual" aria-label="Featured dishes">
-          {heroCards.map((card, index) => (
-            <div key={card.title} className={['hero-card', `hero-card--${index + 1}`].join(' ')} data-reveal data-reveal-delay={index * 120}>
-              <div className="hero-card__image" aria-hidden="true">
-                <span>{card.accent}</span>
-              </div>
-              <div className="hero-card__body">
-                <strong>{card.title}</strong>
-                <small>{card.subtitle}</small>
-              </div>
+            <div className="landing-searchbar" aria-label="Search restaurants and dishes">
+              <Search size={17} className="search-icon" aria-hidden="true" />
+              <input type="text" placeholder="Search restaurants or cravings" aria-label="Search restaurants or cravings" />
+              <button type="button" className="search-button">Find food</button>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-featured section-shell" data-reveal>
-        <div className="section-header">
-          <div>
-            <span className="eyebrow">Crowd favorites</span>
-            <h2>Popular restaurants</h2>
-          </div>
-          <Link to="/restaurants" className="text-link">See all <ArrowRight size={16} /></Link>
-        </div>
-
-        {isLoading ? (
-          <div className="restaurant-grid">
-            {[...Array(3)].map((_, index) => (
-              <RestaurantCardSkeleton key={index} />
-            ))}
-          </div>
-        ) : (
-          <div className="restaurant-grid">
-            {restaurants.map((restaurant) => (
-              <RestaurantCard key={restaurant.id} restaurant={restaurant} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section id="how-it-works" className="landing-steps section-shell" data-reveal>
-        <div className="section-header section-header--centered">
-          <span className="eyebrow">Easy as one, two, three</span>
-          <h2>How SALO works</h2>
-        </div>
-
-        <div className="steps-rail" aria-label="How SALO works">
-          <div className="step-item" data-reveal data-reveal-delay={0}>
-            <span className="step-index">01</span>
-            <h3>Order</h3>
-            <p>Discover local favorites, pick dishes, and track every detail from the kitchen to your table.</p>
-          </div>
-          <div className="step-item" data-reveal data-reveal-delay={100}>
-            <span className="step-index">02</span>
-            <h3>Reserve</h3>
-            <p>Book a table in seconds for family dinners, birthdays, and catch-ups with friends.</p>
-          </div>
-          <div className="step-item" data-reveal data-reveal-delay={200}>
-            <span className="step-index">03</span>
-            <h3>Gather</h3>
-            <p>Enjoy the moment while the timing, menu, and space are ready before you arrive.</p>
           </div>
         </div>
       </section>
 
-      <section className="landing-reserve-band section-shell" data-reveal>
-        <div className="reserve-band__content">
-          <div className="reserve-band__text">
-            <span className="eyebrow">Reserve a table</span>
-            <h2>Plan your next gathering.</h2>
-          </div>
-
-          <form className="booking-form" aria-label="Reservation form">
-            <div className="booking-form__row">
-              <label>
-                <span>Date</span>
-                <input type="date" defaultValue="2026-11-08" />
-              </label>
-              <label>
-                <span>Time</span>
-                <input type="time" defaultValue="19:30" />
-              </label>
-            </div>
-            <div className="booking-form__guests">
-              {[2, 3, 4, 5, 'Custom'].map((guestValue) => (
-                <button key={guestValue} type="button" className={['guest-chip', guestValue === 4 ? 'is-selected' : ''].filter(Boolean).join(' ')}>
-                  {guestValue}
+      <section className="landing-discover section-shell" data-reveal>
+        <div className="landing-discover__main">
+          <div className="mood-block">
+            <span className="eyebrow eyebrow--soft">WHAT ARE YOU FEELING?</span>
+            <h2>Explore by mood</h2>
+            <div className="filter-row" aria-label="Cuisine filters">
+              {(landingContent?.filterPills || []).map((pill, index) => (
+                <button key={pill} type="button" className={['filter-pill', index === 0 ? 'is-selected' : ''].filter(Boolean).join(' ')}>
+                  {pill}
                 </button>
               ))}
             </div>
-            <Button variant="primary" size="md" className="booking-form__cta">Check availability</Button>
-          </form>
+          </div>
+
+          <div className="popular-block">
+            <div className="popular-header">
+              <span className="eyebrow eyebrow--soft">NEAR YOU</span>
+              <h3>Popular right now</h3>
+            </div>
+
+            <p className="personal-note">Do not sell or share my personal info</p>
+
+            {isLoading ? (
+              <div className="restaurant-grid">
+                {[...Array(4)].map((_, index) => (
+                  <RestaurantCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : (
+              <div className="restaurant-grid">
+                {restaurants.map((restaurant) => (
+                  <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="reserve-band__image" aria-label="Restaurant reservation illustration">
-          <div className="reserve-band__image-card">
-            <Calendar size={20} />
-            <span>Weekend table for 4</span>
-          </div>
-        </div>
-      </section>
+        <aside className="landing-discover__side">
+          <div className="sidebar-card sidebar-card--reservation">
+            <div className="sidebar-card__header">
+              <span className="eyebrow eyebrow--soft">COMING UP</span>
+              <button type="button" className="mini-icon" aria-label="Open calendar">
+                <CalendarDays size={16} />
+              </button>
+            </div>
 
-      <section className="landing-cta section-shell" data-reveal>
-        <div className="cta-card">
-          <div>
-            <span className="eyebrow">Partner with SALO</span>
-            <h2>Add Your Restaurant</h2>
+            <h3>Your table awaits</h3>
+
+            {landingContent?.reservationPreview ? <div className="reservation-item">
+              <div
+                className="reservation-item__visual"
+                style={{ backgroundImage: `linear-gradient(135deg, rgba(82, 99, 77, 0.55), rgba(51, 43, 38, 0.34)), url(${landingContent.reservationPreview.image})` }}
+                aria-hidden="true"
+              />
+              <div className="reservation-item__content">
+                <strong>{landingContent.reservationPreview.restaurant}</strong>
+                <small>{landingContent.reservationPreview.dateTime}</small>
+                <span>Table for {landingContent.reservationPreview.guests}</span>
+              </div>
+            </div> : null}
+
+            <div className="reservation-status">
+              <span className="status-dot" aria-hidden="true" />
+              <strong>{landingContent?.reservationPreview?.status || '—'}</strong>
+              <button type="button">View details</button>
+            </div>
+
+            <button type="button" className="reserve-button" onClick={() => navigate('/reserve')}>Reserve another table →</button>
           </div>
-          <div className="cta-card__actions">
-            <Link to="/partner/apply" className="btn btn--primary">Add Your Restaurant</Link>
+
+          <div className="sidebar-card sidebar-card--owner">
+            <span className="eyebrow eyebrow--soft">FOR RESTAURANT OWNERS</span>
+            <h3>Bring your table to SALO.</h3>
+            <p>Reach more diners and manage everything in one place.</p>
+            <button type="button" className="cta-owner" onClick={() => navigate('/partner/apply')}>Add your restaurant</button>
           </div>
-        </div>
+        </aside>
       </section>
     </div>
   );

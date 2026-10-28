@@ -6,15 +6,21 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, config.mockDelay
 export const riderService = {
   async getOverview(range = 'Today') {
     await wait();
-    const multiplier = range === '30 days' ? 26 : range === '7 days' ? 7 : 1;
+    const seed = riderDashboardSeed.overview;
+    const multiplier = seed.rangeMultipliers[range] || seed.rangeMultipliers.Today;
     return {
       online: riderDashboardSeed.online,
-      earnings: 2480 * multiplier,
-      deliveries: 12 * multiplier,
-      acceptanceRate: 94,
-      cashToRemit: 640,
+      earnings: seed.earnings * multiplier,
+      deliveries: seed.deliveries * multiplier,
+      acceptanceRate: seed.acceptanceRate,
+      cashToRemit: seed.cashToRemit,
+      earningsChange: seed.earningsChange,
+      averageRating: seed.averageRating,
+      settlementDeadline: seed.settlementDeadline,
       weeklyEarnings: riderDashboardSeed.earnings,
       offers: riderDashboardSeed.offers,
+      deliveriesList: riderDashboardSeed.deliveries,
+      completedRoute: seed.completedRoute,
     };
   },
 

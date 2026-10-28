@@ -41,11 +41,11 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="login-email">Email</label>
-            <input id="login-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <input id="login-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email address" required />
           </div>
           <div className="field">
             <label htmlFor="login-password">Password</label>
-            <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+            <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required />
           </div>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <Button variant="primary" size="lg" type="submit">Login</Button>

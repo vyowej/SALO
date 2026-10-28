@@ -6,12 +6,15 @@ import {
   restaurants,
   userProfile,
 } from '../mock/restaurants';
+import { mockOrderFlow } from '../mock/orderFlowData';
+import { customerHomeContent } from '../mock/customerHomeData';
+import { landingFilterPills, landingReservationPreview } from '../mock/landingData';
 import { config } from '../config';
 import { addressService } from './addressService';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ORDER_STORAGE_KEY = 'salo-order-records-v1';
-const orderSteps = ['Placed', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'Completed'];
+const orderSteps = mockOrderFlow.statusSteps;
 const readStoredOrders = () => {
   if (typeof window === 'undefined') return orders.map((order) => ({ ...order }));
   try {
@@ -27,8 +30,8 @@ const saveOrders = (nextOrders) => {
 };
 let orderRecords = readStoredOrders();
 let reservationRecords = reservations.map((reservation) => ({ ...reservation }));
-let nextOrderNumber = 1048;
-let nextReservationNumber = 202;
+let nextOrderNumber = mockOrderFlow.initialOrderNumber;
+let nextReservationNumber = mockOrderFlow.initialReservationNumber;
 const idempotentOrderRequests = new Map();
 
 export const restaurantService = {
@@ -50,6 +53,16 @@ export const restaurantService = {
   async getCategories() {
     await wait(350);
     return categories;
+  },
+
+  async getCustomerHomeContent() {
+    await wait(0);
+    return customerHomeContent;
+  },
+
+  async getLandingContent() {
+    await wait(0);
+    return { filterPills: landingFilterPills, reservationPreview: landingReservationPreview };
   },
 
   async getRestaurantById(id) {
@@ -102,7 +115,7 @@ export const restaurantService = {
         status: 'Placed',
         trackingStep: 0,
         createdAt: new Date().toISOString(),
-        eta: '25–35 min',
+        eta: mockOrderFlow.estimatedDeliveryTime,
         date: new Date().toISOString().slice(0, 10),
       };
       orderRecords = [newOrder, ...orderRecords];
@@ -129,7 +142,7 @@ export const restaurantService = {
       ...order,
       status: orderSteps[nextStep],
       trackingStep: nextStep,
-      rider: nextStep >= 4 ? { name: 'Marco Villanueva', vehicle: 'Motorcycle · SALO-27', initials: 'MV' } : order.rider,
+      rider: nextStep >= 4 ? { ...mockOrderFlow.rider } : order.rider,
     };
     orderRecords = orderRecords.map((item) => item.id === id ? updated : item);
     saveOrders(orderRecords);
@@ -153,7 +166,7 @@ export const restaurantService = {
 
   async createReservation(details) {
     await wait(config.mockDelay);
-    const reservation = { ...details, id: `RES-${nextReservationNumber++}`, status: 'Pending' };
+    const reservation = { ...details, id: `RES-${nextReservationNumber++}`, status: mockOrderFlow.initialReservationStatus };
     reservationRecords = [reservation, ...reservationRecords];
     return reservation;
   },

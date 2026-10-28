@@ -38,23 +38,23 @@ export default function PartnerApplyPage() {
           <form className="checkout-form">
             <div className="field">
               <label htmlFor="partner-name">Restaurant name</label>
-              <input id="partner-name" defaultValue="Salu-salo sa Nayon" />
+              <input id="partner-name" placeholder="Enter your restaurant name" />
             </div>
             <div className="field">
               <label htmlFor="partner-city">Primary city</label>
-              <input id="partner-city" defaultValue="Makati" />
+              <input id="partner-city" placeholder="Enter your primary city" />
             </div>
             <div className="field">
               <label htmlFor="partner-cuisine">Cuisine</label>
-              <input id="partner-cuisine" defaultValue="Filipino / Bicolano" />
+              <input id="partner-cuisine" placeholder="Describe your cuisine" />
             </div>
             <div className="field">
               <label htmlFor="partner-email">Contact email</label>
-              <input id="partner-email" type="email" defaultValue="hello@salusalo.ph" />
+              <input id="partner-email" type="email" placeholder="Enter your business email address" />
             </div>
             <div className="field">
               <label htmlFor="partner-notes">What makes your brand special?</label>
-              <textarea id="partner-notes" defaultValue="We serve home-style dishes and celebratory Filipino meals for families and gatherings." />
+              <textarea id="partner-notes" placeholder="Describe your restaurant and the experience you offer." />
             </div>
             <Button variant="primary" size="lg" type="submit">Submit application</Button>
           </form>

@@ -1,4 +1,5 @@
 import { barangays, cities, provinces, regions } from '../mock/locations/philippines';
+import { defaultMockAddress, defaultMockCoordinates, mockPlaceSearchResults } from '../mock/locationData';
 import { locationSettings } from '../mock/locationSettings';
 import { config } from '../config';
 
@@ -10,18 +11,12 @@ const unsupportedProvider = () => {
 };
 
 const findByName = (list, term) => list.find((entry) => entry.name.toLowerCase().includes(term.toLowerCase()));
-const defaultAddress = {
-  region: 'National Capital Region (NCR)',
-  province: 'Metro Manila',
-  city_municipality: 'Quezon City',
-  barangay: 'Bagong Pag-asa',
-  street: 'Sampaguita Street',
-  house_no: '',
-  latitude: 14.6516,
-  longitude: 121.0493,
-};
 
 export const locationService = {
+  getDefaultMapCenter() {
+    return defaultMockCoordinates;
+  },
+
   async getRegions() {
     await wait();
     unsupportedProvider();
@@ -50,16 +45,13 @@ export const locationService = {
     await wait(200);
     unsupportedProvider();
     if (!query.trim()) return [];
-    return [
-      { ...defaultAddress, label: 'Home', detail: 'Sampaguita Street, Quezon City' },
-      { ...defaultAddress, city_municipality: 'Makati City', barangay: 'Bel-Air', label: 'Office', detail: 'Bel-Air, Makati City' },
-    ].filter((place) => `${place.detail} ${place.label}`.toLowerCase().includes(query.toLowerCase()));
+    return mockPlaceSearchResults.filter((place) => `${place.detail} ${place.label}`.toLowerCase().includes(query.toLowerCase()));
   },
 
   async reverseGeocode(latitude, longitude) {
     await wait(250);
     unsupportedProvider();
-    return { ...defaultAddress, latitude, longitude };
+    return { ...defaultMockAddress, latitude, longitude };
   },
 
   async getCurrentPosition() {
@@ -100,13 +92,13 @@ export const locationService = {
   async resolveMockAddress(address) {
     await wait(200);
     unsupportedProvider();
-    const region = findByName(regions, address.region || 'National Capital Region');
+    const region = findByName(regions, address.region || defaultMockAddress.region);
     const regionProvinces = provinces[region?.code] || [];
-    const province = findByName(regionProvinces, address.province || 'Metro Manila');
+    const province = findByName(regionProvinces, address.province || defaultMockAddress.province);
     const provinceCities = cities[province?.code] || [];
-    const city = findByName(provinceCities, address.city_municipality || 'Quezon City');
+    const city = findByName(provinceCities, address.city_municipality || defaultMockAddress.city_municipality);
     const cityBarangays = barangays[city?.code] || [];
-    const barangay = findByName(cityBarangays, address.barangay || 'Bagong Pag-asa');
+    const barangay = findByName(cityBarangays, address.barangay || defaultMockAddress.barangay);
     return { region, province, city, barangay };
   },
 };

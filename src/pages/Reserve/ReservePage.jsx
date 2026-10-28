@@ -5,8 +5,11 @@ import '../Page.css';
 
 export default function ReservePage() {
   const [restaurants, setRestaurants] = useState([]);
-  const [guests, setGuests] = useState(4);
+  const [guests, setGuests] = useState(null);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
   const [reservation, setReservation] = useState(null);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -20,18 +23,31 @@ export default function ReservePage() {
     };
   }, []);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const date = event.target.elements['reservation-date'].value || '2026-11-08';
-    const time = event.target.elements['reservation-time'].value || '19:30';
+    setError('');
+    const restaurant = restaurants.find((item) => item.id === selectedRestaurantId);
+    if (!restaurant || !guests) {
+      setError('Select a restaurant and party size to continue.');
+      return;
+    }
 
-    setReservation({
-      restaurant: restaurants[0]?.name || 'Mang Toma’s Kitchen',
-      date,
-      time,
-      guests,
-      status: 'Confirmed',
-    });
+    setSubmitting(true);
+    try {
+      const createdReservation = await restaurantService.createReservation({
+        restaurant: restaurant.name,
+        restaurantId: restaurant.id,
+        date: event.target.elements['reservation-date'].value,
+        time: event.target.elements['reservation-time'].value,
+        guests,
+      });
+      setReservation(createdReservation);
+    } catch (submitError) {
+      console.error('Unable to submit reservation request.', submitError);
+      setError('We couldn’t submit your reservation. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (reservation) {
@@ -40,7 +56,7 @@ export default function ReservePage() {
         <div className="confirmation-card">
           <span className="eyebrow">Table reserved</span>
           <h1>Your reservation is set</h1>
-          <p>We’ve saved your booking and sent a confirmation to your email.</p>
+          <p>Your reservation request has been submitted.</p>
           <div className="confirmation-metadata">
             <div><span>Restaurant</span><strong>{reservation.restaurant}</strong></div>
             <div><span>Date</span><strong>{reservation.date}</strong></div>
@@ -67,14 +83,21 @@ export default function ReservePage() {
       <div className="reserve-layout">
         <div className="booking-surface">
           <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label htmlFor="reservation-restaurant">Restaurant</label>
+              <select id="reservation-restaurant" value={selectedRestaurantId} onChange={(event) => setSelectedRestaurantId(event.target.value)} required>
+                <option value="">Select a restaurant</option>
+                {restaurants.map((restaurant) => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}
+              </select>
+            </div>
             <div className="form-grid">
               <div className="field">
                 <label htmlFor="reservation-date">Date</label>
-                <input id="reservation-date" type="date" defaultValue="2026-11-08" />
+                <input id="reservation-date" type="date" required />
               </div>
               <div className="field">
                 <label htmlFor="reservation-time">Time</label>
-                <input id="reservation-time" type="time" defaultValue="19:30" />
+                <input id="reservation-time" type="time" required />
               </div>
             </div>
             <div>
@@ -92,7 +115,8 @@ export default function ReservePage() {
                 ))}
               </div>
             </div>
-            <Button variant="primary" size="lg" type="submit">Check availability</Button>
+            {error ? <p className="form-error" role="alert">{error}</p> : null}
+            <Button variant="primary" size="lg" type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Check availability'}</Button>
           </form>
         </div>
 

@@ -137,11 +137,11 @@ export default function OrderDetailPage() {
 
       <div className="checkout-grid order-detail-grid">
         <section className="info-card order-tracking-card">
-          <div className="order-eta-card"><Clock3 size={20} /><span><strong>{completed ? 'Order completed' : order.status === 'Cancelled' ? 'Order cancelled' : `Arriving in ${order.eta || '25–35 min'}`}</strong><small>{order.status === 'Out for Delivery' ? 'Your rider is on the way.' : completed ? 'Thanks for ordering with SALO.' : 'We’ll update this status automatically in the preview.'}</small></span></div>
+          <div className="order-eta-card"><Clock3 size={20} /><span><strong>{completed ? 'Order completed' : order.status === 'Cancelled' ? 'Order cancelled' : order.eta ? `Arriving in ${order.eta}` : 'Delivery estimate unavailable'}</strong><small>{order.status === 'Out for Delivery' ? 'Your rider is on the way.' : completed ? 'Thanks for ordering with SALO.' : 'We’ll update this status automatically in the preview.'}</small></span></div>
           <h2>Track your order</h2>
           <Stepper steps={orderSteps} currentStep={currentStep(order.status)} />
           {order.status === 'Cancelled' ? <p className="order-cancelled-copy">This order was cancelled{order.cancelReason ? `: ${order.cancelReason}` : '.'}</p> : null}
-          {order.rider ? <article className="order-rider-card"><div className="order-rider-card__avatar"><Bike size={21} /></div><div><strong>{order.rider.name}</strong><small>{order.rider.vehicle}</small></div><a href="tel:+639171112222" className="text-link">Call rider</a></article> : null}
+          {order.rider ? <article className="order-rider-card"><div className="order-rider-card__avatar"><Bike size={21} /></div><div><strong>{order.rider.name}</strong><small>{order.rider.vehicle}</small></div>{order.rider.phone ? <a href={`tel:${order.rider.phone}`} className="text-link">Call rider</a> : null}</article> : null}
           <div className="order-delivery-detail"><MapPin size={16} /><span>{order.deliveryMode || 'Delivery'}{order.address ? ` · ${order.address}` : ''}{order.riderNote ? ` · ${order.riderNote}` : ''}</span></div>
           <section className="order-items-summary"><h2>Items</h2>{order.cartItems?.length ? order.cartItems.map((item, index) => <div key={`${item.id}-${index}`}><span>{item.quantity} × {item.name}{item.optionLabels?.length ? <small>{item.optionLabels.join(', ')}</small> : null}</span><strong>{formatPeso(item.unitPrice * item.quantity)}</strong></div>) : <p>{order.items}</p>}</section>
           {order.status === 'Placed' ? <Button variant="ghost" onClick={() => setCancelOpen(true)}>Cancel order</Button> : null}
