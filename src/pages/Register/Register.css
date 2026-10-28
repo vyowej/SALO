@@ -1,0 +1,251 @@
+.register-card {
+  width: min(100%, 38rem);
+}
+
+.register-progress {
+  margin: 1.15rem 0 1.35rem;
+}
+
+.register-progress__labels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.3rem;
+  margin-bottom: 0.45rem;
+}
+
+.register-progress__labels span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.register-progress__labels .is-current {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.register-progress__track,
+.password-meter {
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--primary-soft);
+}
+
+.register-progress__track span,
+.password-meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width var(--transition-fast);
+}
+
+.register-progress__fill--1 {
+  width: 25%;
+}
+
+.register-progress__fill--2 {
+  width: 50%;
+}
+
+.register-progress__fill--3 {
+  width: 75%;
+}
+
+.register-progress__fill--4 {
+  width: 100%;
+}
+
+.register-step {
+  display: grid;
+  gap: 1rem;
+}
+
+.register-step h2 {
+  font-family: var(--body-font);
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.register-step__copy {
+  margin-top: -0.65rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.register-inline-validation {
+  margin-top: -0.5rem;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+.register-name-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.register-name-fields .field label span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.register-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-top: 1.25rem;
+}
+
+.register-actions .btn--primary {
+  min-width: 7rem;
+}
+
+.register-email-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.register-email-status--available,
+.password-rules .is-valid {
+  color: var(--success);
+}
+
+.register-email-status--taken,
+.register-email-status--error {
+  color: var(--danger);
+}
+
+.register-email-status--checking {
+  color: var(--muted);
+}
+
+.register-email-status a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.password-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface);
+}
+
+.password-input input {
+  border: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.password-input button {
+  display: grid;
+  place-items: center;
+  width: 2.7rem;
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.password-meter__fill--0,
+.password-meter__fill--1 {
+  width: 20%;
+  background: var(--danger);
+}
+
+.password-meter__fill--2 {
+  width: 40%;
+  background: var(--warning);
+}
+
+.password-meter__fill--3 {
+  width: 60%;
+  background: var(--mango);
+}
+
+.password-meter__fill--4 {
+  width: 80%;
+  background: var(--leaf);
+}
+
+.password-meter__fill--5 {
+  width: 100%;
+  background: var(--success);
+}
+
+.password-rules {
+  display: grid;
+  gap: 0.35rem;
+  margin: -0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+.password-rules li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.privacy-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.77rem;
+  line-height: 1.5;
+}
+
+.privacy-consent input {
+  margin-top: 0.2rem;
+  accent-color: var(--primary);
+}
+
+.register-address-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.register-success {
+  display: grid;
+  justify-items: center;
+  gap: 0.65rem;
+  text-align: center;
+}
+
+.register-success p {
+  max-width: 25rem;
+  color: var(--muted);
+}
+
+.register-success__icon {
+  display: grid;
+  width: 3.2rem;
+  height: 3.2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+
+@media (max-width: 520px) {
+  .register-name-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .register-progress__labels span {
+    font-size: 0.62rem;
+  }
+}
