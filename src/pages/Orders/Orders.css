@@ -25,7 +25,7 @@
 
 .orders-tabs button.is-selected {
   background: var(--leaf);
-  color: #fff;
+  color: var(--on-forest);
 }
 
 .orders-message {

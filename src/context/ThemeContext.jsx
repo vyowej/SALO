@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 const ThemeContext = createContext(null);
 const THEME_STORAGE_KEY = 'salo-theme-v1';
@@ -18,7 +19,7 @@ const readStoredTheme = () => {
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(readStoredTheme);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -27,16 +28,35 @@ export function ThemeProvider({ children }) {
     }
   }, [theme]);
 
+  const applyTheme = useCallback((nextTheme) => {
+    const updateTheme = () => {
+      document.documentElement.dataset.theme = nextTheme;
+      flushSync(() => setThemeState(nextTheme));
+    };
+
+    if (
+      typeof document.startViewTransition === 'function'
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      && !window.matchMedia('(prefers-reduced-transparency: reduce)').matches
+    ) {
+      document.startViewTransition(updateTheme);
+      return;
+    }
+
+    updateTheme();
+  }, []);
+
   const setTheme = useCallback((nextTheme) => {
     if (!VALID_THEMES.has(nextTheme)) {
       throw new Error(`Unsupported appearance theme: ${nextTheme}`);
     }
-    setThemeState(nextTheme);
-  }, []);
+    if (nextTheme === theme) return;
+    applyTheme(nextTheme);
+  }, [applyTheme, theme]);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark');
-  }, []);
+    applyTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [applyTheme, theme]);
 
   const value = useMemo(() => ({
     theme,

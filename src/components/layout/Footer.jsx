@@ -1,17 +1,13 @@
 import { Camera, Globe, MapPin, MessageCircle, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import logo from '../../assets/Salo_logo.png';
+import BrandLogo from '../brand/BrandLogo';
 
 export function Footer() {
-  const logoUrl = logo || '/Salo_logo.png';
-
   return (
     <footer className="site-footer">
       <div className="section-shell footer-shell">
         <div className="footer-brand">
-          <img src={logoUrl} alt="SALO logo" className="footer-brand__logo" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-          {!logoUrl ? null : <span className="brand-wordmark" aria-label="SALO">SALO</span>}
-          <p>Order. Reserve. Gather.</p>
+          <BrandLogo className="footer-brand__logo" />
         </div>
 
         <div className="footer-columns">

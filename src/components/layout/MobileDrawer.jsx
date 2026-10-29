@@ -2,8 +2,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, X } from 'lucide-react';
 import { USER_ROLES } from '../../context/AuthContext';
 import { useEffect, useRef } from 'react';
-import logo from '../../assets/salo_logoo.png';
 import { PUBLIC_NAV_LINKS, SHELL_LABELS } from '../../constants/navigation';
+import BrandLogo from '../brand/BrandLogo';
 
 export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQuery, onSearchQueryChange }) {
   const location = useLocation();
@@ -56,7 +56,7 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
       <button type="button" className="drawer-backdrop" aria-label="Close navigation menu" onClick={onClose} />
       <aside id="mobile-navigation-drawer" className="mobile-drawer" aria-label="Mobile navigation drawer" aria-modal="true" role="dialog" ref={drawerRef}>
         <div className="mobile-drawer__header">
-          <Link to="/" className="mobile-drawer__brand" aria-label={SHELL_LABELS.homeLink} onClick={onClose}><img src={logo} alt={SHELL_LABELS.homeLink} /></Link>
+          <BrandLogo className="mobile-drawer__brand" onClick={onClose} />
           <button type="button" className="drawer-close" onClick={onClose} aria-label={SHELL_LABELS.closeMenu}>
             <X size={20} />
           </button>

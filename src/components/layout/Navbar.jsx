@@ -7,9 +7,9 @@ import { useLocationContext } from '../../context/LocationContext';
 import { useTheme } from '../../context/ThemeContext';
 import LocationPicker from '../location/LocationPicker';
 import MobileDrawer from './MobileDrawer';
+import BrandLogo from '../brand/BrandLogo';
 import { restaurantService } from '../../services/restaurantService';
 import { getPageTitle, getShellRole, PUBLIC_NAV_LINKS, ROLE_LABELS, SHELL_LABELS } from '../../constants/navigation';
-import logo from '../../assets/salo_logoo.png';
 
 const viewDetails = {
   [USER_ROLES.CUSTOMER]: { label: ROLE_LABELS[USER_ROLES.CUSTOMER], to: '/', icon: UserCircle2 },
@@ -126,9 +126,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
     <>
       <header className={navClass}>
         <nav className="navbar section-shell" aria-label={SHELL_LABELS.navigation}>
-          <Link to="/" className="navbar__brand" aria-label={SHELL_LABELS.homeLink}>
-            <img src={logo} alt={SHELL_LABELS.homeLink} className="navbar__logo" />
-          </Link>
+          <BrandLogo className="navbar__brand" />
 
           {!appMode ? (
             <div className="navbar__center" aria-label={SHELL_LABELS.marketingLinks}>

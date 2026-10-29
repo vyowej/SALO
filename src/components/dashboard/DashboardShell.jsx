@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike,
   CalendarDays,
@@ -24,7 +24,7 @@ import {
 import { useAuth, USER_ROLES } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { CUSTOMER_BOTTOM_NAV, getShellRole, NAVIGATION_GROUPS, ROLE_LABELS, ROLE_PATHS, SHELL_LABELS } from '../../constants/navigation';
-import logo from '../../assets/salo_logoo.png';
+import BrandLogo from '../brand/BrandLogo';
 
 const ICONS = {
   home: Home,
@@ -214,10 +214,7 @@ export function DashboardShell({ children }) {
         ref={drawerRef}
       >
         <div className="dashboard-sidebar__brand-row">
-          <Link className="dashboard-sidebar__brand" to="/" aria-label={`${SHELL_LABELS.brand} — ${SHELL_LABELS.tagline}`}>
-            <img src={logo} alt="" />
-            <span>{SHELL_LABELS.brand}</span>
-          </Link>
+          <BrandLogo className="dashboard-sidebar__brand" to={ROLE_PATHS[activeRole] || '/'} variant="responsive" />
           <button
             type="button"
             className="dashboard-sidebar__collapse"

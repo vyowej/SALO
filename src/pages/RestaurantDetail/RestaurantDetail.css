@@ -33,7 +33,7 @@
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: rgba(255,255,255,0.94);
+  background: var(--surface-dense);
   color: var(--ink);
 }
 
@@ -166,7 +166,7 @@
   border: 0;
   border-radius: 50%;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-action);
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -292,7 +292,7 @@
   gap: 0.35rem;
   padding: 0.7rem;
   border-radius: 0.7rem;
-  background: #fff4d9;
+  background: var(--status-warning-bg);
   color: var(--warning);
   font-size: 0.76rem;
 }
@@ -332,7 +332,7 @@
 }
 
 .restaurant-sticky-cart small {
-  color: rgba(255,255,255,0.8);
+  color: var(--on-action);
   font-size: 0.68rem;
 }
 
