@@ -3,13 +3,7 @@ import { Search, ShoppingCart, X } from 'lucide-react';
 import { USER_ROLES } from '../../context/AuthContext';
 import { useEffect, useRef } from 'react';
 import logo from '../../assets/salo_logoo.png';
-
-const links = [
-  { label: 'Home', to: '/' },
-  { label: 'Restaurants', to: '/restaurants' },
-  { label: 'Reserve a Table', to: '/reserve' },
-  { label: 'How It Works', to: '/#how-it-works' },
-];
+import { PUBLIC_NAV_LINKS, SHELL_LABELS } from '../../constants/navigation';
 
 export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQuery, onSearchQueryChange }) {
   const location = useLocation();
@@ -50,7 +44,8 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
     event.preventDefault();
     const params = new URLSearchParams();
     if (searchQuery.trim()) params.set('q', searchQuery.trim());
-    navigate(`/restaurants${params.size ? `?${params}` : ''}`);
+    const target = `/restaurants${params.size ? `?${params}` : ''}`;
+    navigate(target, { state: { gateTarget: target } });
     onClose();
   };
 
@@ -61,53 +56,53 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
       <button type="button" className="drawer-backdrop" aria-label="Close navigation menu" onClick={onClose} />
       <aside id="mobile-navigation-drawer" className="mobile-drawer" aria-label="Mobile navigation drawer" aria-modal="true" role="dialog" ref={drawerRef}>
         <div className="mobile-drawer__header">
-          <Link to="/" className="mobile-drawer__brand" aria-label="SALO - Order. Reserve. Gather." onClick={onClose}><img src={logo} alt="SALO - Order. Reserve. Gather." /></Link>
-          <button type="button" className="drawer-close" onClick={onClose} aria-label="Close menu">
+          <Link to="/" className="mobile-drawer__brand" aria-label={SHELL_LABELS.homeLink} onClick={onClose}><img src={logo} alt={SHELL_LABELS.homeLink} /></Link>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label={SHELL_LABELS.closeMenu}>
             <X size={20} />
           </button>
         </div>
 
-        <nav className="mobile-drawer__nav" aria-label="Main navigation">
-          {links.filter((link) => !user || link.label !== 'How It Works').map((link) => (
-            <Link key={link.to} to={link.to} className={['mobile-drawer__link', linkIsActive(link.to) ? 'is-active' : ''].filter(Boolean).join(' ')} onClick={onClose}>
+        <nav className="mobile-drawer__nav" aria-label={SHELL_LABELS.navigation}>
+          {PUBLIC_NAV_LINKS.filter((link) => !user || link.label !== SHELL_LABELS.howItWorks).map((link) => (
+            <Link key={link.path} to={link.path} className={['mobile-drawer__link', linkIsActive(link.path) ? 'is-active' : ''].filter(Boolean).join(' ')} onClick={onClose}>
               {link.label}
             </Link>
           ))}
           {userRole === USER_ROLES.RESTAURANT_OWNER ? (
-            <NavLink to="/dashboard" className="mobile-drawer__link" onClick={onClose}>Restaurant Dashboard</NavLink>
+            <NavLink to="/dashboard" className="mobile-drawer__link" onClick={onClose}>{SHELL_LABELS.pages.dashboard}</NavLink>
           ) : null}
           {userRole === USER_ROLES.ADMIN ? (
-            <NavLink to="/admin" className="mobile-drawer__link" onClick={onClose}>Admin Console</NavLink>
+            <NavLink to="/admin" className="mobile-drawer__link" onClick={onClose}>{SHELL_LABELS.pages.admin}</NavLink>
           ) : null}
           {userRole === USER_ROLES.CUSTOMER ? (
             <>
-              <NavLink to="/orders" className="mobile-drawer__link" onClick={onClose}>My Orders</NavLink>
-              <NavLink to="/reservations" className="mobile-drawer__link" onClick={onClose}>My Reservations</NavLink>
+              <NavLink to="/orders" className="mobile-drawer__link" onClick={onClose}>{SHELL_LABELS.nav.orders}</NavLink>
+              <NavLink to="/reservations" className="mobile-drawer__link" onClick={onClose}>{SHELL_LABELS.nav.reservations}</NavLink>
             </>
           ) : null}
         </nav>
 
         <form className="mobile-drawer__search" onSubmit={submitSearch}>
-          <label htmlFor="mobile-restaurant-search">Search restaurants or dishes</label>
+          <label htmlFor="mobile-restaurant-search">{SHELL_LABELS.mobileSearch}</label>
           <div className="mobile-drawer__search-field">
             <Search size={16} />
-            <input id="mobile-restaurant-search" type="search" value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} />
-            <button type="submit">Search</button>
+            <input id="mobile-restaurant-search" type="search" aria-label={SHELL_LABELS.mobileSearch} value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} />
+            <button type="submit">{SHELL_LABELS.submitSearch}</button>
           </div>
         </form>
 
         <div className="mobile-drawer__actions">
           <Link to="/cart" className="btn btn--ghost btn--full" onClick={onClose}>
-            <ShoppingCart size={16} /> Cart
+            <ShoppingCart size={16} /> {SHELL_LABELS.cart}
           </Link>
           {user ? (
             <button type="button" className="btn btn--primary btn--full" onClick={onLogout}>
-              Log out
+              {SHELL_LABELS.logout}
             </button>
           ) : (
             <>
-              <Link to="/login" className="btn btn--ghost btn--full" onClick={onClose}>Login</Link>
-              <Link to="/register" className="btn btn--primary btn--full" onClick={onClose}>Sign Up</Link>
+              <Link to="/login" className="btn btn--ghost btn--full" onClick={onClose}>{SHELL_LABELS.login}</Link>
+              <Link to="/register" className="btn btn--primary btn--full" onClick={onClose}>{SHELL_LABELS.signUp}</Link>
             </>
           )}
         </div>

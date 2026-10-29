@@ -1,6 +1,8 @@
-export function Card({ children, className = '', ...props }) {
+export function Card({ children, variant = 'default', className = '', ...props }) {
+  const variantClass = variant === 'glass' ? 'glass-card' : variant === 'data' ? 'glass-data' : '';
+
   return (
-    <article className={['card', className].filter(Boolean).join(' ')} {...props}>
+    <article className={['card', variantClass, className].filter(Boolean).join(' ')} {...props}>
       {children}
     </article>
   );

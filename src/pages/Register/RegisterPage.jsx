@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Check, Eye, EyeOff, MapPin, RotateCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import AddressForm from '../../components/location/AddressForm';
 import { authService } from '../../services/authService';
-import { DEMO_ACCOUNTS, useAuth } from '../../context/AuthContext';
+import { DEMO_ACCOUNTS, USER_ROLES, useAuth } from '../../context/AuthContext';
+import { getPostAuthDestination } from '../../utils/authRedirect';
 import '../Page.css';
 import './Register.css';
+import { config } from '../../config';
 
 const steps = ['Name', 'Address', 'Email', 'Password'];
 const namePattern = /^[\p{L}][\p{L}\s.'-]*$/u;
@@ -35,6 +37,7 @@ function PasswordRules({ password }) {
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register } = useAuth();
   const [step, setStep] = useState(0);
   const [user, setUser] = useState({ first_name: '', middle_name: '', last_name: '', suffix: '', email: '', password: '' });
@@ -55,11 +58,13 @@ export default function RegisterPage() {
     const timer = window.setTimeout(async () => {
       if (active) setEmailStatus({ email, state: 'checking', message: 'Checking this email…' });
       try {
-        const demoMatch = DEMO_ACCOUNTS.some((account) => account.email === email);
+        const demoMatch = config.useMock && DEMO_ACCOUNTS.some((account) => account.email === email);
         const registered = demoMatch || await authService.isEmailRegistered(email);
-        if (active) setEmailStatus(registered
-          ? { email, state: 'taken', message: 'This email is already registered. Try logging in instead.' }
-          : { email, state: 'available', message: 'This email is available.' });
+        if (active) setEmailStatus(registered === null
+          ? { email, state: 'idle', message: 'Your email will be checked when you create the account.' }
+          : registered
+            ? { email, state: 'taken', message: 'This email is already registered. Try logging in instead.' }
+            : { email, state: 'available', message: 'This email is available.' });
       } catch (checkError) {
         console.error('Unable to check whether the email is registered.', checkError);
         if (active) setEmailStatus({ email, state: 'error', message: 'We couldn’t check this email. Please try again.' });
@@ -100,8 +105,8 @@ export default function RegisterPage() {
       if (visibleEmailStatus.state === 'checking') return 'Please wait while we check this email.';
       if (visibleEmailStatus.state === 'taken') return 'This email is already registered. Try logging in instead.';
       try {
-        const registered = DEMO_ACCOUNTS.some((account) => account.email === user.email.trim().toLowerCase())
-          || await authService.isEmailRegistered(user.email);
+        const demoMatch = config.useMock && DEMO_ACCOUNTS.some((account) => account.email === user.email.trim().toLowerCase());
+        const registered = demoMatch || await authService.isEmailRegistered(user.email);
         if (registered) return 'This email is already registered. Try logging in instead.';
       } catch (checkError) {
         console.error('Unable to verify email availability.', checkError);
@@ -157,8 +162,14 @@ export default function RegisterPage() {
           <span className="register-success__icon"><Check size={26} /></span>
           <span className="eyebrow">You’re all set</span>
           <h1 id="register-success-title">Mabuhay, {createdName}!</h1>
-          <p>Your SALO account is ready. Verify your email before placing your first order.</p>
-          <Button variant="primary" size="lg" onClick={() => navigate('/')}>Start ordering</Button>
+          <p>Your SALO account is ready. You can verify your email and manage your details from your profile.</p>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => navigate(getPostAuthDestination(location.state?.from, USER_ROLES.CUSTOMER), { replace: true })}
+          >
+            Start ordering
+          </Button>
         </section>
       </div>
     );
@@ -199,7 +210,7 @@ export default function RegisterPage() {
               <h2 id="register-email-heading">What’s your email?</h2>
               <p className="register-step__copy">We’ll use it for sign-in and order updates.</p>
               <div className="field"><label htmlFor="register-email">Email address</label><input id="register-email" type="email" autoComplete="email" value={user.email} onChange={(event) => updateUser('email', event.target.value)} placeholder="Enter your email address" aria-describedby="register-email-status" required /></div>
-              {visibleEmailStatus.message ? <p id="register-email-status" className={`register-email-status register-email-status--${visibleEmailStatus.state}`} role="status">{visibleEmailStatus.state === 'checking' ? <RotateCw size={14} /> : null}{visibleEmailStatus.message}{visibleEmailStatus.state === 'taken' ? <Link to="/login">Log in</Link> : null}</p> : null}
+              {visibleEmailStatus.message ? <p id="register-email-status" className={`register-email-status register-email-status--${visibleEmailStatus.state}`} role="status">{visibleEmailStatus.state === 'checking' ? <RotateCw size={14} /> : null}{visibleEmailStatus.message}{visibleEmailStatus.state === 'taken' ? <Link to="/login" state={{ from: location.state?.from }}>Log in</Link> : null}</p> : null}
             </section>
           ) : null}
           {step === 3 ? (
@@ -221,7 +232,7 @@ export default function RegisterPage() {
           </div>
         </form>
 
-        <div className="auth-card__actions"><span>Already have an account?</span><Link to="/login" className="text-link">Log in</Link></div>
+        <div className="auth-card__actions"><span>Already have an account?</span><Link to="/login" state={{ from: location.state?.from }} className="text-link">Log in</Link></div>
         <div className="register-address-note"><MapPin size={14} /> Address details are stored in this browser preview.</div>
       </section>
     </div>

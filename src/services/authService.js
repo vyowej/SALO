@@ -1,4 +1,6 @@
 import { demoAccounts, legacyDemoCredentials, legacyDemoEmailMap, mockEmailVerificationCode } from '../mock/accounts';
+import { config } from '../config';
+import { apiRequest } from './apiClient';
 
 const USERS_STORAGE_KEY = 'salo-registered-users-v1';
 const wait = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -11,6 +13,30 @@ const getDemoAccount = (email, password) => {
   const legacyCredential = legacyDemoCredentials.find((entry) => normalizeEmail(entry.email) === canonicalEmail && entry.password === password);
   return demoAccounts.find((entry) => entry.user.id === legacyCredential?.accountId) || null;
 };
+
+const normalizeApiUser = (user) => {
+  const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    ...user,
+    first_name: nameParts[0] || '',
+    last_name: nameParts.slice(1).join(' '),
+    avatar: user.avatar_url || `${nameParts[0]?.[0] || ''}${nameParts[nameParts.length - 1]?.[0] || ''}`,
+    email_verified: Boolean(user.email_verified_at),
+  };
+};
+
+const formatApiAddress = (address) => ({
+  label: address.label,
+  region: address.region,
+  province: address.province,
+  city_municipality: address.city_municipality,
+  barangay: address.barangay,
+  street: address.street,
+  house_no: address.house_no || null,
+  latitude: address.latitude,
+  longitude: address.longitude,
+  rider_note: address.rider_note || null,
+});
 
 const readUsers = () => {
   try {
@@ -36,11 +62,28 @@ export const authService = {
   },
 
   async isEmailRegistered(email) {
+    if (!config.useMock) return null;
     await wait();
     return readUsers().some((user) => normalizeEmail(user.email) === normalizeEmail(email));
   },
 
   async register({ user, address, password }) {
+    if (!config.useMock) {
+      const name = user.name || [user.first_name, user.middle_name, user.last_name, user.suffix].filter(Boolean).join(' ');
+      const created = await apiRequest('/auth/register', {
+        method: 'POST',
+        body: {
+          name,
+          email: normalizeEmail(user.email),
+          phone: user.phone || null,
+          password,
+          password_confirmation: password,
+          address: address ? formatApiAddress(address) : undefined,
+        },
+      });
+      return normalizeApiUser(created);
+    }
+
     await wait(500);
     const registeredUsers = readUsers();
     if (registeredUsers.some((entry) => normalizeEmail(entry.email) === normalizeEmail(user.email))) {
@@ -63,6 +106,18 @@ export const authService = {
   },
 
   async login(email, password) {
+    if (!config.useMock) {
+      try {
+        return normalizeApiUser(await apiRequest('/auth/login', {
+          method: 'POST',
+          body: { email: normalizeEmail(email), password },
+        }));
+      } catch (error) {
+        if (error.status === 401) return null;
+        throw error;
+      }
+    }
+
     await wait(200);
     const user = readUsers().find((entry) => normalizeEmail(entry.email) === normalizeEmail(email) && entry.password === password);
     if (!user) return null;
@@ -77,6 +132,57 @@ export const authService = {
     const updatedUser = { ...user, ...updates };
     window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users.map((entry) => entry.id === id ? updatedUser : entry)));
     return { ...updatedUser, password: undefined };
+  },
+
+  async getCurrentUser() {
+    return normalizeApiUser(await apiRequest('/auth/me'));
+  },
+
+  async updateProfile(updates) {
+    return normalizeApiUser(await apiRequest('/customer/profile', { method: 'PATCH', body: updates }));
+  },
+
+  async deactivateAccount({ password, reason }) {
+    return apiRequest('/customer/profile', { method: 'DELETE', body: { password, reason } });
+  },
+
+  async requestPasswordReset(email) {
+    return apiRequest('/auth/forgot-password', { method: 'POST', body: { email: normalizeEmail(email) } });
+  },
+
+  async resetPassword({ email, token, password, passwordConfirmation }) {
+    return apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: {
+        email: normalizeEmail(email),
+        token,
+        password,
+        password_confirmation: passwordConfirmation,
+      },
+    });
+  },
+
+  async sendVerificationEmail() {
+    return apiRequest('/auth/email/verification/send', { method: 'POST', body: {} });
+  },
+
+  async verifyEmailToken(token) {
+    return normalizeApiUser(await apiRequest('/auth/email/verification/verify', {
+      method: 'POST',
+      body: { token },
+    }));
+  },
+
+  async logout() {
+    if (!config.useMock) await apiRequest('/auth/logout', { method: 'POST', body: {} });
+  },
+
+  async getSettings() {
+    return apiRequest('/customer/settings');
+  },
+
+  async updateSettings(updates) {
+    return apiRequest('/customer/settings', { method: 'PATCH', body: updates });
   },
 };
 

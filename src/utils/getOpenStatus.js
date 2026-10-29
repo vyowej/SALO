@@ -37,6 +37,7 @@ export function getOpenStatus(restaurant, now = new Date()) {
 
   const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if ((restaurant.closureDates || []).includes(dateKey)) return { status: 'closed', label: 'Closed today' };
+  if (restaurant.is_24_7) return { status: 'open', label: 'Open 24/7' };
 
   const day = now.getDay();
   const currentMinute = now.getHours() * 60 + now.getMinutes();

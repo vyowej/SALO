@@ -55,6 +55,36 @@
   color: var(--muted);
 }
 
+.profile-account-form {
+  display: grid;
+  gap: 0.7rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.profile-account-form > p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.profile-verification {
+  display: grid;
+  justify-items: start;
+  gap: 0.3rem;
+}
+
+.profile-verification small {
+  color: var(--muted);
+}
+
+.profile-deactivate {
+  display: grid;
+  justify-items: start;
+  gap: 0.65rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
 .profile-address-panel__header {
   display: flex;
   justify-content: space-between;
@@ -65,6 +95,27 @@
 .profile-address-list {
   display: grid;
   gap: 0.5rem;
+}
+
+.profile-address-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.profile-address-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.profile-address-confirm {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .profile-address-item {
@@ -128,5 +179,14 @@
 @media (max-width: 760px) {
   .profile-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-address-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-address-actions {
+    display: flex;
+    justify-content: flex-end;
   }
 }

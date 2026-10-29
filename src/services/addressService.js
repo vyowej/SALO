@@ -1,5 +1,7 @@
 import { savedAddresses as mockAddresses } from '../mock/restaurants';
 import { defaultMockAddress } from '../mock/locationData';
+import { config } from '../config';
+import { apiRequest } from './apiClient';
 
 const ADDRESSES_KEY = 'salo-saved-addresses-v1';
 const SELECTED_ADDRESS_KEY = 'salo-selected-address-v1';
@@ -42,8 +44,25 @@ const saveAddresses = (addresses) => {
   window.localStorage.setItem(ADDRESSES_KEY, JSON.stringify(addresses));
 };
 
+const toApiAddress = (address) => ({
+  label: address.label,
+  region: address.region,
+  province: address.province,
+  city_municipality: address.city_municipality,
+  barangay: address.barangay,
+  street: address.street,
+  house_no: address.house_no || null,
+  latitude: address.latitude,
+  longitude: address.longitude,
+  rider_note: address.rider_note || null,
+});
+
 export const addressService = {
   async getSavedAddresses() {
+    if (!config.useMock) {
+      const addresses = await apiRequest('/customer/addresses');
+      return addresses.map((address, index) => normalizeAddress(address, index));
+    }
     return readAddresses();
   },
 
@@ -63,6 +82,25 @@ export const addressService = {
   },
 
   async saveAddress(address) {
+    if (!config.useMock) {
+      const endpoint = address.id
+        ? `/customer/addresses/${encodeURIComponent(address.id)}`
+        : '/customer/addresses';
+      let saved = await apiRequest(endpoint, {
+        method: address.id ? 'PATCH' : 'POST',
+        body: toApiAddress(address),
+      });
+      if (address.is_main) {
+        saved = await apiRequest(`/customer/addresses/${encodeURIComponent(saved.id)}/primary`, {
+          method: 'PATCH',
+          body: {},
+        });
+      }
+      const normalizedSaved = normalizeAddress(saved);
+      if (normalizedSaved.is_main) await this.setSelectedAddress(normalizedSaved);
+      return normalizedSaved;
+    }
+
     const normalized = normalizeAddress({ ...address, id: address.id || `address-${Date.now()}` });
     const addresses = readAddresses().map((entry) => normalized.is_main ? { ...entry, is_main: false, primary: false } : entry);
     const nextAddresses = [normalized, ...addresses.filter((entry) => entry.id !== normalized.id)];
@@ -71,8 +109,50 @@ export const addressService = {
     return normalized;
   },
 
+  async setPrimaryAddress(address) {
+    if (!address?.id) throw new Error('A saved address is required to set a primary destination.');
+    if (!config.useMock) {
+      const primary = await apiRequest(`/customer/addresses/${encodeURIComponent(address.id)}/primary`, {
+        method: 'PATCH',
+        body: {},
+      });
+      return normalizeAddress(primary);
+    }
+
+    const addresses = readAddresses().map((entry) => ({
+      ...entry,
+      is_main: entry.id === address.id,
+      primary: entry.id === address.id,
+    }));
+    saveAddresses(addresses);
+    return normalizeAddress(addresses.find((entry) => entry.id === address.id));
+  },
+
+  async deleteAddress(address) {
+    if (!address?.id) throw new Error('A saved address is required for removal.');
+    if (!config.useMock) {
+      await apiRequest(`/customer/addresses/${encodeURIComponent(address.id)}`, { method: 'DELETE' });
+      return;
+    }
+
+    const remaining = readAddresses().filter((entry) => entry.id !== address.id);
+    if (remaining.length && !remaining.some((entry) => entry.is_main)) {
+      remaining[0] = { ...remaining[0], is_main: true, primary: true };
+    }
+    saveAddresses(remaining);
+  },
+
   async setSelectedAddress(address) {
-    if (!address) return null;
+    if (!address) {
+      try {
+        window.localStorage.removeItem(SELECTED_ADDRESS_KEY);
+        window.dispatchEvent(new CustomEvent('salo:address-change', { detail: null }));
+      } catch (error) {
+        console.error('Unable to clear the selected address.', error);
+        throw error;
+      }
+      return null;
+    }
     const normalized = normalizeAddress(address);
     try {
       window.localStorage.setItem(SELECTED_ADDRESS_KEY, normalized.id);

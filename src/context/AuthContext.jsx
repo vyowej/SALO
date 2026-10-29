@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService } from '../services/authService';
 import { addressService } from '../services/addressService';
+import { config } from '../config';
 
 const AuthContext = createContext(null);
 const AUTH_STORAGE_KEY = 'salo-auth-v1';
@@ -15,6 +16,28 @@ export const USER_ROLES = {
 };
 
 const accounts = authService.getDemoAccounts();
+const emptyAuth = { user: null, capabilities: [], activeView: USER_ROLES.GUEST, emailVerified: true };
+const authForApiUser = (user) => {
+  const capabilities = [
+    ...(user.capabilities || []),
+    ...(user.capabilities?.includes('driver') ? [USER_ROLES.RIDER] : []),
+    ...(user.memberships?.some((membership) => membership.status === 'active') ? [USER_ROLES.RESTAURANT_OWNER] : []),
+  ];
+  const activeView = capabilities.includes(USER_ROLES.ADMIN)
+    ? USER_ROLES.ADMIN
+    : capabilities.includes(USER_ROLES.RIDER)
+      ? USER_ROLES.RIDER
+      : capabilities.includes(USER_ROLES.RESTAURANT_OWNER)
+        ? USER_ROLES.RESTAURANT_OWNER
+        : USER_ROLES.CUSTOMER;
+
+  return {
+    user,
+    capabilities: [...new Set(capabilities)],
+    activeView,
+    emailVerified: user.email_verified,
+  };
+};
 
 const getAccountByCredentials = (email, password) => {
   return authService.getDemoAccount(email, password);
@@ -44,15 +67,41 @@ const readStoredAuth = () => {
 };
 
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(readStoredAuth);
+  const [auth, setAuth] = useState(() => config.useMock ? readStoredAuth() : emptyAuth);
+  const [authLoading, setAuthLoading] = useState(!config.useMock);
+  const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    if (config.useMock) return undefined;
+    let active = true;
+    authService.getCurrentUser()
+      .then((user) => {
+        if (!active) return;
+        setAuth(authForApiUser(user));
+        setAuthError('');
+      })
+      .catch((error) => {
+        if (!active) return;
+        if (error.status === 401) {
+          setAuth(emptyAuth);
+          setAuthError('');
+        } else {
+          console.error('Unable to verify the current account.', error);
+          setAuthError('We couldn’t verify your account. Check your connection and try again.');
+        }
+      })
+      .finally(() => { if (active) setAuthLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const persistAuth = useCallback((nextAuth) => {
     setAuth(nextAuth);
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+    setAuthError('');
+    if (config.useMock) window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const account = getAccountByCredentials(email, password);
+    const account = config.useMock ? getAccountByCredentials(email, password) : null;
     if (account) {
       persistAuth({ user: account.user, capabilities: account.capabilities, activeView: account.role, emailVerified: true });
       return true;
@@ -60,44 +109,50 @@ export function AuthProvider({ children }) {
 
     const registeredUser = await authService.login(email, password);
     if (!registeredUser) return false;
-    persistAuth({
-      user: { ...registeredUser, avatar: `${registeredUser.first_name?.[0] || ''}${registeredUser.last_name?.[0] || ''}` },
-      capabilities: [USER_ROLES.CUSTOMER],
-      activeView: USER_ROLES.CUSTOMER,
-      emailVerified: Boolean(registeredUser.email_verified),
-    });
+    persistAuth(authForApiUser(registeredUser));
     return true;
   }, [persistAuth]);
 
   const register = useCallback(async (details) => {
     const registeredUser = await authService.register(details);
-    const savedAddress = await addressService.saveAddress(registeredUser.address);
-    const user = {
+    const savedAddress = config.useMock ? await addressService.saveAddress(registeredUser.address) : null;
+    const user = config.useMock ? {
       ...registeredUser,
       address: savedAddress,
       name: [registeredUser.first_name, registeredUser.middle_name, registeredUser.last_name, registeredUser.suffix].filter(Boolean).join(' '),
       avatar: `${registeredUser.first_name?.[0] || ''}${registeredUser.last_name?.[0] || ''}`,
-    };
-    persistAuth({
-      user,
-      capabilities: [USER_ROLES.CUSTOMER],
-      activeView: USER_ROLES.CUSTOMER,
-      emailVerified: false,
-    });
+    } : registeredUser;
+    persistAuth(config.useMock
+      ? {
+          user,
+          capabilities: registeredUser.capabilities || [USER_ROLES.CUSTOMER],
+          activeView: USER_ROLES.CUSTOMER,
+          emailVerified: registeredUser.email_verified,
+        }
+      : authForApiUser(user));
     return user;
   }, [persistAuth]);
 
   const verifyEmail = useCallback(async (code) => {
+    if (!config.useMock) {
+      const user = await authService.verifyEmailToken(code);
+      persistAuth(authForApiUser(user));
+      return true;
+    }
     if (!authService.verifyEmailCode(code) || !auth.user) return false;
     const user = await authService.updateRegisteredUser(auth.user.id, { email_verified: true });
     persistAuth({ ...auth, user, emailVerified: true });
     return true;
   }, [auth, persistAuth]);
 
+  const sendVerificationEmail = useCallback(() => authService.sendVerificationEmail(), []);
+
   const updateUser = useCallback(async (updates) => {
     if (!auth.user) throw new Error('You must be signed in to update your account.');
-    const isDemoAccount = accounts.some((entry) => entry.user.id === auth.user.id);
-    const user = isDemoAccount
+    const isDemoAccount = config.useMock && accounts.some((entry) => entry.user.id === auth.user.id);
+    const user = !config.useMock
+      ? await authService.updateProfile(updates)
+      : isDemoAccount
       ? { ...auth.user, ...updates }
       : await authService.updateRegisteredUser(auth.user.id, updates);
     persistAuth({ ...auth, user });
@@ -108,14 +163,24 @@ export function AuthProvider({ children }) {
     if (!auth.capabilities.includes(view)) return false;
     const nextAuth = { ...auth, activeView: view };
     setAuth(nextAuth);
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+    if (config.useMock) window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
     return true;
   }, [auth]);
 
-  const logout = useCallback(() => {
-    window.localStorage.removeItem(AUTH_STORAGE_KEY);
-    setAuth({ user: null, capabilities: [], activeView: USER_ROLES.GUEST, emailVerified: true });
+  const clearAuth = useCallback(() => {
+    if (config.useMock) window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    setAuth(emptyAuth);
   }, []);
+
+  const logout = useCallback(async () => {
+    await authService.logout();
+    clearAuth();
+  }, [clearAuth]);
+
+  const deactivateAccount = useCallback(async (details) => {
+    await authService.deactivateAccount(details);
+    clearAuth();
+  }, [clearAuth]);
 
   const value = useMemo(() => ({
     user: auth.user,
@@ -124,14 +189,18 @@ export function AuthProvider({ children }) {
     activeView: auth.activeView,
     isLoggedIn: Boolean(auth.user),
     emailVerified: auth.emailVerified,
+    authLoading,
+    authError,
     login,
     register,
     verifyEmail,
+    sendVerificationEmail,
     updateUser,
     logout,
+    deactivateAccount,
     switchView,
     USER_ROLES,
-  }), [auth, login, register, verifyEmail, updateUser, logout, switchView]);
+  }), [auth, authLoading, authError, login, register, verifyEmail, sendVerificationEmail, updateUser, logout, deactivateAccount, switchView]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

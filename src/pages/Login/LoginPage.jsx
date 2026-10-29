@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
-import { DEMO_ACCOUNTS, useAuth } from '../../context/AuthContext';
+import { DEMO_ACCOUNTS, USER_ROLES, useAuth } from '../../context/AuthContext';
+import { AUTH_RETURN_LABELS } from '../../constants/guestExperience';
+import { getPostAuthDestination } from '../../utils/authRedirect';
+import { config } from '../../config';
 import '../Page.css';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,14 +19,21 @@ export default function LoginPage() {
     event.preventDefault();
     setError('');
 
-    if (!await login(email, password)) {
-      setError('Incorrect email or password.');
+    try {
+      if (!await login(email, password)) {
+        setError(AUTH_RETURN_LABELS.incorrectCredentials);
+        return;
+      }
+    } catch (loginError) {
+      console.error('Unable to sign in.', loginError);
+      setError(loginError.message || 'We couldn’t sign you in. Please try again.');
       return;
     }
 
-    const account = DEMO_ACCOUNTS.find((candidate) => candidate.email === email.trim().toLowerCase());
-    const destinations = { admin: '/admin', restaurantOwner: '/dashboard', rider: '/rider', customer: '/' };
-    navigate(destinations[account?.role] || '/');
+    const account = config.useMock
+      ? DEMO_ACCOUNTS.find((candidate) => candidate.email === email.trim().toLowerCase())
+      : null;
+    navigate(getPostAuthDestination(location.state?.from, account?.role || USER_ROLES.CUSTOMER), { replace: true });
   };
 
   const selectAccount = (account) => {
@@ -34,8 +45,8 @@ export default function LoginPage() {
   return (
     <div className="auth-shell section-shell">
       <div className="auth-card">
-        <span className="eyebrow">Welcome back</span>
-        <h1>Log in</h1>
+        <span className="eyebrow">{AUTH_RETURN_LABELS.welcome}</span>
+        <h1>{AUTH_RETURN_LABELS.heading}</h1>
         <p className="auth-card__intro">Pick up where you left off with saved favorites and reservations.</p>
 
         <form onSubmit={handleSubmit}>
@@ -48,25 +59,26 @@ export default function LoginPage() {
             <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required />
           </div>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-          <Button variant="primary" size="lg" type="submit">Login</Button>
+          <Button variant="primary" size="lg" type="submit">{AUTH_RETURN_LABELS.heading}</Button>
         </form>
 
-        <div className="demo-accounts">
-          <strong>Demo accounts</strong>
-          <div className="demo-accounts__list">
-            {DEMO_ACCOUNTS.map((account) => (
-              <button key={account.role} type="button" className="demo-account" onClick={() => selectAccount(account)}>
-                <span>{account.role === 'restaurantOwner' ? 'Business owner' : account.role === 'admin' ? 'Admin' : account.role === 'rider' ? 'Rider' : 'Customer'}</span>
-                <small>{account.email} / {account.password}</small>
-              </button>
-            ))}
+        {config.useMock ? (
+          <div className="demo-accounts">
+            <strong>Demo accounts</strong>
+            <div className="demo-accounts__list">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button key={account.role} type="button" className="demo-account" onClick={() => selectAccount(account)}>
+                  <span>{account.role === 'restaurantOwner' ? 'Business owner' : account.role === 'admin' ? 'Admin' : account.role === 'rider' ? 'Rider' : 'Customer'}</span>
+                  <small>{account.email} / {account.password}</small>
+                </button>
+              ))}
+            </div>
+            <small className="demo-accounts__note">Demo accounts use mock authentication for this frontend preview.</small>
           </div>
-          <small className="demo-accounts__note">Demo accounts use mock authentication for this frontend preview.</small>
-        </div>
-
+        ) : null}
         <div className="auth-card__actions">
           <Link to="/forgot-password" className="text-link">Forgot password?</Link>
-          <Link to="/register" className="text-link">Create account</Link>
+          <Link to="/register" state={{ from: location.state?.from }} className="text-link">Create account</Link>
         </div>
       </div>
     </div>

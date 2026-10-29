@@ -6,6 +6,7 @@ import RestaurantCard from '../../components/restaurant/RestaurantCard';
 import { formatPeso } from '../../utils/formatPeso';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { useAuth } from '../../context/AuthContext';
+import { config } from '../../config';
 import './CustomerHome.css';
 
 function greetingForHour(hour) {
@@ -15,7 +16,7 @@ function greetingForHour(hour) {
 }
 
 export default function CustomerHomePage() {
-  const { user, emailVerified, verifyEmail } = useAuth();
+  const { user, emailVerified, verifyEmail, sendVerificationEmail } = useAuth();
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -29,6 +30,7 @@ export default function CustomerHomePage() {
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(`salo-verify-banner-dismissed-${user?.id}`) === 'true';
@@ -134,6 +136,18 @@ export default function CustomerHomePage() {
     }
   };
 
+  const requestEmailVerification = async (event) => {
+    event.preventDefault();
+    setVerificationError('');
+    try {
+      await sendVerificationEmail();
+      setVerificationSent(true);
+    } catch (error) {
+      console.error('Unable to send an email verification link.', error);
+      setVerificationError('We couldn’t send a verification link. Please try again.');
+    }
+  };
+
   return (
     <div className="customer-home section-shell">
       <section className="customer-home__welcome">
@@ -235,12 +249,12 @@ export default function CustomerHomePage() {
       {verificationOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setVerificationOpen(false); }}>
           <section className="modal verification-modal" role="dialog" aria-modal="true" aria-labelledby="verification-title">
-            <header className="modal__header"><div><h2 id="verification-title">Verify your email</h2><p>We sent a one-time code to {user?.email}.</p></div><button type="button" className="icon-button" aria-label="Close verification dialog" onClick={() => setVerificationOpen(false)}><X size={17} /></button></header>
-            <form className="modal__body verification-form" onSubmit={submitVerification}>
-              <div className="field"><label htmlFor="verification-code">6-digit code</label><input id="verification-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} required /></div>
-              <p className="verification-hint">Enter the one-time verification code.</p>
+            <header className="modal__header"><div><h2 id="verification-title">Verify your email</h2><p>{config.useMock ? `We sent a one-time code to ${user?.email}.` : `We’ll email a verification link to ${user?.email}.`}</p></div><button type="button" className="icon-button" aria-label="Close verification dialog" onClick={() => setVerificationOpen(false)}><X size={17} /></button></header>
+            <form className="modal__body verification-form" onSubmit={config.useMock ? submitVerification : requestEmailVerification}>
+              {config.useMock ? <><div className="field"><label htmlFor="verification-code">6-digit code</label><input id="verification-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} required /></div><p className="verification-hint">Enter the one-time verification code.</p></> : null}
+              {verificationSent ? <p className="form-success" role="status">If verification is needed, a link will be sent to your email.</p> : null}
               {verificationError ? <p className="form-error" role="alert">{verificationError}</p> : null}
-              <button type="submit" className="btn btn--primary btn--full"><Check size={16} /> Verify email</button>
+              <button type="submit" className="btn btn--primary btn--full">{config.useMock ? <><Check size={16} /> Verify email</> : verificationSent ? 'Resend verification link' : 'Send verification link'}</button>
             </form>
           </section>
         </div>

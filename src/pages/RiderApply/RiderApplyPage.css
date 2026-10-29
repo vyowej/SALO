@@ -1,0 +1,121 @@
+.rider-application .page-header {
+  margin-bottom: 1.5rem;
+}
+
+.rider-application .application-card h2 {
+  margin-top: 0;
+}
+
+.rider-application__form-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.rider-application__form-heading > svg {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+  color: var(--primary);
+}
+
+.rider-application__form-heading h2 {
+  margin: 0;
+}
+
+.rider-application__form-heading p,
+.rider-application__privacy-note,
+.rider-application__preview-note {
+  color: var(--muted);
+}
+
+.rider-application__form-heading p {
+  margin: 0.35rem 0 0;
+}
+
+.rider-application__privacy-note {
+  margin: 1rem 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.rider-application__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.rider-application__preview {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.rider-application__preview-icon {
+  display: grid;
+  width: 3rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+
+.rider-application__preview .eyebrow {
+  color: var(--primary);
+}
+
+.rider-application__preview h2 {
+  margin: 0;
+}
+
+.rider-application__preview-note {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.rider-application__summary {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.rider-application__summary > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.7fr) minmax(0, 1.3fr);
+  gap: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.rider-application__summary dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.rider-application__summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.rider-application__preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 600px) {
+  .rider-application__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .rider-application__summary > div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

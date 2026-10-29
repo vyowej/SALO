@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CalendarDays, MapPin, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { config } from '../../config';
 import { useLocationContext } from '../../context/LocationContext';
 import { restaurantService } from '../../services/restaurantService';
 import { locationService } from '../../services/locationService';
@@ -29,7 +30,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { activeCart, activeRestaurantId, totalPrice, clearRestaurant } = useCart();
-  const { user, emailVerified, verifyEmail, updateUser } = useAuth();
+  const { user, emailVerified, verifyEmail, updateUser, sendVerificationEmail } = useAuth();
   const { selectedAddress } = useLocationContext();
   const [deliveryMode, setDeliveryMode] = useState(searchParams.get('mode') === 'Pick-up' ? 'Pick-up' : 'Delivery');
   const [deliverySpeed, setDeliverySpeed] = useState('Standard');
@@ -43,6 +44,7 @@ export default function CheckoutPage() {
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
   const [restaurants, setRestaurants] = useState([]);
   const [deliveryQuote, setDeliveryQuote] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -140,6 +142,18 @@ export default function CheckoutPage() {
     } catch (verificationFailure) {
       console.error('Unable to verify email at checkout.', verificationFailure);
       setVerificationError('We couldn’t verify your email. Please try again.');
+    }
+  };
+
+  const requestEmailVerification = async (event) => {
+    event.preventDefault();
+    setVerificationError('');
+    try {
+      await sendVerificationEmail();
+      setVerificationSent(true);
+    } catch (verificationFailure) {
+      console.error('Unable to send an email verification link.', verificationFailure);
+      setVerificationError('We couldn’t send a verification link. Please try again.');
     }
   };
 
@@ -284,7 +298,7 @@ export default function CheckoutPage() {
 
       <LocationPicker open={addressOpen} onClose={() => setAddressOpen(false)} selectedAddress={selectedAddress} onSelect={(address) => { setRiderNote(address.rider_note || ''); }} />
 
-      {verificationOpen ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setVerificationOpen(false); }}><section className="modal checkout-verification-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-verify-title"><header className="modal__header"><div><h2 id="checkout-verify-title">Verify your email to order</h2><p>Enter the one-time verification code associated with {user?.email}.</p></div><button type="button" className="icon-button" aria-label="Close verification dialog" onClick={() => setVerificationOpen(false)}><X size={17} /></button></header><form className="modal__body checkout-verification-form" onSubmit={handleVerify}><div className="field"><label htmlFor="checkout-otp">Verification code</label><input id="checkout-otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} required /></div>{verificationError ? <p className="form-error" role="alert">{verificationError}</p> : null}<Button variant="primary" type="submit">Verify email</Button></form></section></div> : null}
+      {verificationOpen ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setVerificationOpen(false); }}><section className="modal checkout-verification-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-verify-title"><header className="modal__header"><div><h2 id="checkout-verify-title">Verify your email to order</h2><p>{config.useMock ? `Enter the one-time verification code associated with ${user?.email}.` : `We’ll email a verification link to ${user?.email}.`}</p></div><button type="button" className="icon-button" aria-label="Close verification dialog" onClick={() => setVerificationOpen(false)}><X size={17} /></button></header><form className="modal__body checkout-verification-form" onSubmit={config.useMock ? handleVerify : requestEmailVerification}>{config.useMock ? <div className="field"><label htmlFor="checkout-otp">Verification code</label><input id="checkout-otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} required /></div> : null}{verificationSent ? <p className="form-success" role="status">If verification is needed, a link will be sent to your email.</p> : null}{verificationError ? <p className="form-error" role="alert">{verificationError}</p> : null}<Button variant="primary" type="submit">{config.useMock ? 'Verify email' : verificationSent ? 'Resend verification link' : 'Send verification link'}</Button></form></section></div> : null}
 
       {scheduleOpen ? <div className="modal-backdrop checkout-schedule-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setScheduleOpen(false); }}><section className="modal checkout-schedule-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-title"><header className="modal__header"><div><h2 id="schedule-title">Schedule delivery</h2><p>Choose a time that works for you.</p></div><button type="button" className="icon-button" aria-label="Close schedule picker" onClick={() => setScheduleOpen(false)}><X size={17} /></button></header><div className="modal__body checkout-schedule-form"><div className="field"><label htmlFor="scheduled-at">Date and time</label><input id="scheduled-at" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} min={minScheduledAt} /></div><Button variant="primary" onClick={() => setScheduleOpen(false)} disabled={!scheduledAt}>Confirm schedule</Button></div></section></div> : null}
     </div>

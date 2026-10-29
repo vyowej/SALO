@@ -8,9 +8,11 @@ import {
 } from '../mock/restaurants';
 import { mockOrderFlow } from '../mock/orderFlowData';
 import { customerHomeContent } from '../mock/customerHomeData';
-import { landingFilterPills, landingReservationPreview } from '../mock/landingData';
+import { landingFilterPills, landingReservationPreview, popularRestaurantIds } from '../mock/landingData';
+import { GUEST_POPULAR_RESTAURANT_LIMIT } from '../constants/guestExperience';
 import { config } from '../config';
 import { addressService } from './addressService';
+import { authService } from './authService';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ORDER_STORAGE_KEY = 'salo-order-records-v1';
@@ -43,6 +45,14 @@ export const restaurantService = {
       : restaurants;
 
     return list.slice(0, 3);
+  },
+
+  async getPopularRestaurants() {
+    await wait(config.mockDelay);
+    const popularRestaurants = popularRestaurantIds
+      .map((id) => restaurants.find((restaurant) => restaurant.id === id))
+      .filter(Boolean);
+    return popularRestaurants.slice(0, GUEST_POPULAR_RESTAURANT_LIMIT);
   },
 
   async getAllRestaurants() {
@@ -180,6 +190,7 @@ export const restaurantService = {
   },
 
   async getProfile() {
+    if (!config.useMock) return authService.getCurrentUser();
     await wait(350);
     return userProfile;
   },
@@ -189,7 +200,15 @@ export const restaurantService = {
   },
 
   async getSettings() {
+    if (!config.useMock) return authService.getSettings();
     await wait(250);
+    return appSettings;
+  },
+
+  async updateSettings(updates) {
+    if (!config.useMock) return authService.updateSettings(updates);
+    await wait(100);
+    Object.assign(appSettings, updates);
     return appSettings;
   },
 };
