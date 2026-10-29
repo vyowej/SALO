@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import { AuthProvider } from './context/AuthContext';
@@ -26,10 +27,12 @@ import SettingsPage from './pages/Settings/SettingsPage';
 import PartnerApplyPage from './pages/PartnerApply/PartnerApplyPage';
 import RiderApplyPage from './pages/RiderApply/RiderApplyPage';
 import DashboardPage from './pages/Dashboard/DashboardPage';
-import AdminPage from './pages/Admin/AdminPage';
+import BusinessPage from './pages/Business/BusinessPage';
 import RiderPage from './pages/Rider/RiderPage';
 import NotFoundPage from './pages/NotFound/NotFoundPage';
 import FeatureGatePage from './pages/FeatureGate/FeatureGatePage';
+
+const AdminPage = lazy(() => import('./pages/Admin/AdminPage'));
 
 function HomeGate() {
   const { isLoggedIn, userRole, authLoading, authError, USER_ROLES: roles } = useAuth();
@@ -102,8 +105,9 @@ function App() {
               <Route path="/partner/apply" element={<Layout><PartnerApplyPage /></Layout>} />
               <Route path="/rider/apply" element={<Layout><RiderApplyPage /></Layout>} />
               <Route path="/dashboard" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Layout><DashboardPage /></Layout></RequireCapability>} />
+              <Route path="/business/*" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Layout><BusinessPage /></Layout></RequireCapability>} />
               <Route path="/rider" element={<RequireCapability capability={USER_ROLES.RIDER}><Layout><RiderPage /></Layout></RequireCapability>} />
-              <Route path="/admin" element={<RequireCapability capability={USER_ROLES.ADMIN}><Layout><AdminPage /></Layout></RequireCapability>} />
+              <Route path="/admin/*" element={<RequireCapability capability={USER_ROLES.ADMIN}><Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><AdminPage /></Suspense></RequireCapability>} />
               <Route path="*" element={<Layout><NotFoundPage /></Layout>} />
                 </Routes>
               </LocationProvider>

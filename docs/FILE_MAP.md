@@ -1,6 +1,8 @@
 # SALO Backend File Map
 
-**Status:** Phase A architecture and Phase B Laravel account implementation. No database schema, migration, seeder, factory, or SQL is included.
+**Status:** Phase A architecture, Phase B Laravel account implementation, and in-memory admin API. No database schema, migration, seeder, factory, or SQL is included.
+
+Admin endpoint paths, resource shapes, fixture requirements, and behavior are governed by [ADMIN_API_CONTRACT.md](./ADMIN_API_CONTRACT.md); keep this architecture map focused on implementation structure.
 
 ## Planned tree
 

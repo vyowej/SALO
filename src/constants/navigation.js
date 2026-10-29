@@ -98,6 +98,7 @@ export const SHELL_LABELS = {
     cart: 'Cart',
     profile: 'Account',
     dashboard: 'Overview',
+    business: 'Business',
     rider: 'Overview',
     admin: 'Overview',
     settings: 'Settings',
@@ -160,7 +161,10 @@ export const NAVIGATION_GROUPS = {
   [USER_ROLES.RESTAURANT_OWNER]: [
     {
       label: SHELL_LABELS.groups.workspace,
-      items: [{ label: SHELL_LABELS.nav.dashboard, path: '/dashboard', icon: 'store' }],
+      items: [
+        { label: SHELL_LABELS.nav.dashboard, path: '/dashboard', icon: 'store' },
+        { label: SHELL_LABELS.nav.business, path: '/business', icon: 'business' },
+      ],
     },
     {
       label: SHELL_LABELS.groups.activity,
@@ -225,6 +229,7 @@ export const PAGE_TITLES = [
   { path: '/profile', title: SHELL_LABELS.pages.profile },
   { path: '/settings', title: SHELL_LABELS.pages.settings },
   { path: '/dashboard', title: SHELL_LABELS.pages.dashboard },
+  { path: '/business', title: SHELL_LABELS.pages.dashboard },
   { path: '/rider', title: SHELL_LABELS.pages.rider },
   { path: '/admin', title: SHELL_LABELS.pages.admin },
   { path: '/', title: SHELL_LABELS.pages.home },

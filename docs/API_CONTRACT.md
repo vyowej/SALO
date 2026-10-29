@@ -243,27 +243,7 @@ Uploads require a server allowlist of purposes, MIME and file-signature checks, 
 
 ### Admin operations
 
-| Method and URL | Request | Success `data` | Allowed |
-|---|---|---|---|
-| `GET /admin/dashboard/overview` | Optional `range` | Admin overview metrics | admin |
-| `GET /admin/applications/restaurants` | Optional `status`, `page` | Paginated restaurant applications | admin |
-| `GET /admin/applications/restaurants/{application}` | — | Restaurant application details | admin |
-| `PATCH /admin/applications/restaurants/{application}` | `decision` (`approve` or `reject`), required `note` for rejection | Decided application; approval creates owner membership and approves associated restaurant | admin |
-| `GET /admin/applications/riders` | Optional `status`, `page` | Paginated rider applications | admin |
-| `GET /admin/applications/riders/{application}` | — | Rider application details | admin |
-| `PATCH /admin/applications/riders/{application}` | `decision` (`approve` or `reject`), required `note` for rejection | Decided application; approval adds `driver` platform capability | admin |
-| `GET /admin/restaurants` | Optional `status`, `page` | Paginated restaurants across the platform | admin |
-| `PATCH /admin/restaurants/{restaurant}/status` | `status` (`approved`, `suspended`) and required reason for suspension | Updated restaurant | admin |
-| `GET /admin/users` | Optional `status`, `capability`, `q`, `page` | Paginated minimal user records | admin |
-| `PATCH /admin/users/{user}/status` | `status` (`active`, `suspended`, `deactivated`) and required reason when restricting access | Updated account state | admin |
-| `GET /admin/orders` | Optional `status`, `restaurant_id`, `page` | Paginated platform orders | admin |
-| `POST /admin/orders/{order}/cancel` | Required `reason` | Updated `Order` | admin |
-| `GET /admin/reservations` | Optional `status`, `restaurant_id`, `date`, `page` | Paginated platform reservations | admin |
-| `PATCH /admin/reservations/{reservation}/status` | `status` and reason when cancelling | Updated `Reservation` | admin |
-| `GET /admin/discounts` | Optional `funding_source`, `active`, `page` | Platform and restaurant discounts | admin |
-| `POST /admin/discounts` | Discount definition; `funding_source` must be `platform` | Created platform-funded discount | admin |
-| `PATCH /admin/discounts/{discount}` | Editable discount fields | Updated discount | admin |
-| `DELETE /admin/discounts/{discount}` | —; disables future use | `{ "deleted": true }` | admin |
+Superseded by [docs/ADMIN_API_CONTRACT.md](./ADMIN_API_CONTRACT.md).
 
 ## Status transitions and authorization summary
 

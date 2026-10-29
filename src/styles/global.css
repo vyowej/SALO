@@ -88,6 +88,17 @@
   --max-width: 1200px;
   --display-font: 'Fraunces', Georgia, serif;
   --body-font: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --font-size-xs: 0.72rem;
+  --font-size-sm: 0.82rem;
+  --font-size-md: 0.94rem;
+  --font-size-lg: 1.12rem;
+  --font-size-xl: 1.45rem;
+  --font-size-2xl: clamp(1.7rem, 2.4vw, 2.1rem);
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
 }
 
 .customer-bottom-tabs__icon {

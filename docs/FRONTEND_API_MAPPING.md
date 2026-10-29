@@ -4,6 +4,8 @@
 
 All API routes are under `/api/v1` unless marked as Sanctum/browser-native. Controllers stay thin; authorization, validation, and business rules follow the layering in `FILE_MAP.md`. The browser API adapter uses Sanctum's CSRF cookie and credentialed session cookies.
 
+Admin adapter functions, endpoint paths, payloads, and response shapes are defined by [docs/ADMIN_API_CONTRACT.md](./ADMIN_API_CONTRACT.md); this mapping intentionally does not duplicate that contract.
+
 ## Service functions
 
 | Frontend function | Proposed endpoint | Controller | Service/action |
@@ -63,8 +65,6 @@ All API routes are under `/api/v1` unless marked as Sanctum/browser-native. Cont
 | `riderService.getOverview(range)` | `GET /rider/dashboard/overview?range=...` | `Rider\DashboardController@show` | `BuildDriverDashboard` |
 | `riderService.setOnline(value)` | `PATCH /rider/availability` | `Rider\AvailabilityController@update` | `SetDriverAvailability` |
 | `riderService.respondToOffer(id, accepted)` | Replace with `POST /rider/jobs/{job}/claim`; no accept/decline auction | `Rider\DeliveryJobController@claim` | `ClaimDeliveryJob` (atomic first-claim-wins) |
-| `adminService.getOverview(range)` | `GET /admin/dashboard/overview?range=...` | `Admin\DashboardController@show` | `BuildAdminDashboard` |
-| `adminService.reviewApplication(id, status, note)` | `PATCH /admin/applications/restaurants/{application}` or `PATCH /admin/applications/riders/{application}` after determining application type | `Admin\ApplicationReviewController@update` | `ReviewRestaurantApplication` or `ReviewDriverApplication` |
 
 ## Current frontend / brief conflicts
 

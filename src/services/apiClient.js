@@ -33,7 +33,12 @@ const ensureCsrfCookie = async (apiBaseUrl) => {
   return token;
 };
 
-export async function apiRequest(path, { method = 'GET', body, headers = {} } = {}) {
+export async function apiRequest(path, {
+  method = 'GET',
+  body,
+  headers = {},
+  preserveEnvelope = false,
+} = {}) {
   const normalizedMethod = method.toUpperCase();
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Accept', 'application/json');
@@ -69,7 +74,7 @@ export async function apiRequest(path, { method = 'GET', body, headers = {} } = 
     });
   }
 
-  return payload?.data ?? payload;
+  return preserveEnvelope ? payload : payload?.data ?? payload;
 }
 
 export default apiRequest;

@@ -1,9 +1,16 @@
 <?php
 
+use App\Http\Middleware\EnsurePlatformCapability;
+use App\Http\Middleware\EnsureRestaurantMembership;
+use App\Http\Middleware\ForceJson;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,8 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
         $middleware->alias([
-            'force.json' => \App\Http\Middleware\ForceJson::class,
-            'capability' => \App\Http\Middleware\EnsurePlatformCapability::class,
+            'force.json' => ForceJson::class,
+            'capability' => EnsurePlatformCapability::class,
+            'restaurant.member' => EnsureRestaurantMembership::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -24,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
-        $exceptions->render(function (\Illuminate\Validation\ValidationException $exception, Request $request) {
+        $exceptions->render(function (ValidationException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
@@ -38,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 422);
         });
 
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $exception, Request $request) {
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
@@ -51,7 +59,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 401);
         });
 
-        $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $exception, Request $request) {
+        $exceptions->render(function (AuthorizationException $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
@@ -64,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 403);
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception, Request $request) {
+        $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
