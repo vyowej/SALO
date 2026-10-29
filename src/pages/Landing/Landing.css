@@ -6,6 +6,7 @@
 
 .guest-hero__image {
   position: relative;
+  min-width: 0;
   min-height: clamp(26rem, 51vw, 39rem);
   overflow: hidden;
   border: 1px solid var(--glass-border);
@@ -17,7 +18,9 @@
 .guest-hero__image::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, var(--overlay), transparent 90%);
+  background:
+    linear-gradient(90deg, var(--hero-scrim) 0%, var(--hero-scrim) 84%, transparent 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--hero-scrim-color) 24%, transparent) 0%, color-mix(in srgb, var(--hero-scrim-color) 24%, transparent) 42%, transparent 74%);
   content: '';
 }
 
@@ -34,6 +37,8 @@
   z-index: 1;
   display: flex;
   width: min(100%, 48rem);
+  box-sizing: border-box;
+  min-width: 0;
   min-height: inherit;
   flex-direction: column;
   align-items: flex-start;
@@ -42,25 +47,47 @@
   color: var(--on-action);
 }
 
+.guest-hero__content {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .guest-hero__copy .eyebrow {
-  color: var(--on-action);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--mustard);
+  border-radius: var(--radius-pill);
+  background: var(--mustard);
+  color: var(--on-mustard);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .guest-hero__copy h1 {
-  max-width: 11ch;
+  max-width: 13ch;
   margin: 0.9rem 0;
   font-family: var(--display-font);
   font-size: clamp(2.8rem, 7vw, 5.7rem);
   font-weight: 700;
-  letter-spacing: -0.045em;
-  line-height: 0.98;
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+  color: var(--hero-copy-color);
 }
 
-.guest-hero__copy > p {
-  max-width: 38rem;
+.guest-hero__copy h1 span {
+  color: var(--mustard);
+}
+
+.guest-hero__content > p {
+  max-width: 32rem;
   margin: 0 0 1.8rem;
   font-size: clamp(1rem, 1.8vw, 1.2rem);
-  line-height: 1.7;
+  line-height: 1.55;
+  color: var(--hero-copy-color);
 }
 
 .guest-search {
@@ -437,7 +464,9 @@
   }
 
   .guest-hero__image::after {
-    background: linear-gradient(0deg, var(--overlay), transparent 100%);
+    background:
+      linear-gradient(90deg, var(--hero-scrim) 0%, var(--hero-scrim) 90%, transparent 100%),
+      linear-gradient(0deg, color-mix(in srgb, var(--hero-scrim-color) 24%, transparent) 0%, color-mix(in srgb, var(--hero-scrim-color) 24%, transparent) 75%, transparent 100%);
   }
 
   .guest-search {
@@ -502,5 +531,43 @@
   .guest-restaurant-card,
   .guest-restaurant-card__image > img {
     transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .guest-hero__image {
+    display: grid;
+    place-items: center start;
+  }
+
+  .guest-hero__image::after {
+    background: none;
+  }
+
+  .guest-hero__copy {
+    width: min(100%, 48rem);
+    min-height: 0;
+    margin: 0;
+    padding: var(--space-4);
+    background: transparent;
+  }
+
+  .guest-hero__content {
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    background: var(--hero-scrim-color);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) and (max-width: 600px) {
+  .guest-hero__image {
+    place-items: end stretch;
+  }
+
+  .guest-hero__copy {
+    width: 100%;
+    margin: 0;
+    padding: var(--space-3);
   }
 }

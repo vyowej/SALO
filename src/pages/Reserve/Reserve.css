@@ -1,0 +1,301 @@
+.reserve-promo {
+  display: grid;
+  gap: clamp(var(--space-7), 6vw, var(--space-14));
+  padding: clamp(var(--space-6), 4vw, var(--space-11)) 0 var(--space-13);
+}
+
+.reserve-promo__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  align-items: center;
+  gap: clamp(var(--space-6), 5vw, var(--space-13));
+  padding: clamp(var(--space-6), 5vw, var(--space-13));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow);
+}
+
+.reserve-promo__intro {
+  max-width: 42rem;
+}
+
+.reserve-promo__intro > .eyebrow,
+.reserve-promo__section-heading > .eyebrow,
+.reserve-promo__benefits .eyebrow,
+.reserve-promo__closing .eyebrow {
+  color: var(--primary);
+}
+
+.reserve-promo__intro h1 {
+  max-width: 12ch;
+  margin: var(--space-3) 0 0;
+  font-family: var(--display-font);
+  font-size: clamp(2.5rem, 5.2vw, 4.8rem);
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+}
+
+.reserve-promo__subhead {
+  margin: var(--space-4) 0 0;
+  color: var(--forest);
+  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+  font-weight: 800;
+}
+
+.reserve-promo__description {
+  max-width: 38rem;
+  margin: var(--space-3) 0 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.reserve-promo__actions {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.reserve-promo__actions > p {
+  margin: 0;
+}
+
+.reserve-promo__login {
+  color: var(--link);
+  font-weight: 700;
+  text-underline-offset: 0.18em;
+}
+
+.reserve-promo__preview {
+  padding: clamp(var(--space-5), 3vw, var(--space-8));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-dense);
+  box-shadow: var(--shadow-soft);
+}
+
+.reserve-promo__preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--forest);
+}
+
+.reserve-promo__sample-label,
+.reserve-promo__preview-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--mustard-wash);
+  color: var(--espresso);
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: var(--space-1) var(--space-3);
+}
+
+.reserve-promo__preview h2 {
+  margin: var(--space-5) 0;
+  font-family: var(--display-font);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.reserve-promo__preview-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.reserve-promo__preview-icon,
+.reserve-promo__step-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-11);
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  background: var(--forest-wash);
+  color: var(--forest);
+}
+
+.reserve-promo__preview-details {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.reserve-promo__preview-details strong {
+  overflow-wrap: anywhere;
+}
+
+.reserve-promo__preview-details > span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.reserve-promo__preview-status {
+  grid-column: 2;
+  justify-self: start;
+  background: var(--surface-control);
+}
+
+.reserve-promo__steps {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.reserve-promo__section-heading h2,
+.reserve-promo__benefits h2,
+.reserve-promo__closing h2 {
+  margin: var(--space-2) 0 0;
+  font-family: var(--display-font);
+  font-size: clamp(1.8rem, 3.5vw, 2.7rem);
+  line-height: 1.15;
+}
+
+.reserve-promo__step-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reserve-promo__step-card {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.reserve-promo__step-number {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.reserve-promo__step-card h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: 1.05rem;
+}
+
+.reserve-promo__step-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reserve-promo__benefits {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: var(--space-8);
+  padding: clamp(var(--space-6), 4vw, var(--space-11));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow);
+}
+
+.reserve-promo__benefits ul {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reserve-promo__benefits li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  line-height: 1.5;
+}
+
+.reserve-promo__benefits li svg {
+  flex: 0 0 auto;
+  margin-top: var(--space-1);
+  color: var(--success);
+}
+
+.reserve-promo__closing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: clamp(var(--space-6), 4vw, var(--space-11));
+  border-radius: var(--radius-xl);
+  background: var(--mustard);
+  color: var(--on-mustard);
+}
+
+.reserve-promo__closing .eyebrow {
+  color: var(--on-mustard);
+}
+
+.reserve-promo__closing .btn {
+  flex: 0 0 auto;
+  background: var(--espresso);
+  border-color: var(--espresso);
+  color: var(--cream);
+}
+
+.reserve-promo__error {
+  color: var(--danger);
+}
+
+@media (max-width: 800px) {
+  .reserve-promo__hero,
+  .reserve-promo__benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .reserve-promo__step-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .reserve-promo__closing {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .reserve-promo__actions,
+  .reserve-promo__actions .btn,
+  .reserve-promo__closing .btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reserve-promo *,
+  .reserve-promo *::before,
+  .reserve-promo *::after {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .reserve-promo__hero,
+  .reserve-promo__preview,
+  .reserve-promo__step-card,
+  .reserve-promo__benefits {
+    background: var(--surface-dense);
+  }
+}

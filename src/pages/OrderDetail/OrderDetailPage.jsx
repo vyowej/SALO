@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Bike, Clock3, MapPin, X } from 'lucide-react';
 import { restaurantService } from '../../services/restaurantService';
 import { formatPeso } from '../../utils/formatPeso';
+import { FILIPINO_VOICE } from '../../constants/voice';
 import { Stepper } from '../../components/ui/Stepper';
 import { Button } from '../../components/ui/Button';
 import '../Page.css';
@@ -131,7 +132,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="section-shell order-shell order-detail-page">
-      {searchParams.get('placed') === 'true' ? <div className="order-placed-banner" role="status"><span>Order placed</span><strong>Mabuhay! Your order is on its way to the kitchen.</strong></div> : null}
+      {searchParams.get('placed') === 'true' ? <div className="order-placed-banner" role="status"><span>Order placed</span><strong><span lang="tl">{FILIPINO_VOICE.masarap.phrase}</span> Your order is on its way to the kitchen.</strong></div> : null}
       {placedToastVisible ? <div className="toast order-placed-toast" role="status">Order placed successfully.</div> : null}
       <div className="page-header"><div><span className="eyebrow">{order.id}</span><h1>{order.restaurant}</h1><p>Placed {order.date}</p></div><span className={`status-badge ${completed ? 'status-badge--success' : order.status === 'Cancelled' ? 'status-badge--danger' : 'status-badge--pending'}`}>{order.status === 'Delivered' ? 'Completed' : order.status}</span></div>
 

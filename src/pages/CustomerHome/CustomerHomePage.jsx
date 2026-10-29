@@ -7,13 +7,8 @@ import { formatPeso } from '../../utils/formatPeso';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { useAuth } from '../../context/AuthContext';
 import { config } from '../../config';
+import { getGreeting } from '../../constants/voice';
 import './CustomerHome.css';
-
-function greetingForHour(hour) {
-  if (hour < 12) return 'Magandang Umaga';
-  if (hour < 18) return 'Magandang Hapon';
-  return 'Magandang Gabi';
-}
 
 export default function CustomerHomePage() {
   const { user, emailVerified, verifyEmail, sendVerificationEmail } = useAuth();
@@ -39,7 +34,7 @@ export default function CustomerHomePage() {
       return false;
     }
   });
-  const greeting = greetingForHour(new Date().getHours());
+  const firstName = user?.first_name || user?.name?.split(' ')[0] || 'there';
 
   const loadData = async () => {
     setLoading(true);
@@ -153,7 +148,7 @@ export default function CustomerHomePage() {
       <section className="customer-home__welcome">
         <div>
           <span className="eyebrow">Your SALO</span>
-          <h1>{greeting}, {user?.first_name || user?.name?.split(' ')[0] || 'there'}</h1>
+          <h1><span lang="tl">{getGreeting(new Date(), firstName)}</span></h1>
           <p>Good food and good company are closer than you think.</p>
         </div>
         <div className="service-segment" role="group" aria-label="Choose service">

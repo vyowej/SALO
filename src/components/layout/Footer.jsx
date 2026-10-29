@@ -54,7 +54,7 @@ export function Footer() {
             <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram"><Camera size={16} /></a>
             <a href="https://www.google.com" target="_blank" rel="noreferrer" aria-label="Chat"><MessageCircle size={16} /></a>
           </div>
-          <p className="footer-note"><Sparkles size={14} /> Mabuhay!</p>
+          <p className="footer-note"><Sparkles size={14} /> Made for good company.</p>
           <p className="footer-address"><MapPin size={14} /> Pasig City, Philippines</p>
         </div>
       </div>

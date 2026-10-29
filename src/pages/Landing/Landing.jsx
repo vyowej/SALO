@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Search, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FEATURE_GATE_LABELS,
-  GUEST_POPULAR_CARDS_OPEN_GATE,
   LANDING_LABELS,
+  GUEST_POPULAR_CARDS_OPEN_GATE,
 } from '../../constants/guestExperience';
+import { FILIPINO_VOICE } from '../../constants/voice';
 import { landingFeatureCards, landingFilterPills } from '../../mock/landingData';
 import { restaurantService } from '../../services/restaurantService';
 import { getOpenStatus } from '../../utils/getOpenStatus';
@@ -14,9 +14,9 @@ import foodPlaceholder from '../../assets/food-placeholder.svg';
 import './Landing.css';
 
 const featureActions = {
-  order: { title: LANDING_LABELS.orderTitle, description: LANDING_LABELS.orderDescription, action: LANDING_LABELS.orderAction, path: '/restaurants' },
-  reserve: { title: LANDING_LABELS.reserveTitle, description: LANDING_LABELS.reserveDescription, action: LANDING_LABELS.reserveAction, path: '/reserve' },
-  gather: { title: LANDING_LABELS.gatherTitle, description: LANDING_LABELS.gatherDescription, action: LANDING_LABELS.gatherAction, path: '/#how-it-works' },
+  order: { title: 'orderTitle', description: 'orderDescription', action: 'orderAction', path: '/restaurants' },
+  reserve: { title: 'reserveTitle', description: 'reserveDescription', action: 'reserveAction', path: '/reserve' },
+  gather: { title: 'gatherTitle', description: 'gatherDescription', action: 'gatherAction', path: '/#how-it-works' },
 };
 
 export function LandingPage() {
@@ -57,23 +57,25 @@ export function LandingPage() {
         <div className="guest-hero__image">
           <img src={foodBg} alt="" />
           <div className="guest-hero__copy">
-            <span className="eyebrow">{LANDING_LABELS.heroEyebrow}</span>
-            <h1 id="guest-hero-title">{LANDING_LABELS.heroTitle}</h1>
-            <p>{LANDING_LABELS.heroDescription}</p>
-            <form className="guest-search" aria-label={LANDING_LABELS.searchLabel} onSubmit={(event) => {
-              event.preventDefault();
-              openRestaurants(query);
-            }}>
-              <Search size={19} aria-hidden="true" />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={LANDING_LABELS.searchPlaceholder}
-                aria-label={LANDING_LABELS.searchLabel}
-              />
-              <button type="submit" className="btn btn--primary">{LANDING_LABELS.searchAction}</button>
-            </form>
+            <div className="guest-hero__content">
+              <span className="eyebrow" lang="tl">{FILIPINO_VOICE.kainTayo.phrase}</span>
+              <h1 id="guest-hero-title">{LANDING_LABELS.heroTitleBefore}<span>{LANDING_LABELS.heroTitleAccent}</span></h1>
+              <p>{LANDING_LABELS.heroDescription}</p>
+              <form className="guest-search" aria-label={LANDING_LABELS.searchLabel} onSubmit={(event) => {
+                event.preventDefault();
+                openRestaurants(query);
+              }}>
+                <Search size={19} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={LANDING_LABELS.searchPlaceholder}
+                  aria-label={LANDING_LABELS.searchLabel}
+                />
+                <button type="submit" className="btn btn--primary">{LANDING_LABELS.searchAction}</button>
+              </form>
+            </div>
           </div>
         </div>
       </section>
@@ -84,13 +86,13 @@ export function LandingPage() {
           <h2 id="guest-categories-title">{LANDING_LABELS.categoriesTitle}</h2>
         </div>
         <div className="guest-category-list">
-          {[LANDING_LABELS.allCategories, ...landingFilterPills.filter((pill) => pill !== LANDING_LABELS.allCategories)].map((category, index) => (
+          {landingFilterPills.map((category, index) => (
             <button
               type="button"
               className="guest-category"
               key={category}
               onClick={() => openRestaurants(
-                category === LANDING_LABELS.allCategories ? '' : category,
+                category === 'All' ? '' : category,
                 'cuisine',
               )}
             >
@@ -109,14 +111,14 @@ export function LandingPage() {
           return (
             <article className={`guest-feature-card guest-feature-card--${card.id}`} key={card.id}>
               <div className="guest-feature-card__content">
-                <span className="eyebrow">{feature.title}</span>
-                <h2>{feature.description}</h2>
+                <span className="eyebrow">{LANDING_LABELS[feature.title]}</span>
+                <h2>{LANDING_LABELS[feature.description]}</h2>
                 <button
                   type="button"
                   className="guest-text-action"
                   onClick={() => navigate(feature.path, { state: { gateTarget: feature.path } })}
                 >
-                  {feature.action}<ArrowRight size={17} aria-hidden="true" />
+                  {LANDING_LABELS[feature.action]}<ArrowRight size={17} aria-hidden="true" />
                 </button>
               </div>
             </article>
@@ -178,8 +180,8 @@ export function LandingPage() {
         )}
       </section>
 
-      <section className="guest-final-cta section-shell" aria-label={FEATURE_GATE_LABELS.title}>
-        <h2>{FEATURE_GATE_LABELS.title}</h2>
+      <section className="guest-final-cta section-shell" aria-label={LANDING_LABELS.closingTitle}>
+        <h2>{LANDING_LABELS.closingTitle}</h2>
         <button type="button" className="btn btn--primary" onClick={openHowItWorks}>
           {LANDING_LABELS.howItWorks}<ArrowRight size={17} aria-hidden="true" />
         </button>

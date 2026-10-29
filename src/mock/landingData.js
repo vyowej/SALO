@@ -6,7 +6,7 @@ export const popularRestaurantIds = [
   'sarap-seoul',
   'pista-kape',
   'gulay-garden',
-  'salu-salo-nayon',
+  'nayon-kitchen',
 ];
 
 export const landingFeatureCards = [

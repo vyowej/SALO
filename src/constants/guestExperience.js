@@ -1,6 +1,8 @@
 export const LANDING_LABELS = {
   heroEyebrow: 'Made for gathering',
   heroTitle: 'Good food tastes better together.',
+  heroTitleBefore: 'Good food tastes better ',
+  heroTitleAccent: 'together.',
   heroDescription: 'Discover local favorites, order what you love, or save your seat—all in one place.',
   searchLabel: 'Search restaurants and dishes',
   searchPlaceholder: 'Search restaurants or cravings',
@@ -46,6 +48,43 @@ export const AUTH_RETURN_LABELS = {
   welcome: 'Welcome back',
   heading: 'Log in',
   incorrectCredentials: 'Incorrect email or password.',
+};
+
+export const EMPTY_CART_LABELS = {
+  prompt: 'Find something delicious to share with your group.',
+};
+
+export const RESERVATION_PROMO_LABELS = {
+  loading: 'Loading reservation information',
+  previewAriaLabel: 'Sample reservation preview',
+  heroEyebrow: 'Make room for good company',
+  title: 'One click and you have a table.',
+  description: 'Plan a meal together, choose a time that works, and keep your reservation details in one place.',
+  primaryAction: 'Reserve a table now',
+  loginLink: 'Already have an account? Log in',
+  previewLabel: 'Sample preview',
+  previewTitle: 'Your table, at a glance',
+  sampleRestaurant: 'Your selected restaurant',
+  sampleDate: 'Your chosen date',
+  sampleTime: 'Your chosen time',
+  sampleGroup: 'Your group',
+  sampleStatus: 'Sample',
+  stepsEyebrow: 'A simple way to gather',
+  stepsTitle: 'How it works',
+  steps: [
+    { title: 'Pick a restaurant', description: 'Find a spot that fits your plans.' },
+    { title: 'Choose a date, time, and number of guests', description: 'Set the details that work for your group.' },
+    { title: 'Show up and enjoy', description: 'Keep your reservation details handy.' },
+  ],
+  benefitsEyebrow: 'Made for your plans',
+  benefitsTitle: 'A little more time together.',
+  benefits: [
+    'See open tables for the time you want.',
+    'Bring your friends or family together.',
+    'Track and cancel reservations in one place.',
+  ],
+  closingEyebrow: 'Bring everyone to the table',
+  closingTitle: 'Your next gathering starts here.',
 };
 
 export const GUEST_POPULAR_RESTAURANT_LIMIT = 6;

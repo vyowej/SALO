@@ -1,140 +1,99 @@
-import { useEffect, useState } from 'react';
-import { restaurantService } from '../../services/restaurantService';
-import { Button } from '../../components/ui/Button';
-import '../Page.css';
+import { Navigate, Link } from 'react-router-dom';
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, MapPin, UsersRound } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { FILIPINO_VOICE } from '../../constants/voice';
+import { RESERVATION_PROMO_LABELS } from '../../constants/guestExperience';
+import './Reserve.css';
+
+const signupHref = '/signup?returnTo=%2Freservations%2Fnew';
+const loginHref = '/login?returnTo=%2Freservations%2Fnew';
+
+const stepIcons = [
+  MapPin,
+  CalendarDays,
+  CheckCircle2,
+];
 
 export default function ReservePage() {
-  const [restaurants, setRestaurants] = useState([]);
-  const [guests, setGuests] = useState(null);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
-  const [reservation, setReservation] = useState(null);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const { isLoggedIn, authLoading, authError } = useAuth();
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const data = await restaurantService.getAllRestaurants();
-      if (active) setRestaurants(data.filter((restaurant) => restaurant.acceptsReservations));
-    };
-    load();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError('');
-    const restaurant = restaurants.find((item) => item.id === selectedRestaurantId);
-    if (!restaurant || !guests) {
-      setError('Select a restaurant and party size to continue.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const createdReservation = await restaurantService.createReservation({
-        restaurant: restaurant.name,
-        restaurantId: restaurant.id,
-        date: event.target.elements['reservation-date'].value,
-        time: event.target.elements['reservation-time'].value,
-        guests,
-      });
-      setReservation(createdReservation);
-    } catch (submitError) {
-      console.error('Unable to submit reservation request.', submitError);
-      setError('We couldn’t submit your reservation. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (reservation) {
-    return (
-      <div className="section-shell reserve-shell">
-        <div className="confirmation-card">
-          <span className="eyebrow">Table reserved</span>
-          <h1>Your reservation is set</h1>
-          <p>Your reservation request has been submitted.</p>
-          <div className="confirmation-metadata">
-            <div><span>Restaurant</span><strong>{reservation.restaurant}</strong></div>
-            <div><span>Date</span><strong>{reservation.date}</strong></div>
-            <div><span>Time</span><strong>{reservation.time}</strong></div>
-            <div><span>Guests</span><strong>{reservation.guests}</strong></div>
-          </div>
-          <div className="confirmation-actions">
-            <button type="button" className="btn btn--primary" onClick={() => setReservation(null)}>Book another table</button>
-          </div>
-        </div>
-      </div>
-    );
+  if (authLoading) {
+    return <div className="reserve-promo section-shell"><div className="skeleton skeleton--block" aria-label={RESERVATION_PROMO_LABELS.loading} /></div>;
   }
+  if (authError) {
+    return <div className="reserve-promo section-shell"><p className="reserve-promo__error" role="alert">{authError}</p></div>;
+  }
+  if (isLoggedIn) return <Navigate to="/reservations/new" replace />;
 
   return (
-    <div className="section-shell reserve-shell">
-      <div className="page-header">
-        <div>
-          <h1>Reserve a Table</h1>
-          <p>Plan a warm get-together before the crowd arrives.</p>
+    <div className="reserve-promo section-shell">
+      <section className="reserve-promo__hero" aria-labelledby="reserve-promo-title">
+        <div className="reserve-promo__intro">
+          <span className="eyebrow">{RESERVATION_PROMO_LABELS.heroEyebrow}</span>
+          <h1 id="reserve-promo-title">{RESERVATION_PROMO_LABELS.title}</h1>
+          <p className="reserve-promo__subhead"><span lang="tl">{FILIPINO_VOICE.saluSaloFriends.phrase}</span></p>
+          <p className="reserve-promo__description">{RESERVATION_PROMO_LABELS.description}</p>
+          <div className="reserve-promo__actions">
+            <Link to={signupHref} className="btn btn--primary btn--lg">{RESERVATION_PROMO_LABELS.primaryAction}<ArrowRight size={17} aria-hidden="true" /></Link>
+            <p><Link to={loginHref} className="reserve-promo__login">{RESERVATION_PROMO_LABELS.loginLink}</Link></p>
+          </div>
         </div>
-      </div>
-
-      <div className="reserve-layout">
-        <div className="booking-surface">
-          <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label htmlFor="reservation-restaurant">Restaurant</label>
-              <select id="reservation-restaurant" value={selectedRestaurantId} onChange={(event) => setSelectedRestaurantId(event.target.value)} required>
-                <option value="">Select a restaurant</option>
-                {restaurants.map((restaurant) => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}
-              </select>
+        <aside className="reserve-promo__preview" aria-label={RESERVATION_PROMO_LABELS.previewAriaLabel}>
+          <div className="reserve-promo__preview-heading">
+            <span className="reserve-promo__sample-label">{RESERVATION_PROMO_LABELS.previewLabel}</span>
+            <CalendarDays size={22} aria-hidden="true" />
+          </div>
+          <h2>{RESERVATION_PROMO_LABELS.previewTitle}</h2>
+          <div className="reserve-promo__preview-card">
+            <span className="reserve-promo__preview-icon"><CalendarDays size={20} aria-hidden="true" /></span>
+            <div className="reserve-promo__preview-details">
+              <strong>{RESERVATION_PROMO_LABELS.sampleRestaurant}</strong>
+              <span><CalendarDays size={14} aria-hidden="true" /> {RESERVATION_PROMO_LABELS.sampleDate}</span>
+              <span><Clock3 size={14} aria-hidden="true" /> {RESERVATION_PROMO_LABELS.sampleTime}</span>
+              <span><UsersRound size={14} aria-hidden="true" /> {RESERVATION_PROMO_LABELS.sampleGroup}</span>
             </div>
-            <div className="form-grid">
-              <div className="field">
-                <label htmlFor="reservation-date">Date</label>
-                <input id="reservation-date" type="date" required />
-              </div>
-              <div className="field">
-                <label htmlFor="reservation-time">Time</label>
-                <input id="reservation-time" type="time" required />
-              </div>
-            </div>
-            <div>
-              <label className="reserve-guests-label">Guests</label>
-              <div className="option-list">
-                {[2, 3, 4, 5, 'Custom'].map((guestValue) => (
-                  <button
-                    key={guestValue}
-                    type="button"
-                    className={['option-button', guests === guestValue ? 'is-selected' : ''].filter(Boolean).join(' ')}
-                    onClick={() => setGuests(guestValue)}
-                  >
-                    {guestValue}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {error ? <p className="form-error" role="alert">{error}</p> : null}
-            <Button variant="primary" size="lg" type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Check availability'}</Button>
-          </form>
-        </div>
-
-        <aside className="timeline-card">
-          <h2>Best matches</h2>
-          <div className="reserve-match-list">
-            {restaurants.slice(0, 3).map((restaurant) => (
-              <div key={restaurant.id} className="reservation-item">
-                <div className="reservation-meta">
-                  <strong>{restaurant.name}</strong>
-                  <span className="status-badge status-badge--success">Available</span>
-                </div>
-                <div className="reserve-restaurant-detail">{restaurant.location} · {restaurant.cuisine}</div>
-              </div>
-            ))}
+            <span className="reserve-promo__preview-status">{RESERVATION_PROMO_LABELS.sampleStatus}</span>
           </div>
         </aside>
-      </div>
+      </section>
+
+      <section className="reserve-promo__steps" aria-labelledby="reserve-steps-title">
+        <div className="reserve-promo__section-heading">
+          <span className="eyebrow">{RESERVATION_PROMO_LABELS.stepsEyebrow}</span>
+          <h2 id="reserve-steps-title">{RESERVATION_PROMO_LABELS.stepsTitle}</h2>
+        </div>
+        <ol className="reserve-promo__step-list">
+          {RESERVATION_PROMO_LABELS.steps.map(({ title, description }, index) => {
+            const Icon = stepIcons[index];
+            return (
+            <li className="reserve-promo__step-card" key={title}>
+              <span className="reserve-promo__step-number">{index + 1}</span>
+              <span className="reserve-promo__step-icon"><Icon size={22} aria-hidden="true" /></span>
+              <h3>{title}</h3>
+              <p>{description}</p>
+            </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <section className="reserve-promo__benefits" aria-labelledby="reserve-benefits-title">
+        <div>
+          <span className="eyebrow">{RESERVATION_PROMO_LABELS.benefitsEyebrow}</span>
+          <h2 id="reserve-benefits-title">{RESERVATION_PROMO_LABELS.benefitsTitle}</h2>
+        </div>
+        <ul>
+          {RESERVATION_PROMO_LABELS.benefits.map((benefit) => <li key={benefit}><CheckCircle2 size={18} aria-hidden="true" />{benefit}</li>)}
+        </ul>
+      </section>
+
+      <section className="reserve-promo__closing" aria-labelledby="reserve-closing-title">
+        <div>
+          <span className="eyebrow">{RESERVATION_PROMO_LABELS.closingEyebrow}</span>
+          <h2 id="reserve-closing-title">{RESERVATION_PROMO_LABELS.closingTitle}</h2>
+        </div>
+        <Link to={signupHref} className="btn btn--primary btn--lg">{RESERVATION_PROMO_LABELS.primaryAction}<ArrowRight size={17} aria-hidden="true" /></Link>
+      </section>
     </div>
   );
 }

@@ -46,8 +46,8 @@ const restaurantSeeds = [
     ],
   },
   {
-    id: 'salu-salo-nayon',
-    name: 'Salu-salo sa Nayon',
+    id: 'nayon-kitchen',
+    name: 'Nayon Kitchen',
     cuisine: 'Bicolano',
     location: 'Makati',
     image: foodPlaceholder,

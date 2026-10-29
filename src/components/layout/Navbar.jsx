@@ -109,7 +109,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
       navigate('/');
     } catch (error) {
       console.error('Unable to sign out.', error);
-      setLogoutError('We couldn’t sign you out. Please try again.');
+      setLogoutError(SHELL_LABELS.signOutError);
       setMenuOpen(true);
     }
   };
@@ -132,7 +132,9 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
 
           {!appMode ? (
             <div className="navbar__center" aria-label={SHELL_LABELS.marketingLinks}>
-              {PUBLIC_NAV_LINKS.map((item) => <Link key={item.path} to={item.path} className={['nav-link', isMarketingLinkActive(item.path) ? 'is-active' : ''].filter(Boolean).join(' ')}>{item.label}</Link>)}
+              {PUBLIC_NAV_LINKS.map((item) => (
+                <Link key={item.path} to={item.path} className={['nav-link', isMarketingLinkActive(item.path) ? 'is-active' : ''].filter(Boolean).join(' ')}>{item.label}</Link>
+              ))}
             </div>
           ) : null}
 
@@ -209,7 +211,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
                 </button>
                 {menuOpen ? (
                   <div className="user-menu__dropdown" role="menu">
-                    <span className="menu-group-label">{SHELL_LABELS.account}</span>
+                    <span className="menu-group-label">{SHELL_LABELS.groups.account}</span>
                     <Link to="/profile" className="user-menu__item" role="menuitem" onClick={() => setMenuOpen(false)}>{SHELL_LABELS.profile}</Link>
                     <Link to="/settings" className="user-menu__item" role="menuitem" onClick={() => setMenuOpen(false)}>{SHELL_LABELS.settings}</Link>
                     <Link to="/profile" className="user-menu__item" role="menuitem" onClick={() => setMenuOpen(false)}>{SHELL_LABELS.help}</Link>
@@ -238,7 +240,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
                 ) : null}
               </div>
             ) : (
-              <div className="auth-actions"><Link to="/login" className="btn btn--ghost">{SHELL_LABELS.login}</Link><Link to="/register" className="btn btn--primary">{SHELL_LABELS.signUp}</Link></div>
+              <div className="auth-actions"><Link to="/login" className="btn btn--ghost">{SHELL_LABELS.login}</Link><Link to="/signup" className="btn btn--primary">{SHELL_LABELS.signUp}</Link></div>
             )}
           </div>
         </nav>

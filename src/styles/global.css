@@ -11,6 +11,7 @@
   --action: #BF561F;
   --link: #B04E1A;
   --on-action: #FFFFFF;
+  --on-mustard: #332B26;
 
   --status-success: #2F744E;
   --status-warning: #875A0C;
@@ -43,6 +44,23 @@
   --glass-surface: rgba(255, 255, 255, 0.66);
   --glass-border: rgba(255, 255, 255, 0.78);
   --glass-shadow: 0 18px 48px rgba(51, 43, 38, 0.1);
+  --hero-scrim-color: var(--espresso);
+  --hero-scrim: color-mix(in srgb, var(--hero-scrim-color) 72%, transparent);
+  --hero-copy-color: var(--cream);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.25rem;
+  --space-10: 2.5rem;
+  --space-11: 3rem;
+  --space-12: 3.5rem;
+  --space-13: 4rem;
+  --space-14: 5rem;
   --brand-wash: rgba(217, 107, 53, 0.12);
   --mustard-wash: rgba(217, 164, 65, 0.1);
   --forest-wash: rgba(82, 99, 77, 0.08);
@@ -115,6 +133,8 @@ body {
     var(--cream);
   font-family: var(--body-font);
   font-size: 15px;
+  letter-spacing: 0;
+  word-spacing: normal;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -185,7 +205,7 @@ h4,
 h5 {
   margin: 0;
   font-family: var(--display-font);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
@@ -1425,8 +1445,8 @@ select {
 }
 
 .navbar__actions .auth-actions .btn--primary {
-  border-color: var(--forest);
-  background: var(--forest);
+  border-color: var(--primary);
+  background: var(--primary);
 }
 
 .search-panel {
@@ -2164,6 +2184,9 @@ select {
     --glass-surface: rgba(40, 35, 31, 0.84);
     --glass-border: rgba(255, 255, 255, 0.16);
     --glass-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    --hero-scrim-color: var(--cream);
+    --hero-scrim: color-mix(in srgb, var(--hero-scrim-color) 72%, transparent);
+    --hero-copy-color: var(--espresso);
     --brand-wash: rgba(217, 107, 53, 0.1);
     --mustard-wash: rgba(217, 164, 65, 0.07);
     --forest-wash: rgba(145, 167, 135, 0.06);

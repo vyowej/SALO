@@ -63,7 +63,7 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
         </div>
 
         <nav className="mobile-drawer__nav" aria-label={SHELL_LABELS.navigation}>
-          {PUBLIC_NAV_LINKS.filter((link) => !user || link.label !== SHELL_LABELS.howItWorks).map((link) => (
+          {PUBLIC_NAV_LINKS.filter((link) => !user || link.path !== '/#how-it-works').map((link) => (
             <Link key={link.path} to={link.path} className={['mobile-drawer__link', linkIsActive(link.path) ? 'is-active' : ''].filter(Boolean).join(' ')} onClick={onClose}>
               {link.label}
             </Link>
@@ -102,7 +102,7 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
           ) : (
             <>
               <Link to="/login" className="btn btn--ghost btn--full" onClick={onClose}>{SHELL_LABELS.login}</Link>
-              <Link to="/register" className="btn btn--primary btn--full" onClick={onClose}>{SHELL_LABELS.signUp}</Link>
+              <Link to="/signup" className="btn btn--primary btn--full" onClick={onClose}>{SHELL_LABELS.signUp}</Link>
             </>
           )}
         </div>

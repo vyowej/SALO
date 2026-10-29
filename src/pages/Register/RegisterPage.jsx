@@ -38,6 +38,8 @@ function PasswordRules({ password }) {
 export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const returnTo = new URLSearchParams(location.search).get('returnTo');
+  const loginHref = returnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login';
   const { register } = useAuth();
   const [step, setStep] = useState(0);
   const [user, setUser] = useState({ first_name: '', middle_name: '', last_name: '', suffix: '', email: '', password: '' });
@@ -146,6 +148,10 @@ export default function RegisterPage() {
         address: { ...address, is_main: true },
         password: user.password,
       });
+      if (returnTo) {
+        navigate(getPostAuthDestination(returnTo, USER_ROLES.CUSTOMER), { replace: true });
+        return;
+      }
       setCreatedName(user.first_name);
     } catch (registerError) {
       console.error('Unable to create the account.', registerError);
@@ -161,12 +167,12 @@ export default function RegisterPage() {
         <section className="auth-card register-success" aria-labelledby="register-success-title">
           <span className="register-success__icon"><Check size={26} /></span>
           <span className="eyebrow">You’re all set</span>
-          <h1 id="register-success-title">Mabuhay, {createdName}!</h1>
+          <h1 id="register-success-title">Welcome, {createdName}!</h1>
           <p>Your SALO account is ready. You can verify your email and manage your details from your profile.</p>
           <Button
             variant="primary"
             size="lg"
-            onClick={() => navigate(getPostAuthDestination(location.state?.from, USER_ROLES.CUSTOMER), { replace: true })}
+            onClick={() => navigate(getPostAuthDestination(returnTo || location.state?.from, USER_ROLES.CUSTOMER), { replace: true })}
           >
             Start ordering
           </Button>
@@ -210,7 +216,7 @@ export default function RegisterPage() {
               <h2 id="register-email-heading">What’s your email?</h2>
               <p className="register-step__copy">We’ll use it for sign-in and order updates.</p>
               <div className="field"><label htmlFor="register-email">Email address</label><input id="register-email" type="email" autoComplete="email" value={user.email} onChange={(event) => updateUser('email', event.target.value)} placeholder="Enter your email address" aria-describedby="register-email-status" required /></div>
-              {visibleEmailStatus.message ? <p id="register-email-status" className={`register-email-status register-email-status--${visibleEmailStatus.state}`} role="status">{visibleEmailStatus.state === 'checking' ? <RotateCw size={14} /> : null}{visibleEmailStatus.message}{visibleEmailStatus.state === 'taken' ? <Link to="/login" state={{ from: location.state?.from }}>Log in</Link> : null}</p> : null}
+              {visibleEmailStatus.message ? <p id="register-email-status" className={`register-email-status register-email-status--${visibleEmailStatus.state}`} role="status">{visibleEmailStatus.state === 'checking' ? <RotateCw size={14} /> : null}{visibleEmailStatus.message}{visibleEmailStatus.state === 'taken' ? <Link to={loginHref} state={{ from: location.state?.from }}>Log in</Link> : null}</p> : null}
             </section>
           ) : null}
           {step === 3 ? (
@@ -232,7 +238,7 @@ export default function RegisterPage() {
           </div>
         </form>
 
-        <div className="auth-card__actions"><span>Already have an account?</span><Link to="/login" state={{ from: location.state?.from }} className="text-link">Log in</Link></div>
+        <div className="auth-card__actions"><span>Already have an account?</span><Link to={loginHref} state={{ from: location.state?.from }} className="text-link">Log in</Link></div>
         <div className="register-address-note"><MapPin size={14} /> Address details are stored in this browser preview.</div>
       </section>
     </div>

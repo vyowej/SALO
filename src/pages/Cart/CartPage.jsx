@@ -6,6 +6,8 @@ import { useLocationContext } from '../../context/LocationContext';
 import { formatPeso } from '../../utils/formatPeso';
 import { restaurantService } from '../../services/restaurantService';
 import { locationService } from '../../services/locationService';
+import { FILIPINO_VOICE } from '../../constants/voice';
+import { EMPTY_CART_LABELS } from '../../constants/guestExperience';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { Button } from '../../components/ui/Button';
 import '../Page.css';
@@ -186,7 +188,7 @@ export default function CartPage() {
       <div className="section-shell cart-page">
         <div className="page-header"><div><h1>Your cart</h1><p>Your saved restaurant carts stay separate.</p></div></div>
         {savedRestaurants.length ? <div className="saved-carts-list">{savedRestaurants.map((restaurantId) => <button key={restaurantId} type="button" onClick={() => setActiveRestaurant(restaurantId)}><span><strong>{restaurantCarts[restaurantId][0]?.restaurantName || 'Restaurant order'}</strong><small>{restaurantCarts[restaurantId].reduce((sum, item) => sum + item.quantity, 0)} items · {formatPeso(restaurantCarts[restaurantId].reduce((sum, item) => sum + item.price * item.quantity, 0))}</small></span><span>Open cart →</span></button>)}</div> : null}
-        {!savedRestaurants.length ? <div className="empty-state"><h2>Your cart is empty</h2><p>Add a few favorites to start your next gathering.</p><Link to="/restaurants" className="btn btn--primary cart-empty-action">Browse restaurants</Link></div> : null}
+        {!savedRestaurants.length ? <div className="empty-state"><h2>Your cart is empty</h2><p><span lang="tl">{FILIPINO_VOICE.taraNa.phrase}</span> {EMPTY_CART_LABELS.prompt}</p><Link to="/restaurants" className="btn btn--primary cart-empty-action">Browse restaurants</Link></div> : null}
       </div>
     );
   }

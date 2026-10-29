@@ -16,6 +16,7 @@ import OrdersPage from './pages/Orders/OrdersPage';
 import OrderDetailPage from './pages/OrderDetail/OrderDetailPage';
 import ReservationsPage from './pages/Reservations/ReservationsPage';
 import ReservePage from './pages/Reserve/ReservePage';
+import ReservationBookingPage from './pages/Reservations/ReservationBookingPage';
 import LoginPage from './pages/Login/LoginPage';
 import RegisterPage from './pages/Register/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPassword/ForgotPasswordPage';
@@ -51,6 +52,15 @@ function GuestFeatureRoute({ children }) {
   return isLoggedIn ? children : <FeatureGatePage />;
 }
 
+function ReservationBookingRoute() {
+  const { isLoggedIn, userRole, authLoading, authError } = useAuth();
+  if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
+  if (authError) return <div className="section-shell" role="alert">{authError}</div>;
+  if (!isLoggedIn) return <Navigate to="/login?returnTo=%2Freservations%2Fnew" replace />;
+  if (userRole !== USER_ROLES.CUSTOMER) return <Navigate to={ROLE_PATHS[userRole] || '/'} replace />;
+  return <Layout><ReservationBookingPage /></Layout>;
+}
+
 function RequireCapability({ capability, children }) {
   const { isLoggedIn, capabilities, userRole, authLoading, authError } = useAuth();
   const location = useLocation();
@@ -80,8 +90,10 @@ function App() {
               <Route path="/orders" element={<Layout><GuestFeatureRoute><OrdersPage /></GuestFeatureRoute></Layout>} />
               <Route path="/orders/:id" element={<Layout><GuestFeatureRoute><OrderDetailPage /></GuestFeatureRoute></Layout>} />
               <Route path="/reservations" element={<Layout><GuestFeatureRoute><ReservationsPage /></GuestFeatureRoute></Layout>} />
-              <Route path="/reserve" element={<Layout><GuestFeatureRoute><ReservePage /></GuestFeatureRoute></Layout>} />
+              <Route path="/reservations/new" element={<ReservationBookingRoute />} />
+              <Route path="/reserve" element={<Layout><ReservePage /></Layout>} />
               <Route path="/login" element={<Layout><LoginPage /></Layout>} />
+              <Route path="/signup" element={<Layout><RegisterPage /></Layout>} />
               <Route path="/register" element={<Layout><RegisterPage /></Layout>} />
               <Route path="/forgot-password" element={<Layout><ForgotPasswordPage /></Layout>} />
               <Route path="/verify-email" element={<Layout><VerifyEmailPage /></Layout>} />
@@ -93,12 +105,12 @@ function App() {
               <Route path="/rider" element={<RequireCapability capability={USER_ROLES.RIDER}><Layout><RiderPage /></Layout></RequireCapability>} />
               <Route path="/admin" element={<RequireCapability capability={USER_ROLES.ADMIN}><Layout><AdminPage /></Layout></RequireCapability>} />
               <Route path="*" element={<Layout><NotFoundPage /></Layout>} />
-              </Routes>
-            </LocationProvider>
-          </CartProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+                </Routes>
+              </LocationProvider>
+            </CartProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
   );
 }
 

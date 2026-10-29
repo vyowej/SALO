@@ -10,6 +10,7 @@ import '../Page.css';
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const returnTo = new URLSearchParams(location.search).get('returnTo');
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +34,7 @@ export default function LoginPage() {
     const account = config.useMock
       ? DEMO_ACCOUNTS.find((candidate) => candidate.email === email.trim().toLowerCase())
       : null;
-    navigate(getPostAuthDestination(location.state?.from, account?.role || USER_ROLES.CUSTOMER), { replace: true });
+    navigate(getPostAuthDestination(returnTo || location.state?.from, account?.role || USER_ROLES.CUSTOMER), { replace: true });
   };
 
   const selectAccount = (account) => {
@@ -78,7 +79,7 @@ export default function LoginPage() {
         ) : null}
         <div className="auth-card__actions">
           <Link to="/forgot-password" className="text-link">Forgot password?</Link>
-          <Link to="/register" state={{ from: location.state?.from }} className="text-link">Create account</Link>
+          <Link to={returnTo ? `/signup?returnTo=${encodeURIComponent(returnTo)}` : '/signup'} state={{ from: location.state?.from }} className="text-link">Create account</Link>
         </div>
       </div>
     </div>
