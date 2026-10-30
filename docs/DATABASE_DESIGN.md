@@ -17,7 +17,7 @@
 
 ## 2. Foundation schema (Phase 0)
 
-**Proposed — not approved for migration.** These foundation entities are required before Business persistence. The repository currently has no application migrations.
+**Proposed — not approved for migration.** These foundation entities are required before Business persistence. Migration source files exist in the repository, but no live database exists and no migrations have been applied; this design does not assert that any table exists.
 
 | Table | Proposed columns, keys, indexes, and constraints |
 |---|---|
@@ -154,3 +154,22 @@ When a table changes to Maintenance, create a Notification for the restaurant. D
 - Confirm privacy/legal retention requirements for IDs, permits, audit logs, and deleted upload files; listed durations remain subject to the source plan's `[VERIFY]` items.
 - **Proposed plan edit (not applied):** SALO_PLAN_v2.md Section 4.6 should list Restaurant statuses as Approved, Suspended, Inactive, and Closed, with publication represented by separate `is_published`. Pending and Rejected belong to RestaurantApplication status. The approved plan was not edited.
 - No migration or destructive schema change may be produced until the owner approves this design.
+
+## 8. Customer-side schema proposal (Phase 3)
+
+**Proposed — not approved for migration.** The current migration source has no durable Customer address, cart, favorite, review, or support-ticket tables. Customer C0 records the full flow/API contract in [CUSTOMER_SIDE.md](./CUSTOMER_SIDE.md). These are proposed additions only; do not migrate them until reviewed and approved.
+
+| Table / change | Proposed schema |
+|---|---|
+| `users` extension | Add nullable `avatar_path` containing only a server-generated local-disk path and nullable `customer_onboarding_completed_at` for first-login welcome completion. Never store provider URLs or uploaded bytes. |
+| `user_addresses` | `id`; `user_id` FK; `psgc_code` FK to `psgc_locations`; label (`home`, `work`, `school`, `church`, `other`); nullable `custom_label`; `street`, nullable `house_no`; decimal latitude/longitude; nullable `delivery_note`; `is_default`; timestamps. Index `(user_id, created_at)`. Enforce one default per non-empty user address set transactionally; a generated nullable `default_user_id` plus unique key may enforce the invariant in MySQL 8. Validate Philippines coordinate bounds and require custom text for Other. |
+| `orders` extension | Add nullable `delivery_address_id` FK to `user_addresses` to the shared-order schema. Keep the existing address text and coordinate snapshot fields; historical order details must not change when an address is edited/deleted. |
+| `carts` | `id`; `user_id` and `restaurant_id` FKs; status (`active`, `expired`, `checked_out`); `last_activity_at`, `expires_at`; timestamps. Enforce at most one active cart per user/restaurant with a generated nullable active-scope key/keys or equivalent database-safe uniqueness. Index `(user_id, status, expires_at)`. |
+| `cart_items` | `id`; `cart_id`, `menu_item_id` FKs; positive `quantity`; nullable `note`; timestamps; unique `(cart_id, menu_item_id)`. Cart rows do not reserve menu stock. The item add-on/options model remains [VERIFY]. |
+| `restaurant_favorites` | Composite PK `(user_id, restaurant_id)` with FKs and `created_at`. |
+| `menu_item_favorites` | Composite PK `(user_id, menu_item_id)` with FKs and `created_at`. |
+| `restaurant_reviews` | `id`; unique `order_id` FK; `user_id` FK; rating 1..5; nullable comment, reply and `replied_at`; `is_hidden`; timestamps. Enforce completed/receipt-confirmed ownership and self-review restrictions in service/policy. |
+| `rider_reviews` (Driver dependency) | `id`; unique `delivery_id` FK; `user_id` FK; rating 1..5; nullable comment; timestamps. Add only with/after the approved Driver Delivery schema. |
+| `support_tickets`, `ticket_messages` | Ticket: user FK, optional order FK, optional assigned Admin FK, subject, status, timestamps. Message: ticket FK, sender identity, body, timestamps. Sender representation, transitions and retention need approval; these are a missing Phase 1 foundation dependency used by C4/C6. |
+
+Reuse `checkout_groups`, `orders`, `order_items`, `order_status_histories`, `payments`, `discounts`, `discount_redemptions`, `reservations`, `restaurant_tables`, `reservation_settings`, `restaurants`, `menu_items`, `psgc_locations`, `platform_settings`, and `notifications` from the existing migration proposals. Do not create a second Customer order, reservation, discount, or notification table. Live rider coordinates belong in short-lived cache, not a location-history table.

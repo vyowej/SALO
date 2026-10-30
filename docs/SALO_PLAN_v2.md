@@ -6,13 +6,20 @@ This is the working plan for **SALO: An Online Food Ordering and Restaurant Tabl
 
 Tags: **\[DECIDED\]** you chose it · **\[PROPOSED\]** my recommendation, change it if your instructor says otherwise · **\[VERIFY\]** a real-world or legal fact to confirm from a cited source before relying on it.
 
+## Schema authority and owner decisions (2026-10-30)
+
+- [DATABASE_SCHEMA_V3.sql](./DATABASE_SCHEMA_V3.sql) is the authoritative physical schema and overrides this plan, the other design documents, and unapplied migration/model code wherever they differ. The owner will edit v3; do not modify it or infer that any table exists in a live database. No migrations have been applied and no database exists.
+- Product ownership rule: one restaurant may have several Owners. An Owner cannot transfer ownership; an Owner may add another Owner. The Manager ownership-change request feature is removed.
+- **[VERIFY — owner schema update required]:** current v3 has one required `restaurants.owner_user_id`, no Owner membership role in `restaurant_staff`, and no owner invitation relation. Therefore it cannot represent several Owners or add-owner invitations. Keep this product rule in the plan, but do not implement it until the owner updates v3 and approves the corresponding code work.
+- For Customer and Business features, use v3 tables/columns and service-level invariants where they suffice. Do not invent extra columns/tables. Where v3 does not represent a documented behavior, mark that behavior **[VERIFY]** and hold it rather than silently proposing schema changes.
+
 ## What changed in v2
 
 - Backend is **Laravel** (replaces plain PHP/PDO). **No Cloudinary**: files go on the local disk.
 - Order types are **Delivery** and **Pick-up** only. Walk-in is not an order type.
 - One checkout can include several restaurants (**CheckoutGroup**); `Order.user_id` is dropped for strict 3NF.
 - Riders are assigned to **zones with capacity limits** automatically, and orders are **dispatched automatically**.
-- Business hierarchy: **Owner, Manager, Reservation Manager, Staff**. Only the Owner manages staff.
+- Business hierarchy: **Owner(s), Manager, Reservation Manager, Staff**. Only an Owner manages staff and may add another Owner, subject to the schema gate above.
 - Business-mode users cannot order or apply as riders; they switch to Customer mode.
 - Join requirements are trimmed for a school project; delivery proof is a camera photo; the customer confirms receipt before rating.
 - Location search uses PSGC data plus an autocomplete provider; maps use OpenStreetMap.
@@ -93,7 +100,7 @@ A phase is an order of building, not a separate project. The ERD, rules, and tab
 | Capability | How the system knows |
 | --- | --- |
 | Customer | Every Active user |
-| Business (Owner) | `Restaurant.owner_user_id` equals the user |
+| Business (Owner) | An approved Owner relationship for that restaurant. **[VERIFY]** v3 currently represents only `restaurants.owner_user_id`; do not treat it as a complete multi-owner design. |
 | Business (Manager, Reservation Manager, Staff) | An Active `RestaurantStaff` membership for that restaurant |
 | Driver | An Approved, not Resigned `RiderProfile` |
 | Admin | A `PlatformAdmin` row |
@@ -111,7 +118,7 @@ Business-mode restrictions, enforced by the backend:
 ### 4.4 Business hierarchy
 
 ```
-OWNER  (highest; one per restaurant; stored on the Restaurant)
+OWNER(S) (highest; several may belong to one restaurant)
   MANAGER                 runs daily operations
     RESERVATION MANAGER   reservations and tables only
     STAFF                 kitchen/counter: orders and sold-out toggles
@@ -132,11 +139,11 @@ OWNER  (highest; one per restaurant; stored on the Restaurant)
 | See audit history (who approved or updated an order) | Yes | No | No | No |
 | Add, change, or remove staff and positions | Yes | No | No | No |
 
-A suspended restaurant is read-only for every role.
+A suspended restaurant is read-only for every role. All Owners have the Owner permission set; one Owner cannot transfer ownership, but an Owner may add another Owner after the schema supports that membership. The Manager ownership-change request flow is removed.
 
 ### 4.5 Admin
 
-One admin level (Super) for now; a Verifier and Support split is a future option. The admin can view and manage everything, but admin actions are written to the audit log, orders, payments, and reviews are soft-deleted only, and the admin can never see passwords.
+One admin level (Super) for now; a Verifier and Support split is a future option. The admin can view and manage everything, but admin actions are written to the audit log. Orders, payments, and reviews are never hard-deleted; v3 provides no soft-delete column for these records, so use only existing status/moderation fields where applicable. The admin can never see passwords.
 
 ### 4.6 Statuses
 
@@ -180,12 +187,13 @@ User enters email, the system always answers "If that email exists, we sent a li
 - Delivery: Laravel Mail with Mailtrap in development. For a real demo use Gmail SMTP with an app password or a free mail service \[VERIFY\]. Email only; no SMS.
 - Google sign-in (Laravel Socialite) is optional and not in the first build.
 
-### 5.5 Adding staff (Owner only)
+### 5.5 Adding staff and Owners (Owner only)
 
 - **New person:** the Owner enters an email and a position; the invitee gets a single-use link (valid 72 hours), sets their own password, and the membership moves from Invited to Active. The Owner never creates a password for someone else.
 - **Existing user:** the Owner searches by **exact email** (there is no browsable user list, to protect privacy); the user receives an invitation to accept.
-- Only the Owner can change or remove a position. Staff cannot raise their own role, and the last Owner cannot leave without transferring ownership.
-- **Ownership transfer:** the Owner can initiate a direct transfer to any Active SALO account except themself, after reviewing the target identity, confirming with their current password, and explicitly confirming the consequences. A Manager may request a transfer to any Active SALO account other than the current Owner or the requesting Manager; the target need not already belong to the restaurant. Manager lookup is exact-email only and returns minimal identity confirmation, not a browsable user directory. Only one Manager request may be pending per restaurant. The request creates a notification for the current Owner and does not change ownership or permissions until that Owner approves it; the Owner may reject it. The Owner's approval atomically transfers ownership, removes the new Owner's restaurant-staff membership if one exists, and creates or reactivates the former Owner's Manager membership. If no row exists for the new Owner, create one as Removed so the unique restaurant/user pair remains reusable. Record request, approval/rejection, previous/new Owner, actor, and timestamp in audit history. Owner-initiated transfers use the same ownership update and audit transaction.
+- Any Owner may change or remove staff positions; staff cannot raise their own role. One restaurant may have several Owners. An Owner may add another Owner but cannot transfer ownership or silently change an existing person's role to Owner.
+- **[VERIFY — v3 update required]:** the current invitation and membership schema only represents Manager, Reservation Manager, and Staff. Before adding another Owner, the owner must update v3 to represent Owner membership and an invitation/acceptance path. The eventual flow must use exact-email lookup, require acceptance for an existing account, and let a new invitee activate their own account; the Owner never sets or receives a password.
+- Manager ownership-change requests, owner-initiated transfer, and ownership reassignment are not part of the approved workflow.
 
 ### 5.6 Sensitive changes
 
@@ -288,7 +296,7 @@ Business rules are the policies the database and backend must enforce. Numbers m
 - **U4** A user reads and edits only their own private information. Others see only what a transaction requires (a rider sees the customer's name, address, and phone for the active delivery only).
 - **U5** Suspended, Deactivated, and Invited accounts cannot log in.
 - **U6** Unverified emails can browse but cannot place orders or reservations.
-- **U7** A user may save several addresses with a label (Home, Work, School, Church, or Other with custom text); exactly one is the default.
+- **U7** A user may save several addresses using v3 `address_type`, `label`, and `custom_label`; encode School as `address_type=other` and `label=School`. Exactly one address is default when the user has addresses; enforce this in a transaction because v3's index is non-unique.
 - **U8** Birthday is optional; age is derived. Riders must be 18 or older.
 - **U9** Mobile numbers use a Philippine format.
 - **U10** Account removal is deactivation, with anonymization after a retention period. Orders and reservations are never hard-deleted.
@@ -298,7 +306,7 @@ Business rules are the policies the database and backend must enforce. Numbers m
 
 ### 10.2 Restaurants and staff (R, S)
 
-- **R1** Every restaurant has exactly one Owner, stored on the Restaurant.
+- **R1** A restaurant may have several Owners. An Owner cannot transfer ownership, but may add another Owner. Current v3 stores only one `owner_user_id`; multi-owner storage and invitations are **[VERIFY]** pending the owner's schema update.
 - **R2** A restaurant is public only when Approved and Published.
 - **R3** Suspended, Inactive, Closed, and unpublished restaurants cannot receive new orders or reservations.
 - **R4** Hours are defined per weekday with one or more shifts; overnight shifts must be flagged.
@@ -312,11 +320,11 @@ Business rules are the policies the database and backend must enforce. Numbers m
 - **R12** Every restaurant offers Delivery and Pick-up. Walk-in is shown as information only.
 - **R13** A 24/7 restaurant skips the closed-hours check for orders and reservations.
 - **R14** Edits to sensitive fields need admin re-approval; the old value stays live until approved \[PROPOSED\].
-- **S1** Staff roles are Manager, Reservation Manager, and Staff; the Owner is stored on the Restaurant.
+- **S1** Staff roles are Manager, Reservation Manager, and Staff. Owner is a separate capability/membership, not a staff position. V3 does not yet represent multiple Owner memberships **[VERIFY]**.
 - **S2** Only the Owner adds, changes, or removes staff and positions. Managers cannot.
 - **S3** One user may work at several restaurants; permissions are checked per restaurant.
 - **S4** Membership is checked on every request, so removal or suspension takes effect immediately.
-- **S5** The Owner cannot be removed by staff; the last Owner cannot leave without transferring ownership.
+- **S5** Staff cannot remove or change an Owner. No Owner may transfer ownership. Adding an Owner requires the approved Owner-only add flow; any Owner-removal/deactivation rule that could leave no active Owner is **[VERIFY]**.
 - **S6** Key actions (accept or reject orders, change prices, change roles) are written to an audit log that only the Owner (own restaurant) and Admin can read.
 - **S7** A suspended restaurant is read-only for all roles.
 
@@ -334,10 +342,10 @@ Business rules are the policies the database and backend must enforce. Numbers m
 
 ### 10.4 Cart, checkout, and orders (C, O)
 
-- **C1** A customer has at most one active cart per restaurant; carts for several restaurants can coexist.
+- **C1** V3 permits one persistent cart row per customer/restaurant pair (unique `(user_id,restaurant_id)`), not multiple cart lifecycles. Reuse that row; derive an active cart from its items and `expires_at`, and clear its items after expiry or checkout. Touch the parent cart's `updated_at` whenever a cart item changes; set `expires_at` to seven days after activity while nonempty and clear it when empty/expired/checked out. Multiple restaurants can coexist.
 - **C2 (replaced)** One checkout may include several carts. Each cart becomes its own order, and orders placed together share a CheckoutGroup.
 - **C3** A cart does not reserve stock; availability and prices are re-checked at checkout.
-- **C4** Carts expire after 7 days of inactivity \[PROPOSED\].
+- **C4** Carts expire after 7 days of inactivity \[PROPOSED\], using v3 `updated_at` and `expires_at`; no cart status or last-activity column is assumed.
 - **O1** An order belongs to one restaurant and (through its group) one customer, has at least one item, and each quantity is above zero and under a set limit.
 - **O2** The backend computes all totals; totals from the frontend are ignored.
 - **O3** Delivery orders need an address with coordinates inside the restaurant's delivery radius. Pick-up orders have no delivery fee.
@@ -368,7 +376,7 @@ Business rules are the policies the database and backend must enforce. Numbers m
 ### 10.6 Discounts (D)
 
 - **D1** A discount is platform-wide or restaurant-specific and records who funds it.
-- **D2** It must be active, inside its dates, meet the minimum order, and be under its total and per-customer limits.
+- **D2** It must be active, inside its dates, meet the minimum order, and be under its total and per-customer limits; a null v3 `per_customer_limit` means no per-customer cap.
 - **D3** Percent is 1 to 100 with an optional maximum; a fixed discount cannot exceed the eligible subtotal.
 - **D4** Types: percentage, fixed, free delivery, first order.
 - **D5** One discount per order; the total never goes below zero.
@@ -414,7 +422,7 @@ Business rules are the policies the database and backend must enforce. Numbers m
 - **W4** Help requests create a support ticket visible to admins.
 - **G1** Coordinates must be inside the Philippines.
 - **G2** Addresses use the PSGC hierarchy plus a map pin; GPS readings show a draggable pin for correction.
-- **A1** Every admin action is audited. **A2** Orders, payments, and reviews are soft-deleted only. **A3** Admins never see passwords and do not place orders.
+- **A1** Every admin action is audited. **A2** Orders, payments, and reviews are never hard-deleted. V3 provides no soft-delete column for these records; use only existing status/moderation fields where applicable, and preserve payment/order history. **A3** Admins never see passwords and do not place orders.
 - **X1** Retention \[PROPOSED\]: audit log 90 days; rejected-application documents 30 days; delivery proof photos 30 days; notifications 60 days; orders, payments, and reviews kept.
 - **X2** Uploads: JPG, PNG, WebP (and PDF for documents), at most 2 MB, validated by real file type, never by the client's name.
 
@@ -483,7 +491,7 @@ Tags: P0 foundation, P1 admin, P2 business, P3 customer, P4 driver, P5 online pa
 - FR-20 \[P2\] Submit a restaurant application with documents.
 - FR-21 \[P2\] Edit the restaurant page: description, category, photos, hours, Open 24/7, closure dates, contact, with a customer preview.
 - FR-22 \[P2\] Publish, unpublish, or close the restaurant.
-- FR-23 \[P2\] Let the Owner add staff by invitation or exact-email search and set or change positions.
+- FR-23 \[P2\] Let an Owner add staff by invitation or exact-email search and set or change staff positions; an Owner may add another Owner, subject to the v3 schema update gate.
 - FR-24 \[P2\] Enforce role permissions and write an audit history only the Owner can read.
 - FR-25 \[P2\] Manage categories and items (draft, publish, archive), prices, photos, and dietary tags.
 - FR-26 \[P2\] Mark items available or sold out, with an optional daily quantity.
@@ -627,7 +635,7 @@ Each component is stored on its order as a snapshot. The grand total of a group 
 | Pay at pick-up | First build | Method and status |
 | Online banks, GCash, card through a provider (for example PayMongo) | Phase 5, test mode | Provider reference, status, amount, timestamps; never card or bank numbers \[VERIFY\] |
 
-**Who earns what (design now, build later):** restaurant earnings are food sales minus restaurant-funded discounts minus commission; platform revenue is commission plus service fee minus platform-funded discounts; the rider earns the rider share of the delivery fee. In the first build only collected cash and a remitted flag are stored; a full payout ledger is later. Online payment will need one payment to cover a whole group, so Payment may later link to the CheckoutGroup.
+**Who earns what (design now, build later):** restaurant earnings are food sales minus restaurant-funded discounts minus commission; platform revenue is commission plus service fee minus platform-funded discounts; the rider earns the rider share of the delivery fee. In the first build only collected cash and a remitted flag are stored; a full payout ledger is later. V3 relates payments to individual orders and does not make `payments.order_id` unique; the plan therefore treats payment attempts as one-to-many per order. A single payment covering an entire group is not part of the current design.
 
 ## 17. Discount system
 
@@ -686,15 +694,26 @@ In a multi-restaurant checkout, a restaurant's code applies only to that restaur
 
 **First come, first served:** two customers may press Book at the same moment, so the database decides. The booking step locks the table row, checks for overlap, and creates the reservation inside one transaction; the loser sees "this slot was just taken" with other times offered.
 
-**Cancellation, no-show, rescheduling \[PROPOSED policy\]:** customers cancel up to a cutoff chosen by the restaurant (for example 2 hours before) within an admin range; later cancellation is recorded as late. The restaurant or admin may cancel with a reason and the customer is notified. Cancelling releases the table immediately. A no-show is marked after the grace period (default 15 minutes) and repeated no-shows are reported. Rescheduling is a request the restaurant approves after a free-slot check. If a restaurant adds a closure date over bookings, affected customers are notified and offered a new date. Deposits and a per-reservation message thread are Future.
+**Cancellation, no-show, rescheduling \[PROPOSED policy\]:** customers cancel up to a cutoff chosen by the restaurant (for example 2 hours before) within an admin range; later cancellation is recorded as late. The restaurant or admin may cancel with a reason and the customer is notified. Cancelling releases the table immediately. A no-show is marked after the grace period (default 15 minutes) and repeated no-shows are reported. V3 has no separate reschedule-request state/table; a customer-facing approval request is **[VERIFY]** and is not included until represented in the approved schema. If a restaurant adds a closure date over bookings, affected customers are notified and offered a new date. Deposits and a per-reservation message thread are Future.
 
-## 19. Entities, attributes, and keys
+## 19. Entities, attributes, and keys — v3 schema authority
 
-Every entity earns its place. Primary keys are auto-increment integers; public orders and reservations also get a non-sequential reference code. The table for a reservable table is named RestaurantTable. Laravel also creates its own framework tables (sessions, tokens, jobs, cache), which are not part of this design. Phase tags: 0 foundation, 1 admin, 2 business, 3 customer, 4 driver, 5 payment.
+The entity tables formerly listed in this section describe the earlier Plan v2 proposal and are **superseded**. Do not use their PK names, columns, enum values, or relationship cardinalities to generate code or migrations. The exact table definitions, PKs, FKs, indexes, checks, enums, and seed values are in [DATABASE_SCHEMA_V3.sql](./DATABASE_SCHEMA_V3.sql); the inventory and code comparison are in [SCHEMA_GAP_REPORT.md](./SCHEMA_GAP_REPORT.md). V3 is a standalone schema blueprint and currently contains a destructive database drop/create preamble; it has not been executed.
 
-Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, required) to enforce "exactly one owner". RestaurantStaff holds the other roles.
+V3's 49 application tables are:
 
-### 19.1 Identity and access
+- Identity and platform: `users`, `platform_admins`, `auth_tokens`, `psgc_locations`, `platform_settings`, `audit_logs`, `notifications`.
+- Restaurant and menu: `restaurants`, `restaurant_applications`, `application_documents`, `restaurant_photos`, `restaurant_staff`, `invitations`, `cuisine_types`, `restaurant_cuisines`, `operating_hours`, `closure_dates`, `reservation_settings`, `menu_categories`, `menu_items`, `dietary_tags`, `menu_item_dietary_tags`, `restaurant_tables`, `reservations`.
+- Customer and orders: `user_addresses`, `carts`, `cart_items`, `checkout_groups`, `orders`, `order_items`, `order_status_histories`, `payments`, `discounts`, `discount_redemptions`, `restaurant_reviews`, `favorite_restaurants`, `favorite_menu_items`, `support_tickets`, `ticket_messages`.
+- Rider and dispatch: `zones`, `shifts`, `zone_shift_capacities`, `rider_profiles`, `rider_documents`, `rider_preferred_shifts`, `rider_shift_assignments`, `deliveries`, `delivery_offers`, `rider_reviews`.
+
+The current v3 owner representation is a known exception to the product rule above: `restaurants.owner_user_id` is one required FK and there is no Owner membership/owner invitation or manager request table. Multi-owner behavior remains **[VERIFY]** until the owner updates v3. Other product rules must fit v3; use service-level validation for cross-row behavior and mark unrepresented behavior **[VERIFY]** rather than adding undocumented schema.
+
+V3 uses auto-increment IDs where specified, plus natural and composite keys; public orders and reservations have non-sequential reference codes. Exact key and table names are defined only by v3. Laravel-managed framework tables are separate and must be created only when required by the selected drivers. Phase tags: 0 foundation, 1 admin, 2 business, 3 customer, 4 driver, 5 payment.
+
+Legacy note: the preceding Plan v2 entity rows were designed around a single `owner_user_id`. They are superseded by the v3 schema authority above and must not be used as the current data dictionary.
+
+### 19.1 Identity and access (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived (not stored) |
 | --- | --- | --- | --- | --- | --- |
@@ -706,7 +725,7 @@ Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, req
 | AuditLog | 0 | log\_id | actor\_user\_id, restaurant\_id (optional) | action, entity\_type, entity\_id, before\_value, after\_value, created\_at |  |
 | PsgcLocation | 0 | code | parent\_code | name, level (region, province, city, barangay) |  |
 
-### 19.2 Restaurant
+### 19.2 Restaurant (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
@@ -721,7 +740,7 @@ Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, req
 | RestaurantCuisine | 2 | (restaurant\_id, cuisine\_id) | both |  |  |
 | ReservationSetting | 2 | restaurant\_id | restaurant\_id | accepts\_reservations, confirm\_mode, review\_window\_hours, slot\_minutes, dining\_minutes, min\_lead\_hours, max\_months\_ahead, max\_party\_size, grace\_minutes, cancel\_cutoff\_hours |  |
 
-### 19.3 Menu
+### 19.3 Menu (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
@@ -730,7 +749,7 @@ Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, req
 | DietaryTag | 2 | tag\_id |  | name, tag\_type |  |
 | MenuItemDietaryTag | 2 | (item\_id, tag\_id) | both |  |  |
 
-### 19.4 Ordering and payment
+### 19.4 Ordering and payment (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
@@ -742,7 +761,7 @@ Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, req
 | OrderStatusHistory | 3 | history\_id | order\_id, changed\_by | from\_status, to\_status, reason, changed\_at |  |
 | Payment | 3 | payment\_id | order\_id | method, status, amount, provider, provider\_reference, paid\_at |  |
 
-### 19.5 Riders, zones, and delivery
+### 19.5 Riders, zones, and delivery (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
@@ -755,7 +774,7 @@ Ownership note: the Owner is stored directly on Restaurant (`owner_user_id`, req
 | Delivery | 4 | delivery\_id | order\_id (unique), rider\_id | status, accepted\_at, picked\_up\_at, delivered\_at, proof\_photo\_path, proof\_lat, proof\_lng, distance\_km, rider\_earning, cash\_collected, cash\_remitted |  |
 | DeliveryOffer | 4 | offer\_id | delivery\_id, rider\_id | offered\_at, response (Accepted, Declined, Timeout), responded\_at |  |
 
-### 19.6 Discounts, reservations, feedback, system
+### 19.6 Discounts, reservations, feedback, system (legacy v2 list; superseded by v3)
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
@@ -774,9 +793,11 @@ Removed from v1: LoginAttempt (Laravel's rate limiter handles it) and FavoriteRi
 
 ## 20. Relationships, cardinality, and the Chen ERD
 
+Logical relationships must not be mistaken for declared v3 foreign keys: for example, `psgc_locations.parent_code` has no FK constraint. V3's declared keys are authoritative. Multiple-Owner cardinality is a product rule pending the owner schema update.
+
 | Relationship | Cardinality | Implementation |
 | --- | --- | --- |
-| User owns Restaurant | 1 : M | Restaurant.owner\_user\_id |
+| User owns Restaurant | M : N product rule | Owner association is **[VERIFY]**; current v3 has only the required `restaurants.owner_user_id` FK and cannot encode multiple Owners. |
 | User works at Restaurant | M : N | RestaurantStaff |
 | User has Addresses | 1 : M | UserAddress.user\_id |
 | User may be a Rider / an Admin | 1 : 0..1 | unique user\_id on RiderProfile / PlatformAdmin |
@@ -784,7 +805,7 @@ Removed from v1: LoginAttempt (Laravel's rate limiter handles it) and FavoriteRi
 | CheckoutGroup contains Orders | 1 : M | Order.checkout\_id |
 | Restaurant receives Orders | 1 : M | Order.restaurant\_id |
 | Order contains Menu Items | M : N | OrderItem |
-| Order has Status History, Payment | 1 : M, 1 : 1 | order\_id on each |
+| Order has Status History and Payments | 1 : M, 1 : M | `order_status_histories.order_id`; `payments.order_id` (not unique in v3) |
 | Order has Delivery | 1 : 0..1 | Delivery.order\_id unique |
 | Rider performs Deliveries | 1 : M | Delivery.rider\_id |
 | Rider is assigned to Zone and Shift | M : N : N | RiderShiftAssignment |
@@ -793,7 +814,7 @@ Removed from v1: LoginAttempt (Laravel's rate limiter handles it) and FavoriteRi
 | Restaurant has Reservation Settings | 1 : 1 | keyed by restaurant\_id |
 | Restaurant serves Cuisines | M : N | RestaurantCuisine |
 | Category contains Items; Item has Tags | 1 : M; M : N | category\_id; MenuItemDietaryTag |
-| User has Carts (one per restaurant); Cart contains Items | 1 : M; M : N | Cart unique pair; CartItem |
+| User has one reusable Cart per restaurant; Cart contains Items | 1 : M; 1 : M | Unique `(user_id,restaurant_id)`; reuse row and clear items on expiry/checkout |
 | Table holds Reservations; User makes Reservations | 1 : M each | table\_id, user\_id |
 | Discount is redeemed in Orders | M : N, at most one per order | DiscountRedemption |
 | Order has one Restaurant Review; Delivery has one Rider Review | 1 : 0..1 | unique order\_id, delivery\_id |
@@ -828,7 +849,7 @@ Removed from v1: LoginAttempt (Laravel's rate limiter handles it) and FavoriteRi
 ## 22. Data integrity
 
 - **Entity integrity:** every primary key is unique and not null.
-- **Referential integrity:** foreign keys must reference existing rows; deletes are restricted, and history tables are soft-deleted.
+- **Referential integrity:** foreign keys must reference existing rows; deletes are restricted where v3 defines them. Preserve history-bearing records; use soft deletion only on tables with a v3 `deleted_at` column.
 - **Domain integrity:** price above 0; quantity above 0; capacity above 0; guests at least 1; discount percent between 1 and 100; rating between 1 and 5; coordinates inside the Philippines; enumerated statuses; unique email, table number per restaurant, category name per restaurant, one cart per user and restaurant.
 - **Business integrity:** sold-out food cannot be ordered; a table cannot be double-booked; expired or exhausted discounts cannot be used; a restaurant cannot be managed by non-members; a suspended restaurant cannot receive orders; a business-mode user cannot order; nobody orders from their own restaurant; a zone cannot exceed its capacity.
 
@@ -853,15 +874,15 @@ Failures of external services (email, maps, routing) never leave partial records
 | Approach | Meaning | Fit for SALO |
 | --- | --- | --- |
 | Hard delete | Removes the row and related data | Not used; it would destroy orders, reservations, reviews, and reports |
-| **Soft delete or deactivation** | Row stays, status becomes inactive | **Used everywhere** |
+| **Soft delete or deactivation** | Row stays, status becomes inactive | Used where v3 provides status/`deleted_at`; not every table has a soft-delete column |
 
 - **Customer deactivation:** settings, confirm password, show consequences, status Deactivated. Order and reservation history stays; personal data is anonymized after the retention period.
-- **Owner deactivation:** the restaurants become Inactive or Closed: no new orders or reservations, existing transactions are resolved or preserved, active discounts are deactivated, history is kept.
+- **Owner deactivation:** if another active Owner remains, do not automatically deactivate the restaurant solely because one Owner deactivates. If deactivation would leave no active Owner, the behavior is **[VERIFY]**; an Owner cannot transfer ownership, and an additional Owner must be added through the approved schema-backed flow first.
 - An Owner may reactivate a restaurant they deactivated (Inactive) from Business Settings; it returns to Approved and remains unpublished until the Owner publishes it again. A restaurant suspended by Admin is reinstated only by Admin.
 - **Restaurant deletion:** an owner cannot hard-delete a restaurant. The owner can close or deactivate it; only the status changes.
 - **Staff removal:** membership becomes Removed and access ends on the next request.
 - **Rider resign:** allowed with no active delivery and settled cash; status Resigned; capacity is freed; history stays.
-- **Admin delete:** soft delete for users, restaurants, orders, payments, and reviews, and every action is audited.
+- **Admin removal/moderation:** never hard-delete order/payment history. Use v3 `deleted_at` only where present; use `restaurant_reviews.is_hidden` for review moderation and valid order statuses for order resolution. Every action is audited.
 
 ## 25. Security and validation
 
@@ -952,3 +973,5 @@ Failures of external services (email, maps, routing) never leave partial records
 - Staff may be Staff at one restaurant and Manager at another.
 
 **\[VERIFY\] list:** Laravel approval by the instructor; Data Privacy Act obligations for storing IDs, addresses, and photos; current business and rider requirements of delivery platforms; OpenStreetMap tile and Nominatim usage policies; Geoapify and OpenRouteService free limits; PSGC API endpoints and the data import; Gmail SMTP or another mail service; PayMongo test mode; license and permission for any photo used on the site; MySQL version available at school.
+
+Additional schema-dependent items: Owner membership/add-owner invitation in v3; rules for removing/deactivating an Owner without leaving a restaurant ownerless; Admin ownership changes; address `School` encoding and service-enforced default invariant; customer reschedule requests; account/document retention; and nullable v3 fields required by delivery/order flows.
