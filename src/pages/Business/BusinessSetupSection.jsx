@@ -8,6 +8,40 @@ import { useCan } from '../../hooks/useCan';
 import { businessService } from '../../services/businessService';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const WEEKDAY_LABELS = Object.fromEntries(WEEKDAYS.map((day) => [day, day[0].toUpperCase() + day.slice(1)]));
+
+function formatTime(time) {
+  if (!time) return '';
+  const [hours, minutes] = time.split(':').map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+}
+
+function hasOverlappingHours(hours) {
+  const intervals = WEEKDAYS.map((day) => (hours[day] || []).map((shift) => {
+    const [openHour, openMinute] = shift.open_time.split(':').map(Number);
+    const [closeHour, closeMinute] = shift.close_time.split(':').map(Number);
+    const start = openHour * 60 + openMinute;
+    const close = closeHour * 60 + closeMinute;
+    return [start, close + (shift.crosses_midnight ? 1440 : 0)];
+  }));
+
+  for (let dayIndex = 0; dayIndex < intervals.length; dayIndex += 1) {
+    const dayIntervals = intervals[dayIndex];
+    for (let index = 0; index < dayIntervals.length; index += 1) {
+      const [start, end] = dayIntervals[index];
+      if (dayIntervals.some(([otherStart, otherEnd], otherIndex) => (
+        otherIndex !== index && start < otherEnd && end > otherStart
+      ))) return true;
+
+      if (end > 1440) {
+        const nextDayIntervals = intervals[(dayIndex + 1) % intervals.length];
+        if (nextDayIntervals.some(([nextStart]) => nextStart < end - 1440)) return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 function usePageData(loader) {
   const [data, setData] = useState(null);
@@ -312,6 +346,11 @@ function HoursSection({ restaurantId, user, readOnly }) {
   const [form, setForm] = useState({ is_24_7: false, hours: {} });
   const [closureDate, setClosureDate] = useState('');
   const [closureReason, setClosureReason] = useState('');
+  const [selectedDays, setSelectedDays] = useState([]);
+  const [schedule, setSchedule] = useState({ open_time: '09:00', close_time: '17:00' });
+  const [applyAsClosed, setApplyAsClosed] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [hoursValidationError, setHoursValidationError] = useState('');
   const hoursForm = form.initialized
     ? form
     : page.data
@@ -326,6 +365,23 @@ function HoursSection({ restaurantId, user, readOnly }) {
   })), [closures]);
   const saveHours = (event) => {
     event.preventDefault();
+    setHoursValidationError('');
+    if (!hoursForm.is_24_7) {
+      const invalidShift = WEEKDAYS.some((day) => (hoursForm.hours?.[day] || []).some((shift) => (
+        !shift.open_time
+        || !shift.close_time
+        || shift.open_time === shift.close_time
+        || (shift.crosses_midnight ? shift.close_time >= shift.open_time : shift.close_time <= shift.open_time)
+      )));
+      if (invalidShift) {
+        setHoursValidationError('Each time window needs different opening and closing times. Mark closing times after midnight as overnight.');
+        return;
+      }
+      if (hasOverlappingHours(hoursForm.hours)) {
+        setHoursValidationError('Opening time windows cannot overlap on the same day or across midnight.');
+        return;
+      }
+    }
     feedback.run(async () => {
       await businessService.updateHours(restaurantId, hoursForm, user);
       setForm({ initialized: true, is_24_7: hoursForm.is_24_7, hours: hoursForm.hours });
@@ -333,6 +389,7 @@ function HoursSection({ restaurantId, user, readOnly }) {
     }, 'Opening hours saved.');
   };
   const setShift = (day, index, field, value) => {
+    setHoursValidationError('');
     setForm((previous) => {
       const currentForm = previous.initialized ? previous : hoursForm;
       const current = [...(currentForm.hours[day] || [])];
@@ -340,22 +397,85 @@ function HoursSection({ restaurantId, user, readOnly }) {
       return { ...currentForm, initialized: true, hours: { ...currentForm.hours, [day]: current } };
     });
   };
-  const addShift = (day) => setForm((previous) => {
-    const currentForm = previous.initialized ? previous : hoursForm;
-    return {
-      ...currentForm,
-      initialized: true,
-      hours: { ...currentForm.hours, [day]: [...(currentForm.hours[day] || []), { open_time: '09:00', close_time: '17:00', crosses_midnight: false }] },
-    };
-  });
-  const removeShift = (day, index) => setForm((previous) => {
-    const currentForm = previous.initialized ? previous : hoursForm;
-    return {
-      ...currentForm,
-      initialized: true,
-      hours: { ...currentForm.hours, [day]: currentForm.hours[day].filter((_, position) => position !== index) },
-    };
-  });
+  const addShift = (day) => {
+    setHoursValidationError('');
+    setForm((previous) => {
+      const currentForm = previous.initialized ? previous : hoursForm;
+      return {
+        ...currentForm,
+        initialized: true,
+        hours: { ...currentForm.hours, [day]: [...(currentForm.hours[day] || []), { open_time: '09:00', close_time: '17:00', crosses_midnight: false }] },
+      };
+    });
+  };
+  const removeShift = (day, index) => {
+    setHoursValidationError('');
+    setForm((previous) => {
+      const currentForm = previous.initialized ? previous : hoursForm;
+      return {
+        ...currentForm,
+        initialized: true,
+        hours: { ...currentForm.hours, [day]: currentForm.hours[day].filter((_, position) => position !== index) },
+      };
+    });
+  };
+  const toggleScheduleDay = (day) => {
+    setSelectedDays((previous) => (
+      previous.includes(day)
+        ? previous.filter((selectedDay) => selectedDay !== day)
+        : WEEKDAYS.filter((weekday) => previous.includes(weekday) || weekday === day)
+    ));
+    setScheduleError('');
+  };
+  const selectScheduleDays = (days) => {
+    setSelectedDays(days);
+    setScheduleError('');
+  };
+  const applySchedule = () => {
+    setScheduleError('');
+    setHoursValidationError('');
+    if (selectedDays.length === 0) {
+      setScheduleError('Select at least one day to apply a schedule.');
+      return;
+    }
+
+    if (applyAsClosed) {
+      const daysWithHours = selectedDays.filter((day) => (hoursForm.hours?.[day] || []).length > 0);
+      if (daysWithHours.length > 0 && !window.confirm(`Mark ${daysWithHours.map((day) => WEEKDAY_LABELS[day]).join(', ')} as closed and remove their existing time windows?`)) {
+        return;
+      }
+    } else {
+      if (!schedule.open_time || !schedule.close_time) {
+        setScheduleError('Choose both an opening time and a closing time.');
+        return;
+      }
+      if (schedule.open_time === schedule.close_time) {
+        setScheduleError('Opening and closing times cannot be the same.');
+        return;
+      }
+      const fullDays = selectedDays.filter((day) => (hoursForm.hours?.[day] || []).length >= 4);
+      if (fullDays.length > 0) {
+        setScheduleError(`A maximum of four time windows is allowed for ${fullDays.map((day) => WEEKDAY_LABELS[day]).join(', ')}.`);
+        return;
+      }
+    }
+
+    const nextHours = { ...hoursForm.hours };
+    selectedDays.forEach((day) => {
+      const currentShifts = [...(hoursForm.hours?.[day] || [])];
+      nextHours[day] = applyAsClosed
+        ? []
+        : [...currentShifts, {
+            ...schedule,
+            crosses_midnight: schedule.close_time < schedule.open_time,
+          }];
+    });
+    if (!applyAsClosed && hasOverlappingHours(nextHours)) {
+      setScheduleError('This time window overlaps an existing window on this day or the following day.');
+      return;
+    }
+    setForm({ ...hoursForm, initialized: true, hours: nextHours });
+  };
   const addClosure = (event) => {
     event.preventDefault();
     feedback.run(async () => {
@@ -385,34 +505,113 @@ function HoursSection({ restaurantId, user, readOnly }) {
           <form onSubmit={saveHours}>
             <label className="business-checkbox"><input type="checkbox" checked={Boolean(hoursForm.is_24_7)} onChange={(event) => setForm((previous) => ({ ...(previous.initialized ? previous : hoursForm), initialized: true, is_24_7: event.target.checked }))} /> Open 24/7</label>
             {!hoursForm.is_24_7 ? (
-              <div className="business-hours-grid">
+              <>
+                <fieldset className="business-hours-bulk">
+                  <legend>Apply a schedule to multiple days</legend>
+                  <p>Select days and add a time window. Existing windows are kept; you can also mark selected days as closed.</p>
+                  <div className="business-hours-shortcuts" aria-label="Day selection shortcuts">
+                    <Button variant="secondary" size="sm" onClick={() => selectScheduleDays(WEEKDAYS)}>Select all</Button>
+                    <Button variant="secondary" size="sm" onClick={() => selectScheduleDays(WEEKDAYS.slice(0, 5))}>Weekdays</Button>
+                    <Button variant="secondary" size="sm" onClick={() => selectScheduleDays(WEEKDAYS.slice(5))}>Weekends</Button>
+                    <Button variant="secondary" size="sm" onClick={() => selectScheduleDays([])}>Clear selection</Button>
+                  </div>
+                  <div className="business-hours-day-selector">
+                    {WEEKDAYS.map((day) => (
+                      <label key={day} className="business-hours-day-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedDays.includes(day)}
+                          onChange={() => toggleScheduleDay(day)}
+                        />
+                        {WEEKDAY_LABELS[day]}
+                      </label>
+                    ))}
+                  </div>
+                  <label className="business-checkbox">
+                    <input type="checkbox" checked={applyAsClosed} onChange={(event) => {
+                      setApplyAsClosed(event.target.checked);
+                      setScheduleError('');
+                    }} />
+                    Mark selected days as closed
+                  </label>
+                  {!applyAsClosed ? (
+                    <div className="business-hours-time-inputs">
+                      <Input
+                        label="Opening time"
+                        type="time"
+                        value={schedule.open_time}
+                        onChange={(event) => {
+                          setSchedule({ ...schedule, open_time: event.target.value });
+                          setScheduleError('');
+                        }}
+                        required
+                      />
+                      <Input
+                        label="Closing time"
+                        type="time"
+                        value={schedule.close_time}
+                        onChange={(event) => {
+                          setSchedule({ ...schedule, close_time: event.target.value });
+                          setScheduleError('');
+                        }}
+                        required
+                      />
+                    </div>
+                  ) : null}
+                  <p className="business-hours-preview" aria-live="polite">
+                    <strong>Schedule preview:</strong>{' '}
+                    {selectedDays.length === 0
+                      ? 'Select one or more days.'
+                      : `${selectedDays.map((day) => WEEKDAY_LABELS[day]).join(', ')} — ${applyAsClosed ? 'Closed' : `${formatTime(schedule.open_time)}–${formatTime(schedule.close_time)}${schedule.close_time < schedule.open_time ? ' (next day)' : ''}`}`}
+                  </p>
+                  {scheduleError ? <p className="business-error" role="alert">{scheduleError}</p> : null}
+                  <Button variant="secondary" onClick={applySchedule}>Apply schedule</Button>
+                </fieldset>
+                <div className="business-hours-grid">
                 {WEEKDAYS.map((day) => (
                   <fieldset key={day} className="business-day-fieldset">
-                    <legend>{day}</legend>
+                    <legend>{WEEKDAY_LABELS[day]}</legend>
+                    <span className={`business-hours-status ${(hoursForm.hours?.[day] || []).length ? 'is-open' : 'is-closed'}`}>
+                      {(hoursForm.hours?.[day] || []).length === 0
+                        ? 'Closed'
+                        : (hoursForm.hours?.[day] || []).length > 1
+                          ? `${(hoursForm.hours?.[day] || []).length} time windows`
+                          : 'Open'}
+                    </span>
                     {(hoursForm.hours?.[day] || []).map((shift, index) => (
                       <div className="business-shift-row" key={`${day}-${index}`}>
                         <Input label="Opens" type="time" value={shift.open_time} onChange={(event) => {
                           setShift(day, index, 'open_time', event.target.value);
-                          setShift(day, index, 'crosses_midnight', shift.close_time <= event.target.value);
+                          setShift(day, index, 'crosses_midnight', shift.close_time < event.target.value);
                         }} required />
                         <Input label="Closes" type="time" value={shift.close_time} onChange={(event) => {
                           setShift(day, index, 'close_time', event.target.value);
-                          setShift(day, index, 'crosses_midnight', event.target.value <= shift.open_time);
+                          setShift(day, index, 'crosses_midnight', event.target.value < shift.open_time);
                         }} required />
-                        <Button variant="secondary" size="sm" onClick={() => removeShift(day, index)}>Remove shift</Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Remove this ${day} opening-hours shift?`)) removeShift(day, index);
+                          }}
+                        >
+                          Remove shift
+                        </Button>
                       </div>
                     ))}
-                    <Button variant="secondary" size="sm" onClick={() => addShift(day)}>Add shift</Button>
+                    <Button variant="secondary" size="sm" onClick={() => addShift(day)}>Add time window</Button>
                   </fieldset>
                 ))}
               </div>
+              </>
             ) : null}
+            {hoursValidationError ? <p className="business-error" role="alert">{hoursValidationError}</p> : null}
             <div className="business-form-actions"><Button type="submit" disabled={feedback.busy}>{feedback.busy ? 'Saving…' : 'Save opening hours'}</Button></div>
           </form>
         ) : (
           <div className="business-readonly-hours">
             {hoursForm.is_24_7 ? <p>Open 24/7</p> : WEEKDAYS.map((day) => (
-              <p key={day}><strong>{day}:</strong> {(hoursForm.hours?.[day] || []).map((shift) => `${shift.open_time}–${shift.close_time}${shift.crosses_midnight ? ' (next day)' : ''}`).join(', ') || 'Closed'}</p>
+              <p key={day}><strong>{WEEKDAY_LABELS[day]}:</strong> {(hoursForm.hours?.[day] || []).map((shift) => `${formatTime(shift.open_time)}–${formatTime(shift.close_time)}${shift.crosses_midnight ? ' (next day)' : ''}`).join(', ') || 'Closed'}</p>
             ))}
           </div>
         )}

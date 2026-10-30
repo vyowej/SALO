@@ -2,6 +2,7 @@ import apiRequest, { apiUploadRequest } from './apiClient';
 import config from '../config';
 
 const mockStorageKey = 'salo.business.pages.mock.v1';
+const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 function restaurantPath(restaurantId, endpoint = '') {
   return `/manage/restaurants/${encodeURIComponent(restaurantId)}/business${endpoint}`;
@@ -273,7 +274,10 @@ export async function updateHours(restaurantId, data, user) {
   if (!config.useMock) return apiRequest(restaurantPath(restaurantId, '/hours'), { method: 'PUT', body: data });
   const { state, save } = mockState(restaurantId, user);
   state.restaurant.is_24_7 = Boolean(data.is_24_7);
-  state.hours = data.hours || [];
+  state.hours = Object.fromEntries(weekDays.map((day) => [
+    day,
+    Array.isArray(data.hours?.[day]) ? data.hours[day] : [],
+  ]));
   save();
   return { hours: state.hours, is_24_7: state.restaurant.is_24_7 };
 }

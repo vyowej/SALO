@@ -434,6 +434,68 @@
   gap: var(--space-3);
 }
 
+.business-hours-bulk {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.business-hours-bulk > p:first-of-type {
+  color: var(--text-muted);
+}
+
+.business-hours-shortcuts,
+.business-hours-day-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.business-hours-day-option {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.business-hours-time-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.business-hours-preview {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+}
+
+.business-hours-status {
+  justify-self: start;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.business-hours-status.is-open {
+  color: var(--success, #1d6845);
+  background: color-mix(in srgb, var(--success, #238456) 10%, transparent);
+}
+
+.business-hours-status.is-closed {
+  color: var(--text-muted);
+}
+
 .business-day-fieldset {
   display: grid;
   gap: var(--space-3);
@@ -505,6 +567,7 @@
   .business-form-grid,
   .business-profile-preview,
   .business-upload-row,
+  .business-hours-time-inputs,
   .business-shift-row,
   .business-closure-form {
     grid-template-columns: 1fr;
