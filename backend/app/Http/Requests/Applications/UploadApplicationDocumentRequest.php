@@ -14,7 +14,7 @@ class UploadApplicationDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'doc_type' => ['required', 'in:business_permit,dti_sec_registration,owner_valid_id'],
+            'doc_type' => ['required', 'in:business_permit,dti_sec_registration,owner_valid_id,halal_certificate'],
             'file' => ['required', 'file', 'max:2048', 'mimes:pdf,jpg,jpeg,png,webp'],
             'expiry_date' => ['sometimes', 'nullable', 'date'],
         ];

@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
 use App\Http\Controllers\Api\V1\Business\AuditLogController;
+use App\Http\Controllers\Api\V1\Business\MenuController;
+use App\Http\Controllers\Api\V1\Business\OrderController;
 use App\Http\Controllers\Api\V1\Business\RestaurantPageController;
 use App\Http\Controllers\Api\V1\Business\TeamController;
 use App\Http\Controllers\Api\V1\Business\TeamInvitationController;
@@ -175,5 +177,41 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             ->middleware('restaurant.access:team.manage');
         Route::get('/manage/restaurants/{restaurant}/audit', [AuditLogController::class, 'index'])
             ->middleware('restaurant.access:audit.view');
+        Route::get('/manage/restaurants/{restaurant}/menu', [MenuController::class, 'index'])
+            ->middleware('restaurant.access:restaurant.view');
+        Route::get('/manage/restaurants/{restaurant}/orders', [OrderController::class, 'index'])
+            ->middleware('restaurant.access:orders.view');
+        Route::get('/manage/restaurants/{restaurant}/orders/{order}', [OrderController::class, 'show'])
+            ->middleware('restaurant.access:orders.view')
+            ->whereNumber('order');
+        Route::patch('/manage/restaurants/{restaurant}/orders/{order}/status', [OrderController::class, 'updateStatus'])
+            ->middleware('restaurant.access:orders.status.update')
+            ->whereNumber('order');
+        Route::post('/manage/restaurants/{restaurant}/menu/categories', [MenuController::class, 'storeCategory'])
+            ->middleware('restaurant.access:restaurant.menu.manage');
+        Route::patch('/manage/restaurants/{restaurant}/menu/categories/{category}', [MenuController::class, 'updateCategory'])
+            ->middleware('restaurant.access:restaurant.menu.manage')
+            ->whereNumber('category');
+        Route::delete('/manage/restaurants/{restaurant}/menu/categories/{category}', [MenuController::class, 'archiveCategory'])
+            ->middleware('restaurant.access:restaurant.menu.manage')
+            ->whereNumber('category');
+        Route::post('/manage/restaurants/{restaurant}/menu/items', [MenuController::class, 'storeItem'])
+            ->middleware('restaurant.access:restaurant.menu.manage');
+        Route::post('/manage/restaurants/{restaurant}/menu/items/bulk-publish', [MenuController::class, 'bulkPublish'])
+            ->middleware('restaurant.access:restaurant.menu.manage');
+        Route::patch('/manage/restaurants/{restaurant}/menu/items/{item}', [MenuController::class, 'updateItem'])
+            ->middleware('restaurant.access:restaurant.menu.manage')
+            ->whereNumber('item');
+        Route::post('/manage/restaurants/{restaurant}/menu/items/{item}/photo', [MenuController::class, 'uploadPhoto'])
+            ->middleware('restaurant.access:restaurant.menu.manage')
+            ->whereNumber('item');
+        Route::delete('/manage/restaurants/{restaurant}/menu/items/{item}', [MenuController::class, 'archiveItem'])
+            ->middleware('restaurant.access:restaurant.menu.manage')
+            ->whereNumber('item');
+        Route::patch('/manage/restaurants/{restaurant}/menu/items/{item}/availability', [MenuController::class, 'availability'])
+            ->middleware('restaurant.access:menu.availability.manage')
+            ->whereNumber('item');
+        Route::post('/manage/restaurants/{restaurant}/menu/halal-certificate', [MenuController::class, 'uploadHalalCertificate'])
+            ->middleware('restaurant.access:restaurant.menu.manage');
     });
 });

@@ -38,4 +38,34 @@ class RestaurantPagePolicy
     {
         return $this->access->allows($user, $restaurant, 'restaurant.hours.manage');
     }
+
+    public function manageMenu(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'restaurant.menu.manage');
+    }
+
+    public function manageMenuAvailability(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'menu.availability.manage');
+    }
+
+    public function viewOrders(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'orders.view');
+    }
+
+    public function updateOrderStatus(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'orders.status.update');
+    }
+
+    public function cancelOrder(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'orders.cancel');
+    }
+
+    public function viewOrderActors(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'audit.view');
+    }
 }

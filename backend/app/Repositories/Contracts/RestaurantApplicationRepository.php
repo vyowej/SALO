@@ -16,6 +16,8 @@ interface RestaurantApplicationRepository
 
     public function findPendingSensitiveUpdate(int $restaurantId): ?RestaurantApplication;
 
+    public function findLatestApprovedInitialForRestaurant(int $restaurantId): ?RestaurantApplication;
+
     public function create(array $attributes): RestaurantApplication;
 
     public function updateDraft(RestaurantApplication $application, array $details): RestaurantApplication;

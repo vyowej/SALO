@@ -64,12 +64,28 @@ Because `restaurants` is introduced after Phase 0, `audit_logs.restaurant_id` is
 
 | Table | Proposed columns and constraints |
 |---|---|
-| `menu_categories` | `id`; `restaurant_id` FK; name; sort order; status; timestamps. Unique `(restaurant_id, name)`. |
-| `menu_items` | `id`; `category_id` FK; name, description, decimal(10,2) price > 0, public image path, lifecycle (`draft`, `published`, `archived`), `is_available`, nullable daily quantity and quantity left, prep minutes; timestamps. Item's restaurant is derived through category. |
-| `dietary_tags` | `id`; unique name; tag type. |
+| `menu_categories` | `id`; `restaurant_id` FK; name; unsigned sort order; status (`active`, `archived`); timestamps. Unique `(restaurant_id, name)` and index `(restaurant_id, status, sort_order)`. |
+| `menu_items` | `id`; `category_id` FK; name, description, decimal(10,2) price > 0, public image path, lifecycle (`draft`, `published`, `archived`), `is_available`, nullable daily quantity and quantity left, prep minutes; timestamps. Index `(category_id, lifecycle_status, is_available)`. Item's restaurant is derived through category. |
+| `dietary_tags` | `id`; unique name; **[PROPOSED]** tag type (`dietary`, `allergen`). The initial controlled list includes contains pork, Halal-certified, vegetarian, vegan, and common allergen labels. |
 | `menu_item_dietary_tags` | Composite PK `(menu_item_id, dietary_tag_id)` and FKs. |
 
 Order line snapshots must retain item name and unit price after item changes or archive. Daily quantity is nullable for unlimited stock; quantity decrement/reset behavior is transactional and implemented in a later ordering slice.
+
+The menu migration seeds the controlled dietary-tag vocabulary. A Halal certificate is an `application_documents` row of type `halal_certificate` attached to the restaurant's approved initial application; its private path is never returned by the menu API. B4 requires explicit Owner confirmation for every price edit because Customer cart records do not exist yet; affected-cart detection is deferred to the Customer cart implementation.
+
+### Shared order foundation (B5 prerequisite)
+
+**Proposed — documented for B5 implementation; migration remains unrun.** These are the shared order records required by Business order management. Customer checkout remains out of scope; B5 must not create parallel Business order records or customer-facing checkout routes.
+
+| Table | Proposed columns, keys, indexes, and constraints |
+|---|---|
+| `checkout_groups` | `id BIGINT UNSIGNED AUTO_INCREMENT` PK; `user_id` FK to users; unique non-sequential `reference_code`; nullable `idempotency_key`; `placed_at`; timestamps. Unique `(user_id, idempotency_key)`; group total is derived from its orders. |
+| `orders` | `id BIGINT UNSIGNED AUTO_INCREMENT` PK; `checkout_group_id` FK; `restaurant_id` FK; unique non-sequential `reference_code`; `order_type` (`delivery`, `pick_up`); nullable `scheduled_for`; `status` (`placed`, `confirmed`, `preparing`, `ready`, `out_for_delivery`, `delivered`, `completed`, `rejected`, `cancelled`, `delivery_failed`); recipient name/phone and delivery address text/coordinates snapshots; subtotal, delivery fee, service fee, discount amount, and total amount as `DECIMAL(10,2)` snapshots; nullable `cancelled_by` user FK, cancel reason, `placed_at`, `completed_at`, customer confirmation timestamp/method; timestamps. Indexes `(restaurant_id, status, placed_at)` and `(checkout_group_id, status)`. Do not add `user_id`; customer is derived from `checkout_groups`. |
+| `order_items` | `id BIGINT UNSIGNED AUTO_INCREMENT` PK; `order_id` FK; `item_id` FK to `menu_items`; item name and unit-price snapshots; positive quantity; nullable note; timestamps. Index `(order_id)`; restrict deletion so order history is preserved. |
+| `order_status_histories` | `id BIGINT UNSIGNED AUTO_INCREMENT` PK; `order_id` FK; nullable `actor_user_id` FK (NULL means system); nullable `from_status`; `to_status`; nullable reason; `changed_at`; index `(order_id, changed_at)`. |
+| `payments` | `id BIGINT UNSIGNED AUTO_INCREMENT` PK; unique `order_id` FK; method, status, amount snapshot, nullable provider/reference, nullable `paid_at`; timestamps. First-build methods are Cash on Delivery and pay-at-pick-up; no online-payment credentials are stored. |
+
+`delivery_address_id` is intentionally omitted until persisted Customer addresses exist; the order keeps the required address text and coordinate snapshots. B5 cancellation restores the ordered menu quantities in the same transaction. Discount redemption release cannot be exercised until the shared discount/redemption records and Customer checkout exist; B5 creates no checkout or redemption rows. The order service must be extended to release a redemption in the cancellation transaction when that dependency is implemented.
 
 ### Tables, reservations, discounts
 

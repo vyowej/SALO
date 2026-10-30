@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\Restaurant;
+use App\Repositories\Contracts\MenuRepository;
 
 class BusinessWorkspaceService
 {
+    public function __construct(private readonly MenuRepository $menus) {}
+
     public function show(Restaurant $restaurant, array $membership): array
     {
         $application = $restaurant->applications()
@@ -32,7 +35,7 @@ class BusinessWorkspaceService
             'setup_checklist' => [
                 ['key' => 'profile', 'label' => 'Complete restaurant profile', 'complete' => $profileComplete, 'href' => '/business/profile'],
                 ['key' => 'hours', 'label' => 'Confirm opening hours', 'complete' => $hoursComplete, 'href' => '/business/hours'],
-                ['key' => 'menu', 'label' => 'Add and publish menu items', 'complete' => false, 'href' => '/business/menu'],
+                ['key' => 'menu', 'label' => 'Add and publish menu items', 'complete' => $this->menus->hasOrderableItem($restaurant), 'href' => '/business/menu'],
                 ['key' => 'tables', 'label' => 'Set up reservation tables', 'complete' => false, 'href' => '/business/tables'],
                 ['key' => 'publish', 'label' => 'Review publish checklist', 'complete' => (bool) $restaurant->is_published, 'href' => '/business/publish'],
             ],

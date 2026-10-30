@@ -453,19 +453,20 @@ function HoursSection({ restaurantId, user, readOnly }) {
         setScheduleError('Opening and closing times cannot be the same.');
         return;
       }
-      const fullDays = selectedDays.filter((day) => (hoursForm.hours?.[day] || []).length >= 4);
-      if (fullDays.length > 0) {
-        setScheduleError(`A maximum of four time windows is allowed for ${fullDays.map((day) => WEEKDAY_LABELS[day]).join(', ')}.`);
-        return;
-      }
+    }
+
+    const daysWithHours = selectedDays.filter((day) => (hoursForm.hours?.[day] || []).length > 0);
+    if (!applyAsClosed && daysWithHours.length > 0 && !window.confirm(
+      `Replace the existing opening hours for ${daysWithHours.map((day) => WEEKDAY_LABELS[day]).join(', ')}?`,
+    )) {
+      return;
     }
 
     const nextHours = { ...hoursForm.hours };
     selectedDays.forEach((day) => {
-      const currentShifts = [...(hoursForm.hours?.[day] || [])];
       nextHours[day] = applyAsClosed
         ? []
-        : [...currentShifts, {
+        : [{
             ...schedule,
             crosses_midnight: schedule.close_time < schedule.open_time,
           }];
@@ -508,7 +509,7 @@ function HoursSection({ restaurantId, user, readOnly }) {
               <>
                 <fieldset className="business-hours-bulk">
                   <legend>Apply a schedule to multiple days</legend>
-                  <p>Select days and add a time window. Existing windows are kept; you can also mark selected days as closed.</p>
+                  <p>Choose days and apply one schedule. Existing hours on selected days are replaced; add extra windows below for split shifts.</p>
                   <div className="business-hours-shortcuts" aria-label="Day selection shortcuts">
                     <Button variant="secondary" size="sm" onClick={() => selectScheduleDays(WEEKDAYS)}>Select all</Button>
                     <Button variant="secondary" size="sm" onClick={() => selectScheduleDays(WEEKDAYS.slice(0, 5))}>Weekdays</Button>
@@ -517,7 +518,7 @@ function HoursSection({ restaurantId, user, readOnly }) {
                   </div>
                   <div className="business-hours-day-selector">
                     {WEEKDAYS.map((day) => (
-                      <label key={day} className="business-hours-day-option">
+                      <label key={day} className={`business-hours-day-option ${selectedDays.includes(day) ? 'is-selected' : ''}`}>
                         <input
                           type="checkbox"
                           checked={selectedDays.includes(day)}
@@ -568,40 +569,44 @@ function HoursSection({ restaurantId, user, readOnly }) {
                   <Button variant="secondary" onClick={applySchedule}>Apply schedule</Button>
                 </fieldset>
                 <div className="business-hours-grid">
-                {WEEKDAYS.map((day) => (
-                  <fieldset key={day} className="business-day-fieldset">
-                    <legend>{WEEKDAY_LABELS[day]}</legend>
-                    <span className={`business-hours-status ${(hoursForm.hours?.[day] || []).length ? 'is-open' : 'is-closed'}`}>
-                      {(hoursForm.hours?.[day] || []).length === 0
-                        ? 'Closed'
-                        : (hoursForm.hours?.[day] || []).length > 1
-                          ? `${(hoursForm.hours?.[day] || []).length} time windows`
-                          : 'Open'}
-                    </span>
-                    {(hoursForm.hours?.[day] || []).map((shift, index) => (
-                      <div className="business-shift-row" key={`${day}-${index}`}>
-                        <Input label="Opens" type="time" value={shift.open_time} onChange={(event) => {
-                          setShift(day, index, 'open_time', event.target.value);
-                          setShift(day, index, 'crosses_midnight', shift.close_time < event.target.value);
-                        }} required />
-                        <Input label="Closes" type="time" value={shift.close_time} onChange={(event) => {
-                          setShift(day, index, 'close_time', event.target.value);
-                          setShift(day, index, 'crosses_midnight', event.target.value < shift.open_time);
-                        }} required />
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            if (window.confirm(`Remove this ${day} opening-hours shift?`)) removeShift(day, index);
-                          }}
-                        >
-                          Remove shift
-                        </Button>
-                      </div>
-                    ))}
-                    <Button variant="secondary" size="sm" onClick={() => addShift(day)}>Add time window</Button>
-                  </fieldset>
-                ))}
+                {WEEKDAYS.map((day) => {
+                  const dayShifts = hoursForm.hours?.[day] || [];
+                  const dayStatus = dayShifts.length === 0
+                    ? { label: 'Closed', className: 'is-closed' }
+                    : dayShifts.length > 1
+                      ? { label: `Custom · ${dayShifts.length} time windows`, className: 'is-custom' }
+                      : { label: dayShifts[0].crosses_midnight ? 'Open · overnight' : 'Open', className: 'is-open' };
+                  return (
+                    <fieldset key={day} className="business-day-fieldset">
+                      <legend>{WEEKDAY_LABELS[day]}</legend>
+                      <span className={`business-hours-status ${dayStatus.className}`}>
+                        {dayStatus.label}
+                      </span>
+                      {dayShifts.map((shift, index) => (
+                        <div className="business-shift-row" key={`${day}-${index}`}>
+                          <Input label="Opens" type="time" value={shift.open_time} onChange={(event) => {
+                            setShift(day, index, 'open_time', event.target.value);
+                            setShift(day, index, 'crosses_midnight', shift.close_time < event.target.value);
+                          }} required />
+                          <Input label="Closes" type="time" value={shift.close_time} onChange={(event) => {
+                            setShift(day, index, 'close_time', event.target.value);
+                            setShift(day, index, 'crosses_midnight', event.target.value < shift.open_time);
+                          }} required />
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm(`Remove this ${day} opening-hours shift?`)) removeShift(day, index);
+                            }}
+                          >
+                            Remove shift
+                          </Button>
+                        </div>
+                      ))}
+                      <Button variant="secondary" size="sm" onClick={() => addShift(day)}>Add time window</Button>
+                    </fieldset>
+                  );
+                })}
               </div>
               </>
             ) : null}
@@ -728,7 +733,7 @@ function PublishSection({ restaurantId, user, workspace, readOnly, onWorkspaceUp
 }
 
 export default function BusinessSetupSection({ path, restaurantId, user, workspace, readOnly, onWorkspaceUpdated }) {
-  if (path === '/business/profile') return <ProfileSection restaurantId={restaurantId} user={user} readOnly={readOnly} />;
+  if (path === '/business/profile/edit') return <ProfileSection restaurantId={restaurantId} user={user} readOnly={readOnly} />;
   if (path === '/business/photos') return <PhotosSection restaurantId={restaurantId} user={user} readOnly={readOnly} />;
   if (path === '/business/hours') return <HoursSection restaurantId={restaurantId} user={user} readOnly={readOnly} />;
   if (path === '/business/publish') return <PublishSection restaurantId={restaurantId} user={user} workspace={workspace} readOnly={readOnly} onWorkspaceUpdated={onWorkspaceUpdated} />;

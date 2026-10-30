@@ -67,15 +67,14 @@ class RestaurantPageTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_publish_checklist_keeps_the_orderable_item_requirement_blocked_until_b4(): void
+    public function test_publish_checklist_requires_a_published_orderable_menu_item(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         $request = $this->businessRequest($owner, $restaurant);
 
         $request->getJson($this->path($restaurant, '/publish-checklist'))
             ->assertOk()
-            ->assertJsonPath('data.checks.orderable_item.complete', false)
-            ->assertJsonPath('data.checks.orderable_item.blocked_until', 'B4');
+            ->assertJsonPath('data.checks.orderable_item.complete', false);
 
         $request->postJson($this->path($restaurant, '/publish'))
             ->assertUnprocessable()

@@ -3,6 +3,75 @@
   gap: var(--space-5);
 }
 
+.business-shell input:not([type="checkbox"]):not([type="radio"]),
+.business-shell select,
+.business-shell textarea {
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+.business-shell input:not([type="checkbox"]):not([type="radio"]):hover,
+.business-shell select:hover,
+.business-shell textarea:hover {
+  border-color: var(--border);
+}
+
+.business-shell input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.business-shell select:focus-visible,
+.business-shell textarea:focus-visible {
+  border-color: var(--primary);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.business-shell input[aria-invalid="true"],
+.business-shell select[aria-invalid="true"],
+.business-shell textarea[aria-invalid="true"] {
+  border-color: var(--danger, #b83a30);
+}
+
+.business-shell input[aria-invalid="true"]:focus-visible,
+.business-shell select[aria-invalid="true"]:focus-visible,
+.business-shell textarea[aria-invalid="true"]:focus-visible {
+  outline-color: color-mix(in srgb, var(--danger, #b83a30) 35%, transparent);
+}
+
+.business-shell input:disabled,
+.business-shell select:disabled,
+.business-shell textarea:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.business-shell input::placeholder,
+.business-shell textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.business-shell .modal {
+  max-height: min(90dvh, 54rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.business-shell .modal__header {
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.business-shell .modal__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
 .business-header {
   display: flex;
   justify-content: space-between;
@@ -806,6 +875,16 @@
   cursor: pointer;
 }
 
+.business-hours-day-option.is-selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.business-hours-day-option:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .business-hours-time-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -834,6 +913,11 @@
 
 .business-hours-status.is-closed {
   color: var(--text-muted);
+}
+
+.business-hours-status.is-custom {
+  color: var(--primary-strong, var(--primary));
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .business-day-fieldset {
@@ -911,5 +995,20 @@
   .business-shift-row,
   .business-closure-form {
     grid-template-columns: 1fr;
+  }
+
+  .business-shell .modal-backdrop {
+    padding: .5rem;
+  }
+
+  .business-shell .modal {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    border-radius: var(--radius-md);
+  }
+
+  .business-shell .modal__header,
+  .business-shell .modal__body {
+    padding: var(--space-4);
   }
 }

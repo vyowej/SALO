@@ -1,6 +1,6 @@
 ﻿# SALO Business Side
 
-**Status:** B0 documentation and B1 onboarding are complete; B1 was hand-tested by the owner. B2 code is implemented but awaits compatible-runtime tests and hand-testing. This document records the Business contract and database proposal; see `DATABASE_DESIGN.md` for the current schema design. [SALO_PLAN_v2.md](./SALO_PLAN_v2.md) is authoritative if requirements conflict.
+**Status:** B0 documentation and B1 onboarding are complete; B1 was hand-tested by the owner. B2-B5 implementation code is present, but backend tests and migration execution await a compatible PHP runtime; B2-B5 also await hand-testing. This document records the Business contract and database proposal; see `DATABASE_DESIGN.md` for the current schema design. [SALO_PLAN_v2.md](./SALO_PLAN_v2.md) is authoritative if requirements conflict.
 
 ## 1. B0 prerequisite audit
 
@@ -18,12 +18,12 @@ This audit is based on the checked-in Laravel code, React code, routes, tests, m
 | Local-disk storage | Implemented | Explicit public/private disks, upload services, generated names and photo metadata removal, plus authorized short-lived private-document links exist. |
 | Platform settings | Implemented | Settings are persisted through the database repository and settings table. |
 | Admin application queue | Implemented | Applications are database-backed; Admin review supports start-review, approve, reject, and request-revision. |
-| Database design and migrations | B0/B1 migrations exist; B2 and B3 migrations written, not run | B2 tables and the B3 `invitations` table match `DATABASE_DESIGN.md`; no migrations were executed during B2/B3. |
-| Business backend and UI | B1 hand-tested; B2 and B3 implemented, runtime verification pending | B2 profile, sensitive-update, photo, hours/closure, publish-checklist, and close/reopen surfaces are implemented. B3 adds team, invitation, membership, ownership-transfer, and Owner audit flows. Backend tests are blocked by the local PHP version; B2/B3 need compatible-runtime tests and hand-testing. |
+| Database design and migrations | B0/B1 migrations exist; B2-B5 migrations written, not run | B2 page tables, B3 invitations, B4 menu tables, and B5 shared order tables match the documented proposal; no B2-B5 migrations were executed. |
+| Business backend and UI | B1 hand-tested; B2-B5 implemented, runtime verification pending | B2 page editor, B3 team and audit, B4 menu management, and B5 orders are implemented. Backend tests are blocked by the local PHP version; B2-B5 need compatible-runtime tests and hand-testing. |
 
 ### Remaining verification
 
-The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2 and B3 tests and migration execution also await a compatible PHP runtime.
+The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2-B5 tests and migration execution also await a compatible PHP runtime.
 
 ## 2. Contract conventions
 
@@ -100,7 +100,8 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 
 - Owner/Manager create, edit, reorder, publish, and archive categories/items. Staff may only toggle availability.
 - Item lifecycle (Draft/Published/Archived), manual availability, and optional daily quantity remain independent. Orderable means Published, available, and unlimited or quantity left above zero. Archive instead of hard delete; preserve order snapshots.
-- Validate positive two-decimal price, one restaurant per category/item, category name uniqueness within restaurant, dietary tags, and upload rules. Warn about cart price changes. Daily quantity resets at the restaurant opening time.
+- Validate positive two-decimal price, one restaurant per category/item, category name uniqueness within restaurant, dietary tags, and upload rules. Halal-certified tags require a valid uploaded certificate stored privately. Daily quantity resets at the first shift opening, or Manila midnight for Open 24/7.
+- Until Customer carts exist, require explicit confirmation on every price change and tell the Owner cart impact cannot yet be counted. Actual affected-cart detection belongs with the Customer cart implementation; do not report a fabricated count.
 
 ### B5 â€” Orders
 
@@ -159,7 +160,7 @@ The Admin `restaurant` application queue includes both initial and sensitive-upd
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/sensitive-profile` | Legal name/address/permit proposal | Pending change request; live values unchanged | `restaurant.sensitive.edit` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/preview` | â€” | Customer-visible restaurant resource | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/publish` | â€” | Updated publish state/checklist errors | `restaurant.publish` |
-| `GET /api/v1/manage/restaurants/{restaurant}/business/publish-checklist` | â€” | Current publish checks, including unmet B4 orderable-item check | `restaurant.view` |
+| `GET /api/v1/manage/restaurants/{restaurant}/business/publish-checklist` | â€” | Current publish checks, including the orderable-item check | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/unpublish` | Confirmation | Updated publish state | `restaurant.publish` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/close` | `closed`, optional reason | Updated operational state | `restaurant.publish` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/photos` | â€” | Ordered photo list | `restaurant.view` |
@@ -172,7 +173,7 @@ The Admin `restaurant` application queue includes both initial and sensitive-upd
 | `POST /api/v1/manage/restaurants/{restaurant}/business/closures` | `closure_date`, `reason` | Closure resource | `restaurant.hours.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/business/closures/{closure}` | Confirmation | 204 | `restaurant.hours.manage` |
 
-B2 frontend includes the profile editor, Owner-only sensitive proposal, compressed photo manager, weekly-shift editor, FullCalendar closure view, and publish checklist. Publishing remains blocked until B4 adds a published, orderable menu item; the client does not fabricate one.
+B2 frontend includes the profile editor, Owner-only sensitive proposal, compressed photo manager, weekly-shift editor, FullCalendar closure view, and publish checklist. B4 now checks the real menu data for a published, orderable item; publishing remains blocked until every checklist item is satisfied.
 
 ### Team and owner audit
 
@@ -201,17 +202,20 @@ The Admin ownership-reassignment endpoint is in the Admin namespace and is not a
 |---|---|---|---|
 | `GET /api/v1/manage/restaurants/{restaurant}/menu` | Category/search/status filters | Categories and items | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/categories` | `name`, optional `sort_order` | Category resource | `restaurant.menu.manage` |
-| `PATCH /api/v1/manage/restaurants/{restaurant}/menu/categories/{category}` | `name`, `sort_order`, lifecycle | Updated category | `restaurant.menu.manage` |
+| `PATCH /api/v1/manage/restaurants/{restaurant}/menu/categories/{category}` | `name`, `sort_order`, `status` (`active`, `archived`) | Updated category | `restaurant.menu.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/menu/categories/{category}` | Confirmation | Archived category | `restaurant.menu.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/menu/items` | Category, name, description, positive price, lifecycle, tags, quantity, optional image | Item resource | `restaurant.menu.manage` |
-| `PATCH /api/v1/manage/restaurants/{restaurant}/menu/items/{item}` | Allowed item fields; price change acknowledged if in carts | Updated item | `restaurant.menu.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/menu/items` | Category, name, description, positive price, lifecycle, tags, quantity | Item resource | `restaurant.menu.manage` |
+| `PATCH /api/v1/manage/restaurants/{restaurant}/menu/items/{item}` | Allowed item fields; `price_change_acknowledged` on any actual price change | Updated item | `restaurant.menu.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/items/{item}/photo` | Multipart JPG/PNG/WebP image | Item with public photo URL | `restaurant.menu.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/menu/halal-certificate` | Private certificate file, optional expiry date | Certificate availability | `restaurant.menu.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/menu/items/{item}` | Confirmation | Archived item | `restaurant.menu.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/items/bulk-publish` | `item_ids[]` | Updated items and validation failures | `restaurant.menu.manage` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/menu/items/{item}/availability` | `is_available` | Updated availability | `menu.availability.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/orders` | Status/date/page filters | Paginated orders and allowed actions | `orders.view` |
 | `GET /api/v1/manage/restaurants/{restaurant}/orders/{order}` | â€” | Order snapshots/timeline; actor details Owner-only | `orders.view` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/orders/{order}/status` | Allowed next `status`, required `reason` for reject/cancel | Updated order and timeline | `orders.status.update`; reject/cancel additionally `orders.cancel` |
+
+Business orders list and update records from the shared order tables; Customer checkout is not part of B5. Mock mode displays clearly labeled sample orders only. The order board polls every 12 seconds. Restaurant status changes follow the permitted workflow; the restaurant cannot advance Delivery beyond Ready, and only Pick-up orders can be marked Collected/Completed by the restaurant. Staff may progress orders but cannot reject or cancel. An unanswered Placed order is auto-cancelled after ten minutes with a system-authored status-history event. Discount redemption release depends on the later shared redemption/checkout implementation.
 
 ### Tables, reservations, discounts, reports, and calendar
 
@@ -281,7 +285,7 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 | Discounts `/business/discounts` | Restaurant-funded promotions and usage | Owner/Manager |
 | Reports `/business/reports` | Role-filtered report selector/date range/CSV export | Owner/Manager; Reservation Manager reservation-only |
 
-## 9. B0/B1 readiness and B2 status
+## 9. B0-B4 readiness and status
 
 - [x] Inventory the foundation and record the Business API contract, page list, and scheduler requirements.
 - [x] Implement the B0 identity, OTP, server-checked mode/membership, permissions, local storage, settings, and persistent application-queue foundations.
@@ -295,6 +299,14 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 - [x] Implement B3 team hierarchy, invitations, membership management, ownership transfer, and Owner audit history using the documented schema.
 - [ ] Run B3 backend tests and migration using a supported PHP runtime; the invitations migration is written but has not been run.
 - [ ] Complete B3 hand-testing of existing-account acceptance, new-account activation, membership changes, ownership transfer, and Owner-only audit history.
+- [x] Implement B4 categories, items, dietary tags, photos, availability, bulk publish, audit writes, quantity-reset scheduling, and the published/orderable publish check.
+- [ ] Run B4 backend tests and migration with a compatible PHP runtime and supported MySQL; do not run the migration before schema approval.
+- [ ] Complete B4 hand-testing for Owner/Manager editing, Staff availability-only access, photo and private certificate uploads, price-change confirmation, and daily quantity reset.
+- [ ] Integrate actual affected-cart detection when Customer cart records are implemented; B4 explicitly does not fabricate cart counts.
+- [x] Implement B5 shared order tables proposal/migration, restaurant-scoped order API, status workflow, audit/history, auto-cancel scheduler, and Business order board. Do not start Customer checkout or B6-B7.
+- [ ] Run B5 backend feature tests and shared-order migration with a compatible PHP runtime and supported MySQL; migration has not been run.
+- [ ] Complete B5 hand-testing for Owner/Manager/Staff order actions, actor visibility, status filters/details, auto-cancel, and suspended read-only behavior.
+- [ ] Extend cancellation to release discount redemptions when the shared discount/redemption records are implemented.
 
 ## 10. B8 QA acceptance checklist
 
@@ -307,6 +319,8 @@ Feature tests must verify:
 - Invitations expire at 72 hours, are single-use, and existing-account invites require acceptance. Last Owner cannot leave; ownership transfer requires current password.
 - A suspended restaurant is read-only. Business mode cannot start customer checkout.
 - Archived or sold-out items are not orderable; status transitions require valid permissions and required reasons.
+- Business orders are scoped by the route restaurant; only valid status transitions succeed; reject/cancel requires a reason; Staff cannot reject/cancel; only Owner sees status actors; unanswered Placed orders auto-cancel after 10 minutes.
+- Staff can toggle only item availability; price changes require explicit confirmation; Halal-certified tags are blocked without a valid certificate.
 - Two simultaneous reservations for a table yield exactly one winner; hold expiry and order auto-cancel scheduler jobs run and are retry-safe.
 - Upload checks reject unsupported formats, oversized files, and fake MIME types. Unauthorized users cannot access private documents.
 - A restaurant cannot publish before every checklist requirement is satisfied.

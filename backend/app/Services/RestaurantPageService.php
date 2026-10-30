@@ -9,6 +9,7 @@ use App\Models\RestaurantPhoto;
 use App\Models\User;
 use App\Repositories\Contracts\ApplicationDocumentRepository;
 use App\Repositories\Contracts\AuditLogRepository;
+use App\Repositories\Contracts\MenuRepository;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
 use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +35,7 @@ class RestaurantPageService
         private readonly RestaurantApplicationRepository $applications,
         private readonly ApplicationDocumentRepository $documents,
         private readonly AuditLogRepository $audit,
+        private readonly MenuRepository $menus,
         private readonly PrivateDocumentStorageService $privateFiles,
         private readonly PublicPhotoStorageService $publicPhotos,
     ) {}
@@ -461,8 +463,7 @@ class RestaurantPageService
             ],
             'orderable_item' => [
                 'label' => 'At least one published, orderable menu item exists',
-                'complete' => false,
-                'blocked_until' => 'B4',
+                'complete' => $this->menus->hasOrderableItem($restaurant),
             ],
         ];
 
@@ -481,7 +482,7 @@ class RestaurantPageService
                 $errors = [];
                 foreach ($checklist['checks'] as $key => $check) {
                     if (! $check['complete']) {
-                        $errors[$key] = [$check['label'].($key === 'orderable_item' ? ' (available in B4).' : '.')];
+                        $errors[$key] = [$check['label'].'.'];
                     }
                 }
                 throw ValidationException::withMessages($errors);

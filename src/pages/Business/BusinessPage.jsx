@@ -7,22 +7,36 @@ import { businessService } from '../../services/businessService';
 import BusinessSetupSection from './BusinessSetupSection';
 import BusinessTeamPage from './BusinessTeamPage';
 import BusinessAuditPage from './BusinessAuditPage';
+import BusinessMenuPage from './BusinessMenuPage';
+import BusinessOrdersPage from './BusinessOrdersPage';
+import BusinessReservationsPage from './BusinessReservationsPage';
+import {
+  BusinessOverviewPage,
+  BusinessPublicPage,
+  BusinessReportsPage,
+} from './BusinessWorkspacePages';
 import '../Page.css';
 import './BusinessPage.css';
 
 const SECTIONS = [
   { label: 'Overview', to: '/business' },
-  { label: 'Profile', to: '/business/profile', permission: 'restaurant.page.edit' },
-  { label: 'Photos', to: '/business/photos', permission: 'restaurant.photos.manage' },
-  { label: 'Hours', to: '/business/hours', permission: 'restaurant.hours.manage' },
-  { label: 'Menu', to: '/business/menu', permission: 'restaurant.menu.manage' },
-  { label: 'Tables', to: '/business/tables', permission: 'tables.manage' },
-  { label: 'Publish', to: '/business/publish', permission: 'restaurant.publish' },
+  { label: 'Business', to: '/business/profile', permission: 'restaurant.view' },
+  { label: 'Orders', to: '/business/orders', permission: 'orders.view' },
+  { label: 'Reservations', to: '/business/reservations', permission: 'reservations.view' },
+  { label: 'Menu', to: '/business/menu', permission: 'restaurant.view' },
   { label: 'Team', to: '/business/team', permission: 'team.view' },
+  { label: 'Reports', to: '/business/reports', permission: 'reports.sales_reservations.view' },
   { label: 'Audit history', to: '/business/history', permission: 'audit.view' },
 ];
 
-const TITLES = Object.fromEntries(SECTIONS.map(({ label, to }) => [to, label]));
+const BUSINESS_TOOLS = [
+  { label: 'Edit profile', to: '/business/profile/edit', permission: 'restaurant.page.edit' },
+  { label: 'Photos', to: '/business/photos', permission: 'restaurant.photos.manage' },
+  { label: 'Hours', to: '/business/hours', permission: 'restaurant.hours.manage' },
+  { label: 'Publish checklist', to: '/business/publish', permission: 'restaurant.publish' },
+];
+
+const TITLES = Object.fromEntries([...SECTIONS, ...BUSINESS_TOOLS].map(({ label, to }) => [to, label]));
 
 export default function BusinessPage() {
   const { user, capabilities, activeView, switchView, switchRestaurant, refreshUser } = useAuth();
@@ -43,7 +57,12 @@ export default function BusinessPage() {
   const canManagePhotos = useCan('restaurant.photos.manage', selectedRestaurantId);
   const canManageHours = useCan('restaurant.hours.manage', selectedRestaurantId);
   const canManageMenu = useCan('restaurant.menu.manage', selectedRestaurantId);
-  const canManageTables = useCan('tables.manage', selectedRestaurantId);
+  const canViewRestaurant = useCan('restaurant.view', selectedRestaurantId);
+  const canViewOrders = useCan('orders.view', selectedRestaurantId);
+  const canViewReservations = useCan('reservations.view', selectedRestaurantId);
+  const canViewSalesReports = useCan('reports.sales_reservations.view', selectedRestaurantId);
+  const canViewReservationReports = useCan('reports.reservations.view', selectedRestaurantId);
+  const canViewReports = canViewSalesReports || canViewReservationReports;
   const selectedMembership = memberships.find((membership) => String(membership.restaurant_id) === String(selectedRestaurantId));
   const [workspace, setWorkspace] = useState(null);
   const [switching, setSwitching] = useState(false);
@@ -54,7 +73,10 @@ export default function BusinessPage() {
     && workspace?.restaurant?.id !== String(selectedRestaurantId)
     && !error
   );
-  const currentPath = SECTIONS.some((section) => section.to === location.pathname) ? location.pathname : '/business';
+  const normalizedPath = location.pathname === '/business/tables' ? '/business/reservations' : location.pathname;
+  const currentPath = [...SECTIONS, ...BUSINESS_TOOLS].some((section) => section.to === normalizedPath)
+    ? normalizedPath
+    : '/business';
   const currentTitle = TITLES[currentPath] || 'Overview';
 
   const handleAccessDenied = useCallback(async (requestError) => {
@@ -152,9 +174,7 @@ export default function BusinessPage() {
     );
   }
 
-  const checklist = workspace?.setup_checklist || [];
-  const incomplete = checklist.find((item) => !item.complete);
-  const section = SECTIONS.find((item) => item.to === currentPath);
+  const section = [...SECTIONS, ...BUSINESS_TOOLS].find((item) => item.to === currentPath);
   const permissionAccess = {
     'restaurant.publish': canPublish,
     'team.view': canViewTeam,
@@ -163,20 +183,19 @@ export default function BusinessPage() {
     'restaurant.photos.manage': canManagePhotos,
     'restaurant.hours.manage': canManageHours,
     'restaurant.menu.manage': canManageMenu,
-    'tables.manage': canManageTables,
+    'restaurant.view': canViewRestaurant,
+    'orders.view': canViewOrders,
+    'reservations.view': canViewReservations,
+    'reports.sales_reservations.view': canViewReports,
+    'reports.reservations.view': canViewReports,
   };
-  const shownSections = SECTIONS.filter((item) => (
-    !item.permission
-    || permissionAccess[item.permission]
-  ));
-
   return (
     <div className="section-shell business-shell">
       <header className="business-header">
         <div>
           <p className="business-eyebrow">Business workspace</p>
           <h1>{workspace?.restaurant?.name || memberships.find((item) => item.restaurant_id === String(selectedRestaurantId))?.restaurant_name || 'Restaurant'}</h1>
-          <p>Restaurant operations and access for your current position.</p>
+          <p>Manage your restaurant’s operations and customer-facing profile.</p>
         </div>
         {memberships.length > 1 ? (
           <label className="business-restaurant-select">
@@ -195,14 +214,6 @@ export default function BusinessPage() {
         <p className="business-role-banner" role="status">Your position: {selectedMembership.role.replaceAll('_', ' ')}</p>
       ) : null}
 
-      <nav className="business-nav" aria-label="Business workspace">
-        {shownSections.map((item) => (
-          <Link key={item.to} to={item.to} className={item.to === currentPath ? 'is-active' : ''}>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
       {workspace?.restaurant?.is_read_only ? (
         <div className="business-readonly" role="status">
           This restaurant is suspended. All restaurant actions are read-only; contact an administrator for help.
@@ -212,47 +223,31 @@ export default function BusinessPage() {
       {loading || switching ? <div className="business-loading" role="status">Loading workspace…</div> : null}
 
       {!loading && !error && currentPath === '/business' ? (
-        <div className="business-dashboard">
-          <section className="business-setup-card">
-            <div className="business-card-heading">
-              <div>
-                <h2>Restaurant setup</h2>
-                <p>{checklist.filter((item) => item.complete).length} of {checklist.length} setup steps complete</p>
-              </div>
-              <span className={`business-status business-status--${workspace?.restaurant?.status || 'unknown'}`}>
-                {workspace?.restaurant?.status || 'Loading'}
-              </span>
-            </div>
-            <ol className="business-checklist">
-              {checklist.map((item) => (
-                <li key={item.key} className={item.complete ? 'is-complete' : ''}>
-                  <span aria-hidden="true">{item.complete ? '✓' : '○'}</span>
-                  <Link to={item.href}>{item.label}</Link>
-                  <small>{item.complete ? 'Complete' : 'To do'}</small>
-                </li>
-              ))}
-            </ol>
-            {incomplete ? <Link className="btn btn--primary btn--md" to={incomplete.href}>Continue setup</Link> : null}
-          </section>
-
-          <section className="business-operations-card">
-            <div>
-              <h2>Today’s operations</h2>
-              <p>Live orders and reservations will appear here as those Business features become available.</p>
-            </div>
-            <div className="business-empty-state">
-              <strong>No live operations yet</strong>
-              <span>Finish setup to prepare this workspace.</span>
-            </div>
-          </section>
-        </div>
+        <BusinessOverviewPage
+          key={`overview-${selectedRestaurantId}`}
+          restaurantId={selectedRestaurantId}
+          user={user}
+          workspace={workspace}
+          canViewOrders={canViewOrders}
+          canViewReservations={canViewReservations}
+          permissions={selectedMembership?.permissions || []}
+        />
       ) : null}
 
       {!loading && !error && currentPath !== '/business' && section?.permission && !permissionAccess[section.permission] ? (
         <p className="business-error" role="alert">Your current position does not have permission to view this section.</p>
       ) : null}
       {!loading && !error && currentPath !== '/business' && (!section?.permission || permissionAccess[section.permission]) ? (
-        ['/business/profile', '/business/photos', '/business/hours', '/business/publish'].includes(currentPath) ? (
+        currentPath === '/business/profile' ? (
+          <BusinessPublicPage
+            key={`public-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            canEdit={canEditPage}
+            canManagePhotos={canManagePhotos}
+            canManageHours={canManageHours}
+          />
+        ) : ['/business/profile/edit', '/business/photos', '/business/hours', '/business/publish'].includes(currentPath) ? (
           <BusinessSetupSection
             key={selectedRestaurantId}
             path={currentPath}
@@ -275,6 +270,39 @@ export default function BusinessPage() {
             key={`audit-${selectedRestaurantId}`}
             restaurantId={selectedRestaurantId}
             onAccessDenied={handleAccessDenied}
+          />
+        ) : currentPath === '/business/menu' ? (
+          <BusinessMenuPage
+            key={`menu-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+            onWorkspaceUpdated={async () => setWorkspace(await businessService.getWorkspace(selectedRestaurantId, user))}
+            onAccessDenied={handleAccessDenied}
+          />
+        ) : currentPath === '/business/orders' ? (
+          <BusinessOrdersPage
+            key={`orders-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            restaurantName={workspace?.restaurant?.name || 'your restaurant'}
+            user={user}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+            onAccessDenied={handleAccessDenied}
+          />
+        ) : currentPath === '/business/reservations' ? (
+          <BusinessReservationsPage
+            key={`reservations-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+          />
+        ) : currentPath === '/business/reports' ? (
+          <BusinessReportsPage
+            key={`reports-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            canViewSales={canViewSalesReports}
+            canViewReservations={canViewReservationReports}
           />
         ) : (
           <section className="business-placeholder">

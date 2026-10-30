@@ -98,6 +98,16 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             ->first();
     }
 
+    public function findLatestApprovedInitialForRestaurant(int $restaurantId): ?RestaurantApplication
+    {
+        return RestaurantApplication::query()
+            ->where('restaurant_id', $restaurantId)
+            ->where('application_type', 'initial')
+            ->where('status', 'approved')
+            ->latest('id')
+            ->first();
+    }
+
     public function create(array $attributes): RestaurantApplication
     {
         return RestaurantApplication::query()->create($attributes);

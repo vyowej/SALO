@@ -78,4 +78,14 @@ class Restaurant extends Model
     {
         return $this->hasMany(ClosureDate::class)->orderBy('closure_date');
     }
+
+    public function menuCategories(): HasMany
+    {
+        return $this->hasMany(MenuCategory::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
 }
