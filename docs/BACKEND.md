@@ -36,7 +36,7 @@ The backend uses in-memory repository stubs for account and address data. This p
 
 Admin data follows the same in-memory-only constraint. Admin writes use services and in-memory repositories; no migrations, seeders, factories, SQL, or database persistence are part of the admin implementation.
 
-The business workspace follows the same rule. Restaurant ownership, staff permissions, daily schedules, menu records, orders, reservations, and reports are implemented as in-memory stubs behind service and repository layers. The contract for those endpoints is in [BUSINESS_API_CONTRACT.md](./BUSINESS_API_CONTRACT.md).
+The business workspace is currently a scaffold with static response payloads; restaurant-scoped authorization, durable membership, and business mutations are not implemented. The approved business requirements and route registry are in [BUSINESS_SIDE.md](./BUSINESS_SIDE.md), and the proposed schema requiring review is in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). No migration is authorized until that design is approved.
 
 ## Admin API
 
