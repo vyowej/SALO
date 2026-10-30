@@ -101,24 +101,31 @@ class MenuService
         });
     }
 
-    public function createItem(Restaurant $restaurant, User $actor, array $data): array
+    public function createItem(Restaurant $restaurant, User $actor, array $data, UploadedFile $photo): array
     {
-        return DB::transaction(function () use ($restaurant, $actor, $data): array {
-            $locked = $this->restaurants->lockRestaurant((int) $restaurant->getKey());
-            $category = $this->menus->findCategory($locked, (int) $data['category_id']);
-            abort_unless($category !== null && $category->status === 'active', 404);
-            $tagIds = array_values(array_map('intval', $data['dietary_tag_ids'] ?? []));
-            $this->assertHalalTagAllowed($tagIds, $locked);
-            $attributes = $this->itemAttributes($data, true);
-            if (($attributes['lifecycle_status'] ?? 'draft') === 'published') {
-                $this->assertCanPublish($category, $tagIds, $locked);
-            }
-            $item = $this->menus->createItem($category, $attributes, $tagIds);
-            $result = $this->itemArray($item);
-            $this->record($actor, $locked, 'menu.item.created', 'menu_item', (string) $item->getKey(), null, $this->itemAuditArray($item));
+        $imagePath = $this->publicPhotos->store($photo);
+        try {
+            return DB::transaction(function () use ($restaurant, $actor, $data, $imagePath): array {
+                $locked = $this->restaurants->lockRestaurant((int) $restaurant->getKey());
+                $category = $this->menus->findCategory($locked, (int) $data['category_id']);
+                abort_unless($category !== null && $category->status === 'active', 404);
+                $tagIds = array_values(array_map('intval', $data['dietary_tag_ids'] ?? []));
+                $this->assertHalalTagAllowed($tagIds, $locked);
+                $attributes = $this->itemAttributes($data, true);
+                $attributes['image_path'] = $imagePath;
+                if (($attributes['lifecycle_status'] ?? 'draft') === 'published') {
+                    $this->assertCanPublish($category, $tagIds, $locked);
+                }
+                $item = $this->menus->createItem($category, $attributes, $tagIds);
+                $result = $this->itemArray($item);
+                $this->record($actor, $locked, 'menu.item.created', 'menu_item', (string) $item->getKey(), null, $this->itemAuditArray($item));
 
-            return $result;
-        });
+                return $result;
+            });
+        } catch (\Throwable $exception) {
+            $this->publicPhotos->deleteVariants($imagePath);
+            throw $exception;
+        }
     }
 
     public function updateItem(Restaurant $restaurant, User $actor, int $itemId, array $data): array

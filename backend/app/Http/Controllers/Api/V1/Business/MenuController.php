@@ -63,7 +63,14 @@ class MenuController extends Controller
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
 
-        return MenuResource::make(['item' => $service->createItem($restaurant, $this->user($request), $request->validated())]);
+        return MenuResource::make([
+            'item' => $service->createItem(
+                $restaurant,
+                $this->user($request),
+                $request->validated(),
+                $request->file('file'),
+            ),
+        ]);
     }
 
     public function updateItem(MenuItemUpdateRequest $request, string $item, MenuService $service): MenuResource

@@ -213,7 +213,7 @@ The Admin ownership-reassignment endpoint is in the Admin namespace and is not a
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/categories` | `name`, optional `sort_order` | Category resource | `restaurant.menu.manage` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/menu/categories/{category}` | `name`, `sort_order`, `status` (`active`, `archived`) | Updated category | `restaurant.menu.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/menu/categories/{category}` | Confirmation | Archived category | `restaurant.menu.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/menu/items` | Category, name, description, positive price, lifecycle, tags, quantity | Item resource | `restaurant.menu.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/menu/items` | Multipart: required JPG/PNG/WebP `file` plus category, name, description, positive price, lifecycle, tags, quantity | Item resource with image path stored atomically with creation | `restaurant.menu.manage` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/menu/items/{item}` | Allowed item fields; `price_change_acknowledged` on any actual price change | Updated item | `restaurant.menu.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/items/{item}/photo` | Multipart JPG/PNG/WebP image | Item with public photo URL | `restaurant.menu.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/menu/halal-certificate` | Private certificate file, optional expiry date | Certificate availability | `restaurant.menu.manage` |

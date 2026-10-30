@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Clock3, MapPin, UtensilsCrossed } from 'lucide-react';
+import { ArrowUpRight, Clock3, MapPin, Star, UtensilsCrossed } from 'lucide-react';
 import config from '../../config';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { businessService } from '../../services/businessService';
-import { teamService } from '../../services/teamService';
 import { formatPeso } from '../../utils/formatPeso';
+import { HoursSection, PhotosSection, ProfileSection } from './BusinessSetupSection';
 import './BusinessWorkspacePages.css';
 
 function manilaDate(value) {
@@ -162,46 +164,51 @@ export function BusinessOverviewPage({ restaurantId, user, workspace, canViewOrd
   );
 }
 
-export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhotos, canManageHours, canViewTeam }) {
+export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhotos, canManageHours, readOnly }) {
   const [preview, setPreview] = useState(null);
   const [menu, setMenu] = useState(null);
   const [profile, setProfile] = useState({});
-  const [team, setTeam] = useState(null);
-  const [teamError, setTeamError] = useState('');
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [photosEditorOpen, setPhotosEditorOpen] = useState(false);
+  const [hoursEditorOpen, setHoursEditorOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
+  const loadProfileData = useCallback(() => Promise.all([
       businessService.getPreview(restaurantId, user),
       businessService.getMenu(restaurantId, {}, user),
       businessService.getProfile(restaurantId, user),
-    ])
-      .then(([previewResult, menuResult, profileResult]) => {
-        if (!active) return;
-        setPreview(previewResult);
-        setMenu(menuResult);
-        setProfile(profileResult.restaurant || {});
+  ]), [restaurantId, user]);
+  const applyProfileData = useCallback(([previewResult, menuResult, profileResult]) => {
+    setPreview(previewResult);
+    setMenu(menuResult);
+    setProfile(profileResult.restaurant || {});
+  }, []);
+  const refreshProfile = useCallback(async () => {
+    applyProfileData(await loadProfileData());
+  }, [applyProfileData, loadProfileData]);
+
+  useEffect(() => {
+    let active = true;
+    loadProfileData()
+      .then((result) => {
+        if (active) {
+          applyProfileData(result);
+          setError('');
+        }
       })
       .catch((loadError) => { if (active) setError(loadError.message || 'Restaurant preview could not be loaded.'); })
       .finally(() => { if (active) setLoading(false); });
-    if (canViewTeam) {
-      teamService.getTeam(restaurantId, user, { page: 1, per_page: 5, status: 'active' })
-        .then((teamResult) => { if (active) setTeam(teamResult); })
-        .catch((loadError) => { if (active) setTeamError(loadError.message || 'Team summary could not be loaded.'); });
-    }
     return () => { active = false; };
-  }, [canViewTeam, restaurantId, user]);
+  }, [applyProfileData, loadProfileData]);
 
   const restaurant = preview?.restaurant;
   const profileRestaurant = profile;
   const hours = preview?.hours?.hours || {};
-  const menuItems = (menu?.items || []).filter((item) => (
-    item.lifecycle_status === 'published' && item.is_available
-  ));
+  const hasConfiguredHours = Boolean(preview?.hours?.is_24_7)
+    || Object.values(hours).some((shifts) => Array.isArray(shifts) && shifts.length > 0);
+  const menuItems = (menu?.items || []).filter((item) => item.lifecycle_status === 'published');
   const photos = restaurant?.photos || [];
-  const teamMembers = (team?.members?.data || []).filter((member) => member.status === 'active');
 
   if (loading) return <p className="business-loading" role="status">Loading your customer-facing restaurant preview…</p>;
   if (error) return <p className="business-error" role="alert">{error}</p>;
@@ -224,80 +231,107 @@ export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhoto
           <div className="business-public-identity">
             {restaurant?.logo_url ? <img src={restaurant.logo_url} alt={`${restaurant.name} logo`} /> : <span className="business-public-logo-fallback"><UtensilsCrossed size={28} /></span>}
             <div>
-              <p>{restaurant?.category || restaurant?.cuisine || 'Restaurant'}</p>
+              <p>{[restaurant?.category, restaurant?.cuisine].filter(Boolean).join(' · ') || 'Restaurant'}</p>
               <h3>{restaurant?.name || 'Your restaurant'}</h3>
-              <span className="business-public-open-status"><i />{restaurant?.open_now ? 'Open now' : restaurant?.status === 'closed' ? 'Temporarily closed' : 'Hours vary'}</span>
+              <span className="business-public-open-status"><i />{restaurant?.status === 'closed' ? 'Temporarily closed' : restaurant?.open_now ? 'Open now' : hasConfiguredHours ? 'Closed now' : 'Hours not set'}</span>
+              {profileRestaurant.street ? <span className="business-public-location"><MapPin size={15} />{profileRestaurant.street}</span> : null}
             </div>
           </div>
         </div>
 
         <div className="business-public-content">
-          <div className="business-public-description">
-            <div><h3>About</h3><p>{restaurant?.description || 'Add a description to introduce your restaurant to customers.'}</p></div>
+          <div className="business-public-actions" aria-label="Restaurant profile actions">
+            {canEdit && !readOnly ? <Button onClick={() => setProfileEditorOpen(true)}>Edit Business</Button> : null}
+            {restaurant?.is_published ? <Link className="btn btn--secondary btn--md" to={`/restaurants/${restaurant.id}`}>View customer page</Link> : null}
+            {canManagePhotos && !readOnly ? <Button variant="secondary" onClick={() => setPhotosEditorOpen(true)}>Edit photos</Button> : null}
+            <Link className="business-public-map-link" to="/business/publish"><MapPin size={16} /> Publish checklist</Link>
+          </div>
+          <nav className="business-profile-nav" aria-label="Restaurant profile sections">
+            <a href="#about">About</a>
+            <a href="#hours">Hours</a>
+            <a href="#menu">Menu</a>
+            <a href="#branches">Branches</a>
+            <a href="#reviews">Ratings &amp; Reviews</a>
+            <a href="#photos">Photos</a>
+          </nav>
+          <section className="business-public-section business-public-about" id="about">
+            <div className="business-panel-heading">
+              <div><h3>About</h3><p>Restaurant information visible to customers</p></div>
+              {canEdit && !readOnly ? <Button variant="secondary" size="sm" onClick={() => setProfileEditorOpen(true)}>Edit</Button> : null}
+            </div>
+            <p>{restaurant?.description || 'Add a description to introduce your restaurant to customers.'}</p>
             <div className="business-public-info">
+              {restaurant?.category ? <p><strong>Category</strong><br />{restaurant.category}</p> : null}
+              {restaurant?.cuisine ? <p><strong>Cuisine</strong><br />{restaurant.cuisine}</p> : null}
               {restaurant?.contact_number ? <p><strong>Contact</strong><br />{restaurant.contact_number}</p> : null}
               {profileRestaurant.street ? <p><strong>Location</strong><br /><MapPin size={15} /> {profileRestaurant.street}</p> : null}
               {profileRestaurant.delivery_radius_km ? <p><strong>Delivery radius</strong><br />Within {profileRestaurant.delivery_radius_km} km</p> : null}
               {profileRestaurant.prep_minutes ? <p><strong>Preparation time</strong><br />About {profileRestaurant.prep_minutes} minutes</p> : null}
             </div>
-          </div>
-          <section className="business-public-section">
-            <div className="business-panel-heading"><div><h3>Opening hours</h3><p><Clock3 size={15} /> Weekly schedule</p></div>{canManageHours ? <Link to="/business/hours">Edit hours</Link> : null}</div>
+          </section>
+          <section className="business-public-section" id="hours">
+            <div className="business-panel-heading"><div><h3>Opening hours</h3><p><Clock3 size={15} /> Weekly schedule</p></div>{canManageHours && !readOnly ? <Button variant="secondary" size="sm" onClick={() => setHoursEditorOpen(true)}>Edit hours</Button> : null}</div>
             {preview?.hours?.is_24_7 ? <p>Open 24/7</p> : (
               <ul className="business-public-hours">{Object.entries(hours).map(([day, shifts]) => (
                 <li key={day}><strong>{day}</strong><span>{shifts?.length ? shifts.map((shift) => `${formatClock(shift.open_time)}–${formatClock(shift.close_time)}${shift.crosses_midnight ? ' (next day)' : ''}`).join(', ') : 'Closed'}</span></li>
               ))}</ul>
             )}
           </section>
-          {photos.length ? (
-            <section className="business-public-section">
-              <h3>Photos</h3>
-              <div className="business-public-gallery">{photos.map((photo) => <img key={photo.id || photo.url} src={photo.url} alt={photo.alt_text || restaurant.name} />)}</div>
-            </section>
-          ) : null}
-          <section className="business-public-section">
-            <div className="business-panel-heading"><div><h3>Menu preview</h3><p>Published, orderable items</p></div><Link to="/business/menu">Manage menu</Link></div>
+          <section className="business-public-section" id="menu">
+            <div className="business-panel-heading"><div><h3>Menu</h3><p>Published items and current availability</p></div><Link to="/business/menu">Manage menu</Link></div>
             {menuItems.length ? (
-              <ul className="business-public-menu">{menuItems.slice(0, 6).map((item) => (
-                <li key={item.id}>
-                  {item.photo_url ? <img src={item.photo_url} alt="" /> : <span className="business-public-item-icon"><UtensilsCrossed size={18} /></span>}
-                  <span><strong>{item.name}</strong><small>{item.description || ' '}</small></span>
-                  <strong>{formatPeso(item.price)}</strong>
-                </li>
-              ))}</ul>
+              <div className="business-public-menu-grid">{menuItems.slice(0, 6).map((item) => {
+                const category = menu?.categories?.find((entry) => String(entry.id) === String(item.category_id));
+                const isOrderable = item.is_orderable ?? item.is_available;
+                return (
+                  <article className="business-public-menu-card" key={item.id}>
+                    {item.image_url || item.photo_url
+                      ? <img src={item.image_url || item.photo_url} alt={item.name} />
+                      : <span className="business-public-item-icon"><UtensilsCrossed size={22} /></span>}
+                    <div className="business-public-menu-card__body">
+                      <div><h4>{item.name}</h4><strong>{formatPeso(item.price)}</strong></div>
+                      <p>{item.description || ' '}</p>
+                      <div className="business-public-menu-card__meta">
+                        <span>{category?.name || 'Menu item'}</span>
+                        <span>{isOrderable ? 'Available' : 'Sold out'}</span>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}</div>
             ) : <p className="business-empty-state">No published menu items are available to preview yet.</p>}
           </section>
-          {canEdit || canManagePhotos ? (
-            <div className="business-public-actions">
-              {canEdit ? <Link className="btn btn--primary btn--md" to="/business/profile/edit">Edit restaurant information</Link> : null}
-              {canManagePhotos ? <Link className="btn btn--secondary btn--md" to="/business/photos">Manage photos</Link> : null}
-              <Link className="business-public-map-link" to="/business/publish"><MapPin size={16} /> Publish checklist</Link>
+          <section className="business-public-section" id="branches">
+            <div className="business-panel-heading"><div><h3>Branches</h3><p>Restaurant locations</p></div></div>
+            <p>Branch management is not available for this restaurant yet.</p>
+          </section>
+          <section className="business-public-section" id="reviews">
+            <div className="business-panel-heading"><div><h3>Ratings &amp; Reviews</h3><p>Customer feedback</p></div></div>
+            <div className="business-review-unavailable">
+              <Star size={20} aria-hidden="true" />
+              <p>Ratings and customer reviews are not available yet.</p>
             </div>
-          ) : null}
+          </section>
+          <section className="business-public-section" id="photos">
+            <div className="business-panel-heading">
+              <div><h3>Photos</h3><p>Restaurant gallery</p></div>
+              {canManagePhotos && !readOnly ? <Button variant="secondary" size="sm" onClick={() => setPhotosEditorOpen(true)}>Manage photos</Button> : null}
+            </div>
+            {photos.length ? (
+              <div className="business-public-gallery">{photos.map((photo) => <img key={photo.id || photo.url} src={photo.url} alt={photo.alt_text || restaurant.name} />)}</div>
+            ) : <p className="business-empty-state">No gallery photos yet.</p>}
+          </section>
         </div>
       </article>
-      {canViewTeam ? (
-        <section className="business-public-team" aria-label="Internal team summary">
-          <div className="business-panel-heading">
-            <div><p className="business-eyebrow">Internal workspace · not shown to customers</p><h3>Our Team</h3></div>
-            <Link to="/business/team">View Team</Link>
-          </div>
-          {teamError ? <p className="business-error" role="alert">{teamError}</p> : team ? (
-            teamMembers.length ? (
-              <ul className="business-public-team__list">
-                {teamMembers.slice(0, 5).map((member) => (
-                  <li key={member.id}>
-                    <span className="business-public-team__avatar" aria-hidden="true">
-                      {(member.name || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
-                    </span>
-                    <span><strong>{member.name}</strong><small>{member.position_name || member.position}</small></span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p>No active team members to display.</p>
-          ) : <p className="business-loading" role="status">Loading team summary…</p>}
-        </section>
-      ) : null}
+      <Modal open={profileEditorOpen} title="Edit restaurant profile" onClose={() => setProfileEditorOpen(false)}>
+        <ProfileSection restaurantId={restaurantId} user={user} readOnly={readOnly} onSaved={refreshProfile} />
+      </Modal>
+      <Modal open={photosEditorOpen} title="Manage restaurant photos" onClose={() => setPhotosEditorOpen(false)}>
+        <PhotosSection restaurantId={restaurantId} user={user} readOnly={readOnly} onSaved={refreshProfile} />
+      </Modal>
+      <Modal open={hoursEditorOpen} title="Edit opening hours" onClose={() => setHoursEditorOpen(false)}>
+        <HoursSection restaurantId={restaurantId} user={user} readOnly={readOnly} onSaved={refreshProfile} />
+      </Modal>
     </div>
   );
 }

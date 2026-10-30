@@ -157,7 +157,7 @@ function SensitiveUpdateForm({ restaurantId, user, profile, onSaved }) {
   );
 }
 
-function ProfileSection({ restaurantId, user, readOnly }) {
+export function ProfileSection({ restaurantId, user, readOnly, onSaved }) {
   const canEdit = useCan('restaurant.page.edit', restaurantId);
   const loadProfile = useCallback(() => businessService.getProfile(restaurantId, user), [restaurantId, user]);
   const loadPreview = useCallback(() => businessService.getPreview(restaurantId, user), [restaurantId, user]);
@@ -178,6 +178,7 @@ function ProfileSection({ restaurantId, user, readOnly }) {
         contact_number: form.contact_number ?? profile.contact_number,
       }, user);
       await Promise.all([page.reload(), previewPage.reload()]);
+      await onSaved?.();
     }, 'Restaurant profile saved.');
   };
 
@@ -209,7 +210,10 @@ function ProfileSection({ restaurantId, user, readOnly }) {
         {saveError ? <p className="business-error" role="alert">{saveError}</p> : null}
         {success ? <p className="business-success" role="status">{success}</p> : null}
       </section>
-      <SensitiveUpdateForm restaurantId={restaurantId} user={user} profile={page.data} onSaved={page.reload} />
+      <SensitiveUpdateForm restaurantId={restaurantId} user={user} profile={page.data} onSaved={async () => {
+        await page.reload();
+        await onSaved?.();
+      }} />
       <section className="business-form-card">
         <h3>Public page preview</h3>
         {previewPage.loading ? <p className="business-loading" role="status">Loading preview…</p> : null}
@@ -235,7 +239,7 @@ function ProfileSection({ restaurantId, user, readOnly }) {
   );
 }
 
-function PhotosSection({ restaurantId, user, readOnly }) {
+export function PhotosSection({ restaurantId, user, readOnly, onSaved }) {
   const canManage = useCan('restaurant.photos.manage', restaurantId);
   const loadPhotos = useCallback(() => businessService.getPhotos(restaurantId, user), [restaurantId, user]);
   const page = usePageData(loadPhotos);
@@ -255,6 +259,7 @@ function PhotosSection({ restaurantId, user, readOnly }) {
       setAltText('');
       event.target.value = '';
       await page.reload();
+      await onSaved?.();
     }, 'Photo uploaded.');
   };
 
@@ -263,6 +268,7 @@ function PhotosSection({ restaurantId, user, readOnly }) {
     feedback.run(async () => {
       await businessService.deletePhoto(restaurantId, id, user);
       await page.reload();
+      await onSaved?.();
     }, 'Photo removed.');
   };
 
@@ -274,6 +280,7 @@ function PhotosSection({ restaurantId, user, readOnly }) {
       is_primary: Boolean(changes.is_primary ?? photo.is_primary),
     }, user);
     await page.reload();
+    await onSaved?.();
   }, 'Photo details saved.');
 
   if (page.loading) return <p className="business-loading" role="status">Loading restaurant photos…</p>;
@@ -332,7 +339,7 @@ function PhotosSection({ restaurantId, user, readOnly }) {
   );
 }
 
-function HoursSection({ restaurantId, user, readOnly }) {
+export function HoursSection({ restaurantId, user, readOnly, onSaved }) {
   const canManage = useCan('restaurant.hours.manage', restaurantId);
   const loadHours = useCallback(async () => {
     const [hours, closures] = await Promise.all([
@@ -386,6 +393,7 @@ function HoursSection({ restaurantId, user, readOnly }) {
       await businessService.updateHours(restaurantId, hoursForm, user);
       setForm({ initialized: true, is_24_7: hoursForm.is_24_7, hours: hoursForm.hours });
       await page.reload();
+      await onSaved?.();
     }, 'Opening hours saved.');
   };
   const setShift = (day, index, field, value) => {

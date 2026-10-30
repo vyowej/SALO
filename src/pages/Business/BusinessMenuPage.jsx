@@ -62,6 +62,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
   const [editingItem, setEditingItem] = useState(null);
   const [itemForm, setItemForm] = useState({});
   const [itemPhoto, setItemPhoto] = useState(null);
+  const [itemFormError, setItemFormError] = useState('');
   const [categoryForm, setCategoryForm] = useState({ name: '', sort_order: 0 });
   const [editingCategory, setEditingCategory] = useState(null);
   const [certificateFile, setCertificateFile] = useState(null);
@@ -118,6 +119,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
 
   const startNewItem = () => {
     setEditingItem(null);
+    setItemFormError('');
     setItemForm({
       category_id: activeCategories[0]?.id || '',
       name: '',
@@ -135,6 +137,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
 
   const startEditItem = useCallback((item) => {
     setEditingItem(item);
+    setItemFormError('');
     setItemForm({
       category_id: item.category_id,
       name: item.name,
@@ -161,12 +164,13 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
       ...(priceAcknowledged ? { price_change_acknowledged: true } : {}),
     };
     const response = await runAction(async () => {
+      const preparedPhoto = itemPhoto ? await compressMenuPhoto(itemPhoto) : null;
       const saved = editingItem
         ? await businessService.updateMenuItem(restaurantId, editingItem.id, data, user)
-        : await businessService.createMenuItem(restaurantId, data, user);
+        : await businessService.createMenuItem(restaurantId, data, user, preparedPhoto);
       const savedItem = saved.item;
-      if (itemPhoto && savedItem?.id) {
-        await businessService.uploadMenuPhoto(restaurantId, savedItem.id, await compressMenuPhoto(itemPhoto), user);
+      if (editingItem && preparedPhoto && savedItem?.id) {
+        await businessService.uploadMenuPhoto(restaurantId, savedItem.id, preparedPhoto, user);
       }
       return saved;
     }, editingItem ? 'Menu item updated.' : 'Menu item added.');
@@ -179,6 +183,15 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
 
   const submitItem = (event) => {
     event.preventDefault();
+    setItemFormError('');
+    if (!editingItem && !itemPhoto) {
+      setItemFormError('Please upload a photo for this menu item.');
+      return;
+    }
+    if (!Number.isFinite(Number(itemForm.price)) || Number(itemForm.price) <= 0) {
+      setItemFormError('Enter a valid price greater than ₱0.00.');
+      return;
+    }
     const priceChanged = editingItem && Number(itemForm.price).toFixed(2) !== Number(editingItem.price).toFixed(2);
     if (priceChanged) {
       setConfirm({
@@ -372,7 +385,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
               <h2>Menu items</h2>
               <p>Published items are orderable only when available and in stock.</p>
             </div>
-            {canManage ? <Button onClick={startNewItem} disabled={readOnly || saving}>Add menu item</Button> : null}
+            {canManage ? <Button onClick={startNewItem} disabled={readOnly || saving}>Add New Menu Item</Button> : null}
           </section>
 
           {canManage ? (
@@ -479,22 +492,41 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
         </>
       ) : null}
 
-      <Modal open={itemFormOpen} title={editingItem ? 'Edit menu item' : 'Add menu item'} onClose={() => !saving && setItemFormOpen(false)}>
+      <Modal open={itemFormOpen} title={editingItem ? 'Edit menu item' : 'Add New Menu Item'} onClose={() => !saving && setItemFormOpen(false)}>
         <form className="business-menu-item-form" onSubmit={submitItem}>
-          <label>Category
-            <select required value={itemForm.category_id || ''} onChange={(event) => setItemForm((current) => ({ ...current, category_id: event.target.value }))}>
-              <option value="">Select category</option>
-              {activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
+          {editingItem?.image_url ? <img className="business-menu-item-form__current-photo" src={editingItem.image_url} alt={`${editingItem.name} current`} /> : null}
+          <label>Food photo {!editingItem ? <span aria-hidden="true">*</span> : null}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              required={!editingItem}
+              aria-required={!editingItem}
+              aria-invalid={!editingItem && itemFormError && !itemPhoto ? 'true' : undefined}
+              aria-describedby={itemFormError ? 'menu-item-form-error' : undefined}
+              onInvalid={() => {
+                if (!editingItem && !itemPhoto) setItemFormError('Please upload a photo for this menu item.');
+              }}
+              onChange={(event) => {
+                setItemPhoto(event.target.files?.[0] || null);
+                setItemFormError('');
+              }}
+            />
+            <small>{itemPhoto?.name || (editingItem ? 'Choose a new photo only if you want to replace the current one.' : 'A JPG, PNG, or WebP food photo is required.')}</small>
           </label>
-          <label>Item name
+          <label>Item name <span aria-hidden="true">*</span>
             <input required maxLength="160" value={itemForm.name || ''} onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))} />
           </label>
           <label>Description
             <textarea rows="3" maxLength="5000" value={itemForm.description || ''} onChange={(event) => setItemForm((current) => ({ ...current, description: event.target.value }))} />
           </label>
+          <label>Category <span aria-hidden="true">*</span>
+            <select required value={itemForm.category_id || ''} onChange={(event) => setItemForm((current) => ({ ...current, category_id: event.target.value }))}>
+              <option value="">Select category</option>
+              {activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </label>
           <div className="business-menu-form-grid">
-            <label>Price (₱)
+            <label>Price (₱) <span aria-hidden="true">*</span>
               <input required type="number" min="0.01" step="0.01" value={itemForm.price || ''} onChange={(event) => setItemForm((current) => ({ ...current, price: event.target.value }))} />
             </label>
             <label>Daily quantity (blank = unlimited)
@@ -510,6 +542,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
               </select>
             </label>
           </div>
+          <p className="business-menu-customization-note">Add-ons and item options are not supported by the current menu system yet.</p>
           <label className="business-menu-checkbox">
             <input type="checkbox" checked={Boolean(itemForm.is_available)} onChange={(event) => setItemForm((current) => ({ ...current, is_available: event.target.checked }))} />
             Manually available
@@ -533,12 +566,10 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
               })}
             </div>
           </fieldset>
-          <label>Item photo (optional)
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setItemPhoto(event.target.files?.[0] || null)} />
-          </label>
+          {itemFormError ? <p id="menu-item-form-error" className="business-error" role="alert">{itemFormError}</p> : null}
           <div className="business-form-actions">
             <Button type="button" variant="secondary" onClick={() => setItemFormOpen(false)} disabled={saving}>Cancel</Button>
-            <Button type="submit" disabled={saving || activeCategories.length === 0}>{saving ? 'Saving…' : 'Save item'}</Button>
+            <Button type="submit" disabled={saving || activeCategories.length === 0}>{saving ? 'Saving…' : 'Save Menu Item'}</Button>
           </div>
         </form>
       </Modal>

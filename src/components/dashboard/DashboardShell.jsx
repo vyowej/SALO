@@ -187,7 +187,7 @@ export function DashboardShell({ children }) {
                 <NavLink
                   key={path}
                   to={path}
-                  end={path === '/'}
+                  end={path === '/' || path === '/business'}
                   title={collapsed ? label : undefined}
                   aria-label={collapsed ? label : undefined}
                   className={({ isActive }) => ['dashboard-nav-link', isActive || businessProfileActive ? 'is-active' : ''].filter(Boolean).join(' ')}

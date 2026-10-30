@@ -24,6 +24,7 @@ class MenuItemCreateRequest extends FormRequest
             'prep_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1440'],
             'dietary_tag_ids' => ['sometimes', 'array'],
             'dietary_tag_ids.*' => ['integer', 'distinct', 'exists:dietary_tags,id'],
+            'file' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }
 }

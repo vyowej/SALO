@@ -683,9 +683,25 @@ export async function archiveMenuCategory(restaurantId, categoryId, user) {
   return null;
 }
 
-export async function createMenuItem(restaurantId, data, user) {
-  if (!config.useMock) return apiRequest(menuPath(restaurantId, '/items'), { method: 'POST', body: data });
+export async function createMenuItem(restaurantId, data, user, photo) {
+  if (!photo) throw new Error('Please upload a photo for this menu item.');
+  if (!config.useMock) {
+    const form = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === null || value === undefined) return;
+      if (Array.isArray(value)) {
+        value.forEach((entry, index) => form.append(`${key}[${index}]`, String(entry)));
+      } else {
+        form.append(key, String(value));
+      }
+    });
+    form.append('file', photo);
+    return apiUploadRequest(menuPath(restaurantId, '/items'), form);
+  }
   const { state, save } = mockState(restaurantId, user);
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) || photo.size > 2 * 1024 * 1024) {
+    throw new Error('Choose a JPG, PNG, or WebP image no larger than 2 MB.');
+  }
   if (!Number.isFinite(Number(data.price)) || Number(data.price) <= 0) throw new Error('Price must be greater than zero.');
   const category = state.menu.categories.find((entry) => String(entry.id) === String(data.category_id) && entry.status === 'active');
   if (!category) throw new Error('Choose an active category in this restaurant.');
@@ -693,6 +709,7 @@ export async function createMenuItem(restaurantId, data, user) {
     throw new Error('Upload a valid Halal certificate before assigning the Halal-certified tag.');
   }
   const item = mockMenuItem(category, data);
+  item.image_url = await fileAsDataUrl(photo);
   item.dietary_tags = (data.dietary_tag_ids || []).map((tagId) => mockDietaryTags.find((tag) => tag.id === String(tagId))).filter(Boolean);
   state.menu.items.push(item);
   save();

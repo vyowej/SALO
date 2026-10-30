@@ -18,6 +18,7 @@ class MenuManagementTest extends \Tests\TestCase
 {
     public function test_owner_can_manage_categories_and_items_and_price_change_requires_confirmation(): void
     {
+        Storage::fake('public');
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         $request = $this->businessRequest($owner, $restaurant);
 
@@ -28,7 +29,7 @@ class MenuManagementTest extends \Tests\TestCase
         $categoryId = $categoryResponse->json('data.category.id');
         $vegetarian = DietaryTag::query()->where('name', 'vegetarian')->firstOrFail();
 
-        $itemResponse = $request->postJson($this->menuPath($restaurant, '/items'), [
+        $itemData = [
             'category_id' => $categoryId,
             'name' => 'Vegetable curry',
             'description' => 'A sample item.',
@@ -36,8 +37,22 @@ class MenuManagementTest extends \Tests\TestCase
             'lifecycle_status' => 'published',
             'dietary_tag_ids' => [$vegetarian->getKey()],
             'daily_quantity' => 4,
-        ])->assertOk()->assertJsonPath('data.item.is_orderable', true);
+        ];
+        $request->postJson($this->menuPath($restaurant, '/items'), $itemData)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+        $this->assertSame(0, MenuItem::query()->count());
+
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/rWQAAAAASUVORK5CYII=', true);
+        $itemResponse = $request->post($this->menuPath($restaurant, '/items'), array_merge($itemData, [
+            'file' => UploadedFile::fake()->createWithContent('menu.png', $png),
+        ]), ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.item.is_orderable', true);
         $itemId = $itemResponse->json('data.item.id');
+        $createdItem = MenuItem::query()->findOrFail($itemId);
+        $this->assertNotEmpty($createdItem->image_path);
+        $this->assertNotEmpty($itemResponse->json('data.item.image_url'));
+        Storage::disk('public')->assertExists($createdItem->image_path);
 
         $request->patchJson($this->menuPath($restaurant, '/items/'.$itemId), [
             'price' => '130.00',
@@ -218,6 +233,7 @@ class MenuManagementTest extends \Tests\TestCase
     public function test_halal_label_requires_a_valid_private_certificate(): void
     {
         Storage::fake('private');
+        Storage::fake('public');
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         $application = RestaurantApplication::query()->create([
             'restaurant_id' => $restaurant->getKey(),
@@ -232,15 +248,18 @@ class MenuManagementTest extends \Tests\TestCase
         ]);
         $halalTag = DietaryTag::query()->where('name', 'halal_certified')->firstOrFail();
 
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/rWQAAAAASUVORK5CYII=', true);
         $this->businessRequest($owner, $restaurant)
-            ->postJson($this->menuPath($restaurant, '/items'), [
+            ->post($this->menuPath($restaurant, '/items'), [
                 'category_id' => $category->getKey(),
                 'name' => 'Halal meal',
                 'price' => '90.00',
                 'dietary_tag_ids' => [$halalTag->getKey()],
-            ])
+                'file' => UploadedFile::fake()->createWithContent('menu.png', $png),
+            ], ['Accept' => 'application/json'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['dietary_tag_ids']);
+        $this->assertSame([], Storage::disk('public')->allFiles());
 
         $this->businessRequest($owner, $restaurant)
             ->post($this->menuPath($restaurant, '/halal-certificate'), [

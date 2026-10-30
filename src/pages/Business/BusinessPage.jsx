@@ -266,7 +266,7 @@ export default function BusinessPage() {
             canEdit={canEditPage}
             canManagePhotos={canManagePhotos}
             canManageHours={canManageHours}
-            canViewTeam={canViewTeam}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
           />
         ) : ['/business/profile/edit', '/business/photos', '/business/hours', '/business/publish'].includes(currentPath) ? (
           <BusinessSetupSection
