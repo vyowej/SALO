@@ -87,4 +87,50 @@ export async function apiRequest(path, {
   return preserveEnvelope ? payload : payload?.data ?? payload;
 }
 
+export async function apiUploadRequest(path, body, { method = 'POST', onProgress } = {}) {
+  if (config.useMock) throw new Error('API requests are disabled while mock mode is enabled.');
+  const apiBaseUrl = getApiBaseUrl();
+  const csrfToken = await ensureCsrfCookie(apiBaseUrl);
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(method, `${apiBaseUrl}${path}`);
+    request.withCredentials = true;
+    request.setRequestHeader('Accept', 'application/json');
+    request.setRequestHeader('X-SALO-Mode', requestMode);
+    if (requestRestaurantId) request.setRequestHeader('X-SALO-Restaurant', requestRestaurantId);
+    request.setRequestHeader('X-XSRF-TOKEN', csrfToken);
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    });
+    request.addEventListener('error', () => reject(new ApiError('The upload could not reach the API.')));
+    request.addEventListener('load', () => {
+      if (request.status === 204) {
+        resolve(null);
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(request.responseText);
+      } catch {
+        reject(new ApiError('The API returned an invalid response.', { status: request.status }));
+        return;
+      }
+      if (request.status < 200 || request.status >= 300) {
+        const error = payload?.error;
+        reject(new ApiError(error?.message || payload?.message || 'The request could not be completed.', {
+          status: request.status,
+          code: error?.code,
+          fields: error?.fields || payload?.errors,
+        }));
+        return;
+      }
+      resolve(payload?.data ?? payload);
+    });
+    request.send(body);
+  });
+}
+
 export default apiRequest;

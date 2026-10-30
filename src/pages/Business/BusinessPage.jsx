@@ -4,12 +4,14 @@ import { Button } from '../../components/ui/Button';
 import { useAuth, USER_ROLES } from '../../context/AuthContext';
 import { useCan } from '../../hooks/useCan';
 import { businessService } from '../../services/businessService';
+import BusinessSetupSection from './BusinessSetupSection';
 import '../Page.css';
 import './BusinessPage.css';
 
 const SECTIONS = [
   { label: 'Overview', to: '/business' },
   { label: 'Profile', to: '/business/profile' },
+  { label: 'Photos', to: '/business/photos' },
   { label: 'Hours', to: '/business/hours' },
   { label: 'Menu', to: '/business/menu' },
   { label: 'Tables', to: '/business/tables' },
@@ -200,12 +202,24 @@ export default function BusinessPage() {
       ) : null}
 
       {!loading && !error && currentPath !== '/business' ? (
-        <section className="business-placeholder">
-          <p className="business-eyebrow">{currentTitle}</p>
-          <h2>{section?.label || currentTitle}</h2>
-          <p>This setup area is linked from the B1 workspace shell and will be completed in its approved Business phase.</p>
-          <Link to="/business">Return to overview</Link>
-        </section>
+        ['/business/profile', '/business/photos', '/business/hours', '/business/publish'].includes(currentPath) ? (
+          <BusinessSetupSection
+            key={selectedRestaurantId}
+            path={currentPath}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            workspace={workspace}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+            onWorkspaceUpdated={async () => setWorkspace(await businessService.getWorkspace(selectedRestaurantId, user))}
+          />
+        ) : (
+          <section className="business-placeholder">
+            <p className="business-eyebrow">{currentTitle}</p>
+            <h2>{section?.label || currentTitle}</h2>
+            <p>This setup area will be completed in its approved Business phase.</p>
+            <Link to="/business">Return to overview</Link>
+          </section>
+        )
       ) : null}
     </div>
   );

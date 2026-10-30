@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
+use App\Http\Controllers\Api\V1\Business\RestaurantPageController;
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Api\V1\Auth\ActiveModeController;
 use App\Http\Controllers\Api\V1\Auth\CurrentAccountController;
@@ -106,6 +107,42 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
 
         Route::get('/manage/restaurants/{restaurant}/business', [BusinessWorkspaceController::class, 'show'])
             ->middleware('restaurant.access:restaurant.view');
+        Route::prefix('/manage/restaurants/{restaurant}/business')->group(function (): void {
+            Route::get('/profile', [RestaurantPageController::class, 'profile'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::patch('/profile', [RestaurantPageController::class, 'updateProfile'])
+                ->middleware('restaurant.access:restaurant.page.edit');
+            Route::patch('/sensitive-profile', [RestaurantPageController::class, 'proposeSensitiveUpdate'])
+                ->middleware('restaurant.access:restaurant.sensitive.edit');
+            Route::get('/preview', [RestaurantPageController::class, 'preview'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::get('/photos', [RestaurantPageController::class, 'photos'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::post('/photos', [RestaurantPageController::class, 'uploadPhoto'])
+                ->middleware('restaurant.access:restaurant.photos.manage');
+            Route::patch('/photos/{photo}', [RestaurantPageController::class, 'updatePhoto'])
+                ->middleware('restaurant.access:restaurant.photos.manage');
+            Route::delete('/photos/{photo}', [RestaurantPageController::class, 'deletePhoto'])
+                ->middleware('restaurant.access:restaurant.photos.manage');
+            Route::get('/hours', [RestaurantPageController::class, 'hours'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::put('/hours', [RestaurantPageController::class, 'updateHours'])
+                ->middleware('restaurant.access:restaurant.hours.manage');
+            Route::get('/closures', [RestaurantPageController::class, 'closures'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::post('/closures', [RestaurantPageController::class, 'createClosure'])
+                ->middleware('restaurant.access:restaurant.hours.manage');
+            Route::delete('/closures/{closure}', [RestaurantPageController::class, 'deleteClosure'])
+                ->middleware('restaurant.access:restaurant.hours.manage');
+            Route::post('/publish', [RestaurantPageController::class, 'publish'])
+                ->middleware('restaurant.access:restaurant.publish');
+            Route::get('/publish-checklist', [RestaurantPageController::class, 'publishChecklist'])
+                ->middleware('restaurant.access:restaurant.view');
+            Route::post('/unpublish', [RestaurantPageController::class, 'unpublish'])
+                ->middleware('restaurant.access:restaurant.publish');
+            Route::post('/close', [RestaurantPageController::class, 'close'])
+                ->middleware('restaurant.access:restaurant.publish');
+        });
 
     });
 });

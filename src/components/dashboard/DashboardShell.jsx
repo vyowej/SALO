@@ -37,6 +37,7 @@ const ICONS = {
   rider: Bike,
   admin: ShieldCheck,
   dashboard: LayoutDashboard,
+  business: Store,
 };
 
 export function DashboardShell({ children }) {

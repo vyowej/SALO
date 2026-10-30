@@ -1,37 +1,29 @@
 ﻿# SALO Business Side
 
-**Status:** B0 audit and contract draft. This document resolves the Business API contract and records the database proposal for review; it does not authorize migrations or backend implementation. The approved requirements are in [business-side.md](./business-side.md) and [SALO_PLAN_v2.md](./SALO_PLAN_v2.md). If this document conflicts with either, stop and resolve the conflict before implementation.
+**Status:** B0 documentation and B1 onboarding are complete; B1 was hand-tested by the owner. B2 code is implemented but awaits compatible-runtime tests and hand-testing. This document records the Business contract and database proposal; see `DATABASE_DESIGN.md` for the current schema design. [SALO_PLAN_v2.md](./SALO_PLAN_v2.md) is authoritative if requirements conflict.
 
 ## 1. B0 prerequisite audit
 
-This audit is based on the checked-in Laravel code, React code, routes, tests, and database directory on 2026-10-30. It describes the repository state, not production readiness.
+This audit is based on the checked-in Laravel code, React code, routes, tests, migrations, and database directory on 2026-10-30. It describes repository implementation, not production readiness.
 
 | Prerequisite | Status | Evidence / gap |
 |---|---|---|
-| Login | Partial | Laravel session login and rate limiting exist, but identity persistence is an in-memory repository. |
-| Email OTP | Missing | Current account verification sends a link token, not a six-digit OTP with the specified attempt and resend rules. |
-| Modes and `/me` | Partial | `/auth/me` returns capabilities and memberships, and the SPA switches views. Active mode and selected restaurant are frontend state, not a server-enforced session context. |
-| `PermissionMap` | Partial | A central map exists at `backend/app/Http/Authorization/PermissionMap.php`, but the grants do not fully match the approved matrix. `/auth/me` does return per-membership `permissions[]`; frontend `useCan` is absent. |
-| Membership on every request | Missing | Current middleware accepts any active or invited membership and is not bound to `{restaurant}` or an endpoint permission. |
-| Audit log | Partial | Admin history is fixture-backed and in-memory. Business history is a hard-coded response; there is no durable owner-only restaurant audit log. |
-| PSGC data | Partial | The frontend has a small mock subset; there is no complete server-side PSGC dataset. |
-| Local-disk storage | Partial | Laravel has a public disk and local disk rooted in the private storage directory, but no explicit private disk alias, upload service, or authorized signed URL flow. |
-| Platform settings | Partial | Admin settings routes exist over in-memory records; no durable settings table/repository exists. |
-| Admin application queue | Partial | Admin list, detail, approve, and reject routes/UI exist over fixtures. Request-revision and durable queue behavior are missing. |
-| Database design and migrations | Proposed | `DATABASE_DESIGN.md` now contains a draft schema for review; there are no application migrations. |
-| Business backend | Scaffold only | The current business controller returns static fixtures and uses `/api/v1/business/...`; it does not implement the required restaurant-scoped authorization or mutation flows. |
+| Login | Implemented | Login uses the database-backed user repository, Laravel session authentication, and rate limiting. |
+| Email OTP | Implemented | OTPs are hashed, purpose/target-email scoped, single-use, time-limited, attempt-limited, and rate-limited in the database-backed token service. |
+| Modes and `/me` | Implemented | Active mode and selected restaurant are session-backed and server-checked; `/auth/me` returns current memberships and permissions. |
+| `PermissionMap` | Implemented | `backend/app/Http/Authorization/PermissionMap.php` is the permission source; memberships expose `permissions[]` and the frontend has `useCan`. |
+| Membership on every request | Implemented for the current Business surface | Restaurant middleware resolves the route restaurant, selected context, active membership, permission, and suspended read-only state on each request. |
+| Audit log | Foundation and B2 event writes implemented; runtime verification pending | The durable `audit_logs` table and repository exist. B2 records profile, sensitive proposal, photo, hours/closure, and publication/closure changes; the Owner read endpoint remains B3. |
+| PSGC data | Partial | A database-backed PSGC endpoint and import command exist. No official data file is checked in, so a complete official import is not confirmed. |
+| Local-disk storage | Implemented | Explicit public/private disks, upload services, generated names and photo metadata removal, plus authorized short-lived private-document links exist. |
+| Platform settings | Implemented | Settings are persisted through the database repository and settings table. |
+| Admin application queue | Implemented | Applications are database-backed; Admin review supports start-review, approve, reject, and request-revision. |
+| Database design and migrations | B0/B1 migrations exist; B2 migration written, not run | B2 tables match the proposal in `DATABASE_DESIGN.md`; nullable `restaurants.category` was added there as `[PROPOSED]` before its migration was written. |
+| Business backend and UI | B1 hand-tested; B2 implemented, runtime verification pending | B2 profile, sensitive-update, photo, hours/closure, publish-checklist, and close/reopen surfaces are implemented. Backend tests are blocked by the local PHP version; B2 has not been hand-tested. |
 
-### Required closure before B1
+### Remaining verification
 
-1. Implement or complete authentication and OTP with durable storage, rate limits, single-use verification, and the required account state handling.
-2. Make restaurant membership and active mode/restaurant context server-verifiable on every request; bind authorization to the restaurant route parameter, current membership, and endpoint permission. Removed or suspended membership must fail on the next request.
-3. Align the single `PermissionMap` with the permission matrix below and expose those grants as `permissions[]` through `/auth/me`; implement the frontend `useCan('permission')` helper.
-4. Persist the admin application queue and platform settings, add request-revision handling, and use the proposed schema only after design approval.
-5. Add an explicit private local disk and authorized, short-lived access for private files; complete public photo processing and upload authorization.
-6. Load and validate the official PSGC hierarchy into the backend.
-7. Add tests for these prerequisite behaviors before starting Business feature slices.
-
-These are readiness blockers. No B1-B7 Business feature implementation or migrations are included in B0.
+The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2 tests and migration execution also await a compatible PHP runtime.
 
 ## 2. Contract conventions
 
@@ -156,6 +148,8 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 | `POST /api/v1/admin/applications/{type}/{application}/reject` | Required `note` | Rejected application; live restaurant fields remain unchanged | Admin |
 | `POST /api/v1/admin/applications/{type}/{application}/request-revision` | Required `note` | `needs_revision` application with notes visible to applicant | Admin |
 
+The Admin `restaurant` application queue includes both initial and sensitive-update applications. Sensitive-update approval applies the proposed live fields and writes the before/after audit record in the same transaction.
+
 ### Restaurant context and page
 
 | Method and URL | Request | Response | Required permission |
@@ -165,10 +159,11 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/sensitive-profile` | Legal name/address/permit proposal | Pending change request; live values unchanged | `restaurant.sensitive.edit` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/preview` | â€” | Customer-visible restaurant resource | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/publish` | â€” | Updated publish state/checklist errors | `restaurant.publish` |
+| `GET /api/v1/manage/restaurants/{restaurant}/business/publish-checklist` | â€” | Current publish checks, including unmet B4 orderable-item check | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/unpublish` | Confirmation | Updated publish state | `restaurant.publish` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/close` | `closed`, optional reason | Updated operational state | `restaurant.publish` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/photos` | â€” | Ordered photo list | `restaurant.view` |
-| `POST /api/v1/manage/restaurants/{restaurant}/business/photos` | Multipart image, `kind`, `alt_text` | Photo resource with public URL | `restaurant.photos.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/business/photos` | Multipart `file`, `thumbnail`, `medium`, `kind`, `alt_text` | Photo resource with public URL | `restaurant.photos.manage` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/photos/{photo}` | `alt_text`, `sort_order`, `is_primary` | Updated photo | `restaurant.photos.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/business/photos/{photo}` | Confirmation | 204 | `restaurant.photos.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/hours` | â€” | Weekly shifts, overnight flags, 24/7 state | `restaurant.view` |
@@ -176,6 +171,8 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 | `GET /api/v1/manage/restaurants/{restaurant}/business/closures` | Date range | Closure list | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/closures` | `closure_date`, `reason` | Closure resource | `restaurant.hours.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/business/closures/{closure}` | Confirmation | 204 | `restaurant.hours.manage` |
+
+B2 frontend includes the profile editor, Owner-only sensitive proposal, compressed photo manager, weekly-shift editor, FullCalendar closure view, and publish checklist. Publishing remains blocked until B4 adds a published, orderable menu item; the client does not fabricate one.
 
 ### Team and owner audit
 
@@ -279,16 +276,17 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 | Discounts `/business/discounts` | Restaurant-funded promotions and usage | Owner/Manager |
 | Reports `/business/reports` | Role-filtered report selector/date range/CSV export | Owner/Manager; Reservation Manager reservation-only |
 
-## 9. B0 completion gates
+## 9. B0/B1 readiness and B2 status
 
-- [x] Inventory existing Business-related code and prerequisites.
-- [x] Record missing prerequisites and closure work.
-- [x] Reconcile Business route/permission expectations with the plan and brief.
-- [x] Prepare the Business endpoint registry, page list, and scheduler requirements.
-- [x] Prepare a proposed Business schema without migrations.
-- [ ] Owner review of this contract and `DATABASE_DESIGN.md`.
-- [ ] Close authentication/mode/membership prerequisites and tests before B1.
-- [ ] Do not migrate until the database design is approved.
+- [x] Inventory the foundation and record the Business API contract, page list, and scheduler requirements.
+- [x] Implement the B0 identity, OTP, server-checked mode/membership, permissions, local storage, settings, and persistent application-queue foundations.
+- [x] Implement the B1 application wizard, Admin review/approval flow, and Business workspace shell; owner confirms B1 was hand-tested.
+- [x] Owner approved B0 and authorized B1.
+- [x] Add B1 isolation tests: another user cannot read an application or its private documents, and duplicate approval cannot create a second restaurant. (Execution remains blocked by the local PHP version.)
+- [ ] Run backend tests with a PHP runtime compatible with the installed Composer dependencies (>=8.4.1).
+- [ ] Import and verify the official PSGC hierarchy; the import command exists but the source dataset is not checked in.
+- [x] Implement B2 management routes, frontend surfaces, and migration for documented entities; do not run the migration until a compatible backend environment is available.
+- [ ] Run backend feature tests and migration against the supported MySQL version, then complete B2 hand-testing.
 
 ## 10. B8 QA acceptance checklist
 

@@ -20,12 +20,14 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             $query->where('status', $filters['status']);
         }
         $type = $filters['application_type'] ?? $filters['type'] ?? null;
-        if ($type === 'restaurant' || $type === 'partner') {
+        if ($type === 'restaurant') {
+            $query->whereIn('application_type', ['initial', 'sensitive_update']);
+        } elseif ($type === 'partner') {
             $query->where('application_type', 'initial');
         } elseif ($type !== null && $type !== '') {
             $query->where('application_type', $type);
         } else {
-            $query->where('application_type', 'initial');
+            $query->whereIn('application_type', ['initial', 'sensitive_update']);
         }
         if (empty($filters['status'])) {
             $query->where('status', '!=', 'draft');
@@ -85,6 +87,17 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             ->first();
     }
 
+    public function findPendingSensitiveUpdate(int $restaurantId): ?RestaurantApplication
+    {
+        return RestaurantApplication::query()
+            ->with('documents')
+            ->where('restaurant_id', $restaurantId)
+            ->where('application_type', 'sensitive_update')
+            ->whereIn('status', ['draft', 'submitted', 'under_review', 'needs_revision'])
+            ->latest('id')
+            ->first();
+    }
+
     public function create(array $attributes): RestaurantApplication
     {
         return RestaurantApplication::query()->create($attributes);
@@ -95,6 +108,29 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
         $application->forceFill(['draft_details' => $details])->save();
 
         return $application->load('documents');
+    }
+
+    public function updateSensitiveChanges(RestaurantApplication $application, array $changes): RestaurantApplication
+    {
+        return DB::transaction(function () use ($application, $changes): RestaurantApplication {
+            $locked = RestaurantApplication::query()->lockForUpdate()->findOrFail($application->getKey());
+            if ($locked->application_type !== 'sensitive_update'
+                || ! in_array($locked->status, ['draft', 'needs_revision'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['This sensitive update cannot be edited or resubmitted.'],
+                ]);
+            }
+            $locked->forceFill([
+                'proposed_changes' => $changes,
+                'status' => 'submitted',
+                'submitted_at' => now(),
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+                'review_notes' => null,
+            ])->save();
+
+            return $locked->load(['applicant', 'documents']);
+        });
     }
 
     public function submit(RestaurantApplication $application): RestaurantApplication
@@ -158,6 +194,7 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'owner_user_id' => $locked->submitted_by,
                 'name' => $details['restaurant_name'],
                 'description' => $details['description'] ?? null,
+                'category' => $details['category'] ?? null,
                 'contact_number' => $details['contact_number'] ?? null,
                 'business_email' => $details['business_email'],
                 'business_email_verified_at' => $details['business_email_verified_at'] ?? null,
@@ -171,6 +208,11 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'status' => 'approved',
                 'is_published' => false,
             ]);
+            $cuisine = trim((string) ($details['cuisine'] ?? ''));
+            if ($cuisine !== '') {
+                $cuisineType = \App\Models\CuisineType::query()->firstOrCreate(['name' => $cuisine]);
+                $restaurant->cuisines()->sync([$cuisineType->getKey()]);
+            }
 
             $locked->forceFill([
                 'restaurant_id' => $restaurant->getKey(),
@@ -180,6 +222,72 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             ])->save();
 
             return $locked->load(['applicant', 'documents', 'restaurant']);
+        });
+    }
+
+    public function approveSensitiveUpdate(RestaurantApplication $application, int $reviewerId): array
+    {
+        return DB::transaction(function () use ($application, $reviewerId): array {
+            $locked = RestaurantApplication::query()->lockForUpdate()->findOrFail($application->getKey());
+            if ($locked->application_type !== 'sensitive_update'
+                || $locked->status !== 'under_review'
+                || $locked->restaurant_id === null) {
+                throw ValidationException::withMessages([
+                    'status' => ['This sensitive update is no longer available for approval.'],
+                ]);
+            }
+
+            $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($locked->restaurant_id);
+            $allowed = ['legal_name', 'psgc_code', 'street', 'latitude', 'longitude'];
+            $changes = array_intersect_key($locked->proposed_changes ?? [], array_flip($allowed));
+            $sensitiveDocuments = $locked->documents()->where('doc_type', 'business_permit')->get();
+            if ($changes === [] && $sensitiveDocuments->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'proposed_changes' => ['This sensitive update does not contain any supported changes.'],
+                ]);
+            }
+
+            $before = array_intersect_key($restaurant->getAttributes(), $changes);
+            if ($changes !== []) {
+                $restaurant->forceFill($changes)->save();
+            }
+            $after = array_intersect_key($restaurant->fresh()->getAttributes(), $changes);
+            $previousPermitDocuments = RestaurantApplication::query()
+                ->where('restaurant_id', $restaurant->getKey())
+                ->where('status', 'approved')
+                ->where('id', '!=', $locked->getKey())
+                ->with('documents')
+                ->get()
+                ->flatMap(fn (RestaurantApplication $approved): iterable => $approved->documents
+                    ->where('doc_type', 'business_permit')
+                    ->where('verification_state', 'verified')
+                    ->map(fn ($document): array => [
+                        'id' => (string) $document->getKey(),
+                        'expiry_date' => $document->expiry_date?->toDateString(),
+                    ]))
+                ->values()
+                ->all();
+            if ($sensitiveDocuments->isNotEmpty()) {
+                $sensitiveDocuments->each(function ($document): void {
+                    $document->forceFill(['verification_state' => 'verified'])->save();
+                });
+                $before['permit_documents'] = $previousPermitDocuments;
+                $after['permit_documents'] = $sensitiveDocuments->map(fn ($document): array => [
+                    'id' => (string) $document->getKey(),
+                    'expiry_date' => $document->expiry_date?->toDateString(),
+                ])->values()->all();
+            }
+            $locked->forceFill([
+                'status' => 'approved',
+                'reviewed_by' => $reviewerId,
+                'reviewed_at' => now(),
+            ])->save();
+
+            return [
+                'application' => $locked->load(['applicant', 'documents', 'restaurant']),
+                'before' => $before,
+                'after' => $after,
+            ];
         });
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Restaurant extends Model
@@ -13,6 +14,7 @@ class Restaurant extends Model
         'name',
         'branch_label',
         'description',
+        'category',
         'legal_name',
         'contact_number',
         'business_email',
@@ -55,5 +57,25 @@ class Restaurant extends Model
     public function applications(): HasMany
     {
         return $this->hasMany(RestaurantApplication::class);
+    }
+
+    public function cuisines(): BelongsToMany
+    {
+        return $this->belongsToMany(CuisineType::class, 'restaurant_cuisines', 'restaurant_id', 'cuisine_id');
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(RestaurantPhoto::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function operatingHours(): HasMany
+    {
+        return $this->hasMany(OperatingHour::class)->orderBy('weekday')->orderBy('shift_order');
+    }
+
+    public function closureDates(): HasMany
+    {
+        return $this->hasMany(ClosureDate::class)->orderBy('closure_date');
     }
 }

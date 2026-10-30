@@ -46,6 +46,70 @@ class PublicPhotoStorageService
         return $path;
     }
 
+    public function storeVariants(UploadedFile $original, UploadedFile $thumbnail, UploadedFile $medium): string
+    {
+        $files = [$original, $thumbnail, $medium];
+        $cleaned = [];
+        $extension = null;
+        foreach ($files as $file) {
+            if (($file->getSize() ?? 0) > 2 * 1024 * 1024) {
+                throw ValidationException::withMessages(['file' => ['Photos may not exceed 2 MB.']]);
+            }
+            $source = file_get_contents($file->getRealPath());
+            if (! is_string($source)) {
+                throw new \RuntimeException('The uploaded photo could not be read.');
+            }
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($source);
+            $format = is_string($mime) ? (self::MIME_EXTENSIONS[$mime] ?? null) : null;
+            $image = getimagesizefromstring($source);
+            if ($format === null || $image === false || $image[2] !== $format[1]) {
+                throw ValidationException::withMessages(['file' => ['Upload real JPG, PNG, or WebP image variants.']]);
+            }
+            if ($extension !== null && $extension !== $format[0]) {
+                throw ValidationException::withMessages(['file' => ['Photo variants must use the same image format.']]);
+            }
+            $extension = $format[0];
+            $cleaned[] = match ($mime) {
+                'image/jpeg' => $this->stripJpegMetadata($source),
+                'image/png' => $this->stripPngExif($source),
+                'image/webp' => $this->stripWebpExif($source),
+            };
+        }
+
+        $name = (string) Str::uuid();
+        $paths = [
+            'restaurant-photos/'.$name.'.'.$extension,
+            'restaurant-photos/'.$name.'-thumb.'.$extension,
+            'restaurant-photos/'.$name.'-medium.'.$extension,
+        ];
+        foreach ($paths as $index => $path) {
+            if (! Storage::disk('public')->put($path, $cleaned[$index])) {
+                foreach ($paths as $storedPath) {
+                    Storage::disk('public')->delete($storedPath);
+                }
+                throw new \RuntimeException('The public photo variants could not be stored.');
+            }
+        }
+
+        return $paths[0];
+    }
+
+    public function deleteVariants(?string $path): void
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
+        $base = substr($path, 0, -(strlen($extension) + 1));
+        foreach ([$path, $base.'-thumb.'.$extension, $base.'-medium.'.$extension] as $variantPath) {
+            if (Storage::disk('public')->exists($variantPath)
+                && ! Storage::disk('public')->delete($variantPath)) {
+                throw new \RuntimeException('A replaced public photo variant could not be removed.');
+            }
+        }
+    }
+
     private function stripJpegMetadata(string $image): string
     {
         if (substr($image, 0, 2) !== "\xFF\xD8") {

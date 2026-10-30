@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Http\Authorization\PermissionMap;
+use App\Repositories\Contracts\AuditLogRepository;
 use App\Repositories\Contracts\AdminRepository;
 use App\Repositories\Contracts\PlatformSettingsRepository;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AdminService
@@ -17,6 +19,7 @@ class AdminService
         private readonly AdminRepository $repository,
         private readonly RestaurantApplicationRepository $applications,
         private readonly PlatformSettingsRepository $platformSettings,
+        private readonly AuditLogRepository $audit,
     ) {}
 
     public function list(string $resource, array $params): array
@@ -208,7 +211,39 @@ class AdminService
                 throw ValidationException::withMessages(['status' => ['Move the application into review before recording a decision.']]);
             }
             if ($application->application_type !== 'initial') {
-                throw ValidationException::withMessages(['type' => ['Only initial restaurant applications are supported in this phase.']]);
+                if ($application->application_type !== 'sensitive_update') {
+                    throw ValidationException::withMessages(['type' => ['This restaurant application type is not supported.']]);
+                }
+
+                if (! $approve) {
+                    $updated = $this->applications->transition(
+                        $application,
+                        'rejected',
+                        (string) $note,
+                        (int) $actor->getAuthIdentifier(),
+                    );
+
+                    return $this->applications->toArray($updated);
+                }
+
+                return DB::transaction(function () use ($application, $actor): array {
+                    $result = $this->applications->approveSensitiveUpdate(
+                        $application,
+                        (int) $actor->getAuthIdentifier(),
+                    );
+                    $this->audit->record([
+                        'actor_user_id' => $actor->getAuthIdentifier(),
+                        'restaurant_id' => $application->restaurant_id,
+                        'action' => 'sensitive_update.approved',
+                        'entity_type' => 'restaurant',
+                        'entity_id' => (string) $application->restaurant_id,
+                        'before_value' => $result['before'],
+                        'after_value' => $result['after'],
+                        'created_at' => now(),
+                    ]);
+
+                    return $this->applications->toArray($result['application']);
+                });
             }
 
             $updated = $approve
@@ -267,8 +302,9 @@ class AdminService
         }
 
         $application = $this->applications->find($id) ?? abort(404);
-        if ($application->application_type !== 'initial' || $application->status !== 'submitted') {
-            throw ValidationException::withMessages(['status' => ['Only submitted initial applications can enter review.']]);
+        if (! in_array($application->application_type, ['initial', 'sensitive_update'], true)
+            || $application->status !== 'submitted') {
+            throw ValidationException::withMessages(['status' => ['Only submitted restaurant applications can enter review.']]);
         }
 
         $updated = $this->applications->transition(
