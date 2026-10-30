@@ -62,8 +62,10 @@ const readStoredAuth = () => {
     if (!account && !parsed.user?.id) return { user: null, capabilities: [], activeView: USER_ROLES.GUEST, emailVerified: true };
 
     return {
-      user: account?.user || parsed.user,
-      capabilities: account?.capabilities || parsed.capabilities || [USER_ROLES.CUSTOMER],
+      user: account ? { ...account.user, ...parsed.user } : parsed.user,
+      capabilities: account
+        ? [...new Set([...(account.capabilities || []), ...(parsed.capabilities || [])])]
+        : parsed.capabilities || [USER_ROLES.CUSTOMER],
       activeView: account
         ? (account.capabilities.includes(parsed.activeView) ? parsed.activeView : account.role)
         : USER_ROLES.CUSTOMER,
@@ -167,7 +169,10 @@ export function AuthProvider({ children }) {
       : isDemoAccount
       ? { ...auth.user, ...updates }
       : await authService.updateRegisteredUser(auth.user.id, updates);
-    persistAuth({ ...auth, user });
+    const capabilities = updates.memberships?.some((membership) => membership.status === 'active')
+      ? [...new Set([...auth.capabilities, USER_ROLES.RESTAURANT_OWNER])]
+      : auth.capabilities;
+    persistAuth({ ...auth, user, capabilities });
     return user;
   }, [auth, persistAuth]);
 

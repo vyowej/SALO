@@ -48,5 +48,17 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(max(1, (int) config('salo.auth.otp_requests_per_minute', 5)))
                 ->by($identity.'|'.$request->ip());
         });
+
+        RateLimiter::for('team-email-check', function (Request $request) {
+            $ownerId = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            return Limit::perMinute(10)->by($ownerId.'|'.$request->ip());
+        });
+
+        RateLimiter::for('team-invitation-activation', function (Request $request) {
+            $token = (string) $request->route('token');
+
+            return Limit::perMinute(5)->by(hash('sha256', $token).'|'.$request->ip());
+        });
     }
 }

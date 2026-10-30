@@ -57,6 +57,24 @@ export const authService = {
     return getDemoAccount(email, password);
   },
 
+  getMockAccount(email) {
+    if (!config.useMock) return null;
+    const normalizedEmail = normalizeEmail(email);
+    const demo = demoAccounts.find((entry) => normalizeEmail(entry.email) === normalizedEmail);
+    if (demo) return { ...demo.user, status: 'active' };
+    const user = readUsers().find((entry) => normalizeEmail(entry.email) === normalizedEmail);
+    if (!user) return null;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    return safeUser;
+  },
+
+  verifyMockPassword(email, password) {
+    if (!config.useMock) return false;
+    if (getDemoAccount(email, password)) return true;
+    return readUsers().some((entry) => normalizeEmail(entry.email) === normalizeEmail(email) && entry.password === password);
+  },
+
   verifyEmailCode(code) {
     return code === mockEmailVerificationCode;
   },
@@ -103,6 +121,67 @@ export const authService = {
     // MOCK-ONLY: browser storage stands in for the future account API.
     window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([...registeredUsers, registeredUser]));
     return registeredUser;
+  },
+
+  async createInvitedAccount({ email, restaurantId, restaurantName, position, inviteeName }) {
+    if (!config.useMock) throw new Error('Invited accounts are created by the Business API.');
+    const users = readUsers();
+    if (users.some((entry) => normalizeEmail(entry.email) === normalizeEmail(email))) {
+      throw new Error('An account with this email already exists.');
+    }
+    const nameParts = String(inviteeName || '').trim().split(/\s+/).filter(Boolean);
+    const user = {
+      id: `invited-${Date.now()}`,
+      email: normalizeEmail(email),
+      first_name: nameParts[0] || 'Pending',
+      last_name: nameParts.slice(1).join(' ') || 'Invitee',
+      name: nameParts.length ? String(inviteeName).trim() : 'Pending Invitee',
+      role: 'customer',
+      status: 'invited',
+      capabilities: ['customer'],
+      memberships: [{
+        restaurant_id: String(restaurantId),
+        restaurant_name: restaurantName,
+        role: position,
+        status: 'invited',
+        permissions: [],
+      }],
+      email_verified: false,
+      password: null,
+    };
+    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([...users, user]));
+    return user;
+  },
+
+  async activateInvitedAccount({ email, restaurantId, restaurantName, position, first_name, last_name, password }) {
+    if (!config.useMock) throw new Error('Invited accounts are activated by the Business API.');
+    const users = readUsers();
+    const user = users.find((entry) => normalizeEmail(entry.email) === normalizeEmail(email));
+    if (!user || user.status !== 'invited') throw new Error('This invited account is no longer available for activation.');
+    const permissions = {
+      manager: permissionList('manager'),
+      reservation_manager: permissionList('reservation_manager'),
+      staff: permissionList('staff'),
+    }[position] || [];
+    const membership = {
+      restaurant_id: String(restaurantId),
+      restaurant_name: restaurantName,
+      role: position,
+      status: 'active',
+      permissions,
+    };
+    const updatedUser = {
+      ...user,
+      first_name,
+      last_name,
+      name: `${first_name} ${last_name}`.trim(),
+      status: 'active',
+      email_verified: true,
+      password,
+      memberships: [...(user.memberships || []).filter((item) => String(item.restaurant_id) !== String(restaurantId)), membership],
+    };
+    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users.map((entry) => entry.id === user.id ? updatedUser : entry)));
+    return { ...updatedUser, password: undefined };
   },
 
   async login(email, password) {
@@ -195,5 +274,14 @@ export const authService = {
     return apiRequest('/customer/settings', { method: 'PATCH', body: updates });
   },
 };
+
+function permissionList(role) {
+  const permissions = {
+    manager: ['restaurant.view', 'restaurant.page.edit', 'restaurant.photos.manage', 'restaurant.hours.manage', 'restaurant.menu.manage', 'menu.availability.manage', 'orders.view', 'orders.status.update', 'orders.cancel', 'reservations.view', 'reservations.manage', 'tables.manage', 'discounts.manage', 'reports.sales_reservations.view', 'reports.reservations.view', 'team.view'],
+    reservation_manager: ['restaurant.view', 'reservations.view', 'reservations.manage', 'tables.manage', 'reports.reservations.view'],
+    staff: ['restaurant.view', 'menu.availability.manage', 'orders.view', 'orders.status.update'],
+  };
+  return permissions[role] || [];
+}
 
 export default authService;

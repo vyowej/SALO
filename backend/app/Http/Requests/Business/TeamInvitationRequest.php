@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Http\Requests\Business;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+
+class TeamInvitationRequest extends FormRequest
+{
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('email'))) {
+            $this->merge(['email' => Str::lower(trim($this->input('email')))]);
+        }
+    }
+
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'email' => ['required', 'email:rfc', 'max:254'],
+            'position' => ['required', Rule::in(['manager', 'reservation_manager', 'staff'])],
+            'invitee_name' => ['nullable', 'string', 'max:160'],
+        ];
+    }
+}

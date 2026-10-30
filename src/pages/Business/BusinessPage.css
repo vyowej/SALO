@@ -346,6 +346,346 @@
   border-radius: var(--radius-md);
 }
 
+.business-role-banner,
+.business-access-changed {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-dense);
+  color: var(--text);
+}
+
+.business-team {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.business-team__heading,
+.business-team__section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.business-team__heading h2,
+.business-team__heading p,
+.business-team__section-heading h3,
+.business-team__section-heading p {
+  margin: 0;
+}
+
+.business-team__heading > div > p:last-child,
+.business-team__section-heading p {
+  color: var(--text-muted);
+}
+
+.business-team__card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-dense);
+}
+
+.business-team__card > h3,
+.business-team__card > p {
+  margin: 0;
+}
+
+.team-hierarchy {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.team-position {
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.team-position--owner {
+  border-color: var(--primary);
+}
+
+.team-position h3,
+.team-position p {
+  margin: 0 0 var(--space-2);
+}
+
+.team-position p {
+  min-height: 3.2em;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.team-position ul,
+.team-permission-list,
+.team-invitations {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.team-position li,
+.team-permission-list li,
+.team-invitations li {
+  margin-top: var(--space-2);
+}
+
+.team-permission-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-4);
+}
+
+.team-filters,
+.team-invite-form__row,
+.team-transfer-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.team-filters label,
+.team-invite-form label,
+.team-transfer-form label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: min(100%, 12rem);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.team-filters input,
+.team-filters select,
+.team-invite-form input,
+.team-invite-form select,
+.team-transfer-form input,
+.team-transfer-form select {
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+.team-invite-form,
+.team-activation-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.team-invite-confirmation {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.team-invite-confirmation p {
+  margin: 0;
+}
+
+.team-invite-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.team-invite-identity img,
+.team-invite-identity > span {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  border-radius: 50%;
+}
+
+.team-invite-identity img {
+  object-fit: cover;
+}
+
+.team-invite-identity > span {
+  display: grid;
+  place-items: center;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.team-local-invite-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.team-local-invite-link a {
+  color: var(--primary);
+}
+
+.team-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.team-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.team-table th,
+.team-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.team-table th {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.team-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.team-row-actions select {
+  min-height: 2rem;
+  max-width: 12rem;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  color: var(--text);
+}
+
+.team-status {
+  display: inline-flex;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  text-transform: capitalize;
+}
+
+.team-status--active {
+  color: var(--success);
+}
+
+.team-status--suspended,
+.team-status--removed {
+  color: var(--text-muted);
+}
+
+.team-status--invited {
+  color: var(--primary);
+}
+
+.team-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.team-invitations {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.team-invitations li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.team-audit-values summary {
+  cursor: pointer;
+  color: var(--primary);
+}
+
+.team-audit-values > div {
+  min-width: 14rem;
+}
+
+.team-audit-values pre {
+  max-width: 28rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.team-invitation-page {
+  width: min(100%, 38rem);
+  margin-inline: auto;
+}
+
+.team-invitation-page form {
+  display: grid;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.team-invitation-page label {
+  display: grid;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.team-invitation-page input {
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+@media (max-width: 760px) {
+  .team-hierarchy {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-permission-list {
+    grid-template-columns: 1fr;
+  }
+
+  .team-invitations li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .team-hierarchy {
+    grid-template-columns: 1fr;
+  }
+
+  .team-position p {
+    min-height: 0;
+  }
+
+  .team-pagination {
+    font-size: var(--font-size-sm);
+  }
+}
+
 .business-notice {
   color: var(--text);
   background: var(--surface-control);

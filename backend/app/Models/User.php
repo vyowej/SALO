@@ -156,6 +156,18 @@ class User extends Authenticatable
         ];
     }
 
+    public function hasRestaurantMembership(Restaurant $restaurant): bool
+    {
+        if ((int) $restaurant->owner_user_id === (int) $this->getKey()) {
+            return true;
+        }
+
+        return $this->restaurantStaff()
+            ->where('restaurant_id', $restaurant->getKey())
+            ->whereIn('status', ['invited', 'active', 'suspended'])
+            ->exists();
+    }
+
     private function permissionsFor(string $role, ?string $restaurantStatus): array
     {
         $permissions = PermissionMap::forRole($role);

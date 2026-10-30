@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import { AuthProvider } from './context/AuthContext';
@@ -27,6 +27,7 @@ import SettingsPage from './pages/Settings/SettingsPage';
 import PartnerApplyPage from './pages/PartnerApply/PartnerApplyPage';
 import RiderApplyPage from './pages/RiderApply/RiderApplyPage';
 import BusinessPage from './pages/Business/BusinessPage';
+import TeamInvitationPage from './pages/Business/TeamInvitationPage';
 import RiderPage from './pages/Rider/RiderPage';
 import NotFoundPage from './pages/NotFound/NotFoundPage';
 import FeatureGatePage from './pages/FeatureGate/FeatureGatePage';
@@ -36,10 +37,25 @@ const AdminPage = lazy(() => import('./pages/Admin/AdminPage'));
 function HomeGate() {
   const { isLoggedIn, userRole, authLoading, authError, USER_ROLES: roles } = useAuth();
   const location = useLocation();
+  const [accessChanged] = useState(() => (
+    location.state?.businessAccessChanged
+    || window.sessionStorage.getItem('salo.business.accessChanged') === 'true'
+  ));
+  useEffect(() => {
+    if (accessChanged) window.sessionStorage.removeItem('salo.business.accessChanged');
+  }, [accessChanged]);
   if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
   if (authError) return <div className="section-shell" role="alert">{authError}</div>;
   if (!isLoggedIn) {
     return location.hash === '#how-it-works' ? <FeatureGatePage /> : <LandingPage />;
+  }
+  if (userRole === roles.CUSTOMER) {
+    return (
+      <>
+        {accessChanged ? <p className="business-access-changed" role="status">Your access to this restaurant changed. You’re now in Customer mode.</p> : null}
+        <CustomerHomePage />
+      </>
+    );
   }
   if (userRole === roles.RESTAURANT_OWNER) return <Navigate to="/dashboard" replace />;
   if (userRole === roles.RIDER) return <Navigate to="/rider" replace />;
@@ -105,6 +121,7 @@ function App() {
               <Route path="/rider/apply" element={<Layout><RiderApplyPage /></Layout>} />
               <Route path="/dashboard" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Navigate to="/business" replace /></RequireCapability>} />
               <Route path="/business/*" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Layout><BusinessPage /></Layout></RequireCapability>} />
+              <Route path="/team-invitations/:token/:action" element={<Layout><TeamInvitationPage /></Layout>} />
               <Route path="/rider" element={<RequireCapability capability={USER_ROLES.RIDER}><Layout><RiderPage /></Layout></RequireCapability>} />
               <Route path="/admin/*" element={<RequireCapability capability={USER_ROLES.ADMIN}><Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><AdminPage /></Suspense></RequireCapability>} />
               <Route path="*" element={<Layout><NotFoundPage /></Layout>} />

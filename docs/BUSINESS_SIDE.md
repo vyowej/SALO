@@ -13,17 +13,17 @@ This audit is based on the checked-in Laravel code, React code, routes, tests, m
 | Modes and `/me` | Implemented | Active mode and selected restaurant are session-backed and server-checked; `/auth/me` returns current memberships and permissions. |
 | `PermissionMap` | Implemented | `backend/app/Http/Authorization/PermissionMap.php` is the permission source; memberships expose `permissions[]` and the frontend has `useCan`. |
 | Membership on every request | Implemented for the current Business surface | Restaurant middleware resolves the route restaurant, selected context, active membership, permission, and suspended read-only state on each request. |
-| Audit log | Foundation and B2 event writes implemented; runtime verification pending | The durable `audit_logs` table and repository exist. B2 records profile, sensitive proposal, photo, hours/closure, and publication/closure changes; the Owner read endpoint remains B3. |
+| Audit log | Foundation, B2 event writes, and B3 Owner read endpoint implemented; runtime verification pending | The durable `audit_logs` table and repository exist. B2 records profile, sensitive proposal, photo, hours/closure, and publication/closure changes; B3 adds searchable, paginated Owner-only history and 90-day retention. |
 | PSGC data | Partial | A database-backed PSGC endpoint and import command exist. No official data file is checked in, so a complete official import is not confirmed. |
 | Local-disk storage | Implemented | Explicit public/private disks, upload services, generated names and photo metadata removal, plus authorized short-lived private-document links exist. |
 | Platform settings | Implemented | Settings are persisted through the database repository and settings table. |
 | Admin application queue | Implemented | Applications are database-backed; Admin review supports start-review, approve, reject, and request-revision. |
-| Database design and migrations | B0/B1 migrations exist; B2 migration written, not run | B2 tables match the proposal in `DATABASE_DESIGN.md`; nullable `restaurants.category` was added there as `[PROPOSED]` before its migration was written. |
-| Business backend and UI | B1 hand-tested; B2 implemented, runtime verification pending | B2 profile, sensitive-update, photo, hours/closure, publish-checklist, and close/reopen surfaces are implemented. Backend tests are blocked by the local PHP version; B2 has not been hand-tested. |
+| Database design and migrations | B0/B1 migrations exist; B2 and B3 migrations written, not run | B2 tables and the B3 `invitations` table match `DATABASE_DESIGN.md`; no migrations were executed during B2/B3. |
+| Business backend and UI | B1 hand-tested; B2 and B3 implemented, runtime verification pending | B2 profile, sensitive-update, photo, hours/closure, publish-checklist, and close/reopen surfaces are implemented. B3 adds team, invitation, membership, ownership-transfer, and Owner audit flows. Backend tests are blocked by the local PHP version; B2/B3 need compatible-runtime tests and hand-testing. |
 
 ### Remaining verification
 
-The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2 tests and migration execution also await a compatible PHP runtime.
+The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2 and B3 tests and migration execution also await a compatible PHP runtime.
 
 ## 2. Contract conventions
 
@@ -180,15 +180,20 @@ B2 frontend includes the profile editor, Owner-only sensitive proposal, compress
 |---|---|---|---|
 | `GET /api/v1/manage/restaurants/{restaurant}/team` | Search, role/status filters, pagination | Members with masked email for Manager; pending invitations | `team.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/team/email-check` | Exact `email` | Minimal match confirmation or no-account state | Owner-only `team.manage`; 10/minute |
-| `POST /api/v1/manage/restaurants/{restaurant}/team/invitations` | `email`, `position`, optional invitee name | Invitation status and expiry; local-only invite-link helper | `team.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/team/invitations` | Normalized exact `email`, `position`, optional `invitee_name` | Invitation status and expiry; `invite_path` only in local environment | `team.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/team/invitations/{invitation}/resend` | â€” | Updated expiry/delivery state | `team.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/team/invitations/{invitation}` | Confirmation | 204 | `team.manage` |
 | `POST /api/v1/team-invitations/{token}/accept` | No body; authenticated existing account with matching email | Active membership and permissions | Existing invitee; valid unused token |
-| `POST /api/v1/team-invitations/{token}/activate` | Unauthenticated `password`, `password_confirmation`; token in URL | Active invited account and membership | New invitee; rate-limited, valid unexpired single-use token |
+| `POST /api/v1/team-invitations/{token}/activate` | Unauthenticated `first_name`, `last_name`, `password`, `password_confirmation`; token in URL | Active invited account and membership | New invitee; rate-limited, valid unexpired single-use token |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/team/{membership}` | `position` or `status` | Updated membership | `team.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/team/{membership}` | Confirmation | Removed membership | `team.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/team/transfer-ownership` | Active Manager ID and current password | New Owner; prior Owner becomes Manager | Current Owner |
+| `POST /api/v1/manage/restaurants/{restaurant}/team/transfer-ownership` | `manager_id` (active Manager user ID), current `password` | New Owner; prior Owner becomes Manager | `team.manage` (Owner only) |
 | `GET /api/v1/manage/restaurants/{restaurant}/audit` | Search/action/date/page filters | Paginated before/after audit records | `audit.view` (Owner only) |
+| `POST /api/v1/admin/restaurants/{restaurant}/transfer-ownership` | Active Manager `manager_id`, required `reason` | New Owner; prior Owner becomes Manager | Admin capability |
+
+The Team response includes `positions` with permission previews and an `assignable` flag, `position_holders`, paginated `members` with a server-computed `can_manage_member` flag, pending `invitations`, and `can_manage`. Member filters are `search`, `position`, `status`, `page`, and `per_page`; Managers' search matches names only so masked emails cannot be inferred. Email-check and invitation audit entries store a one-way email hash rather than the searched address. A new account is created in `invited` state with temporary placeholder name values because the user schema requires names; the invitee replaces them with their own first and last names during activation. The Owner never sets or receives a password. Activation is not available to authenticated sessions; an already-active account must authenticate and use the acceptance endpoint. The exact-email existence check intentionally reveals limited account existence to an Owner; no directory or broader search is exposed.
+
+The Admin ownership-reassignment endpoint is in the Admin namespace and is not a Business route. Ownership-transfer events are included in the normal 90-day audit purge; whether to exempt them remains an owner decision.
 
 ### Menu and order endpoints
 
@@ -287,6 +292,9 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 - [ ] Import and verify the official PSGC hierarchy; the import command exists but the source dataset is not checked in.
 - [x] Implement B2 management routes, frontend surfaces, and migration for documented entities; do not run the migration until a compatible backend environment is available.
 - [ ] Run backend feature tests and migration against the supported MySQL version, then complete B2 hand-testing.
+- [x] Implement B3 team hierarchy, invitations, membership management, ownership transfer, and Owner audit history using the documented schema.
+- [ ] Run B3 backend tests and migration using a supported PHP runtime; the invitations migration is written but has not been run.
+- [ ] Complete B3 hand-testing of existing-account acceptance, new-account activation, membership changes, ownership transfer, and Owner-only audit history.
 
 ## 10. B8 QA acceptance checklist
 

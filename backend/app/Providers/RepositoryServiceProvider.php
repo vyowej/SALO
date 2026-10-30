@@ -12,6 +12,7 @@ use App\Repositories\Contracts\PsgcLocationRepository;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
 use App\Repositories\Contracts\RestaurantPageRepository;
 use App\Repositories\Contracts\SessionRepository;
+use App\Repositories\Contracts\TeamRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Database\DatabaseAuthTokenRepository;
 use App\Repositories\Database\DatabaseApplicationDocumentRepository;
@@ -21,6 +22,7 @@ use App\Repositories\Database\DatabasePsgcLocationRepository;
 use App\Repositories\Database\DatabaseRestaurantApplicationRepository;
 use App\Repositories\Database\DatabaseRestaurantPageRepository;
 use App\Repositories\Database\DatabaseSessionRepository;
+use App\Repositories\Database\DatabaseTeamRepository;
 use App\Repositories\Database\DatabaseUserRepository;
 use App\Repositories\Stub\InMemoryAddressRepository;
 use App\Repositories\Stub\InMemoryAdminRepository;
@@ -41,5 +43,6 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(PlatformSettingsRepository::class, DatabasePlatformSettingsRepository::class);
         $this->app->singleton(PsgcLocationRepository::class, DatabasePsgcLocationRepository::class);
         $this->app->singleton(SessionRepository::class, DatabaseSessionRepository::class);
+        $this->app->singleton(TeamRepository::class, DatabaseTeamRepository::class);
     }
 }

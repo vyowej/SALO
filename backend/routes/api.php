@@ -4,7 +4,11 @@ use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
+use App\Http\Controllers\Api\V1\Business\AuditLogController;
 use App\Http\Controllers\Api\V1\Business\RestaurantPageController;
+use App\Http\Controllers\Api\V1\Business\TeamController;
+use App\Http\Controllers\Api\V1\Business\TeamInvitationController;
+use App\Http\Controllers\Api\V1\Admin\AdminOwnershipTransferController;
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Api\V1\Auth\ActiveModeController;
 use App\Http\Controllers\Api\V1\Auth\CurrentAccountController;
@@ -30,7 +34,11 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             ->middleware('throttle:auth-recovery');
     });
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('/team-invitations/{token}/activate', [TeamInvitationController::class, 'activate'])
+            ->middleware(['guest:web', 'throttle:team-invitation-activation']);
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::post('/team-invitations/{token}/accept', [TeamInvitationController::class, 'accept']);
         Route::post('/auth/logout', [AuthenticatedSessionController::class, 'destroy']);
         Route::get('/auth/me', [CurrentAccountController::class, 'show']);
         Route::post('/auth/mode', [ActiveModeController::class, 'update']);
@@ -86,6 +94,7 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::post('/users/{id}/suspend', [AdminController::class, 'userSuspend']);
             Route::post('/users/{id}/reactivate', [AdminController::class, 'userReactivate']);
             Route::patch('/restaurants/{id}/status', [AdminController::class, 'restaurantStatus']);
+            Route::post('/restaurants/{restaurant}/transfer-ownership', AdminOwnershipTransferController::class);
             Route::get('/applications', [AdminController::class, 'index'])->defaults('resource', 'applications');
             Route::get('/applications/{type}/{id}', [AdminController::class, 'show'])->defaults('resource', 'applications');
             Route::post('/applications/{type}/{id}/approve', [AdminController::class, 'applicationApprove']);
@@ -144,5 +153,27 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
                 ->middleware('restaurant.access:restaurant.publish');
         });
 
+        Route::get('/manage/restaurants/{restaurant}/team', [TeamController::class, 'index'])
+            ->middleware('restaurant.access:team.view');
+        Route::post('/manage/restaurants/{restaurant}/team/email-check', [TeamController::class, 'checkEmail'])
+            ->middleware(['restaurant.access:team.manage', 'throttle:team-email-check']);
+        Route::post('/manage/restaurants/{restaurant}/team/invitations', [TeamController::class, 'invite'])
+            ->middleware('restaurant.access:team.manage');
+        Route::post('/manage/restaurants/{restaurant}/team/invitations/{invitation}/resend', [TeamController::class, 'resend'])
+            ->middleware('restaurant.access:team.manage')
+            ->whereNumber('invitation');
+        Route::delete('/manage/restaurants/{restaurant}/team/invitations/{invitation}', [TeamController::class, 'cancel'])
+            ->middleware('restaurant.access:team.manage')
+            ->whereNumber('invitation');
+        Route::patch('/manage/restaurants/{restaurant}/team/{membership}', [TeamController::class, 'updateMember'])
+            ->middleware('restaurant.access:team.manage')
+            ->whereNumber('membership');
+        Route::delete('/manage/restaurants/{restaurant}/team/{membership}', [TeamController::class, 'removeMember'])
+            ->middleware('restaurant.access:team.manage')
+            ->whereNumber('membership');
+        Route::post('/manage/restaurants/{restaurant}/team/transfer-ownership', [TeamController::class, 'transferOwnership'])
+            ->middleware('restaurant.access:team.manage');
+        Route::get('/manage/restaurants/{restaurant}/audit', [AuditLogController::class, 'index'])
+            ->middleware('restaurant.access:audit.view');
     });
 });

@@ -36,7 +36,14 @@ class EnsureRestaurantMembership
         );
 
         $membership = $policy->membership($user, $restaurant);
-        abort_unless($membership !== null, 404);
+        if ($membership === null) {
+            $knownMembership = $user->restaurantStaff()
+                ->where('restaurant_id', $restaurant->getKey())
+                ->whereIn('status', ['invited', 'suspended', 'removed'])
+                ->exists();
+            abort_if($knownMembership, 403);
+            abort(404);
+        }
         abort_unless($policy->allows($user, $restaurant, $permission), 403);
         abort_if(! $policy->mayWrite($restaurant) && ! $request->isMethod('GET') && ! $request->isMethod('HEAD'), 403);
 
