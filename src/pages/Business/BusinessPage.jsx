@@ -10,6 +10,8 @@ import BusinessAuditPage from './BusinessAuditPage';
 import BusinessMenuPage from './BusinessMenuPage';
 import BusinessOrdersPage from './BusinessOrdersPage';
 import BusinessReservationsPage from './BusinessReservationsPage';
+import BusinessDiscountsPage from './BusinessDiscountsPage';
+import BusinessCalendarPage from './BusinessCalendarPage';
 import {
   BusinessOverviewPage,
   BusinessPublicPage,
@@ -23,6 +25,8 @@ const SECTIONS = [
   { label: 'Business', to: '/business/profile', permission: 'restaurant.view' },
   { label: 'Orders', to: '/business/orders', permission: 'orders.view' },
   { label: 'Reservations', to: '/business/reservations', permission: 'reservations.view' },
+  { label: 'Discounts', to: '/business/discounts', permission: 'discounts.manage' },
+  { label: 'Calendar', to: '/business/calendar', permission: 'restaurant.view' },
   { label: 'Menu', to: '/business/menu', permission: 'restaurant.view' },
   { label: 'Team', to: '/business/team', permission: 'team.view' },
   { label: 'Reports', to: '/business/reports', permission: 'reports.sales_reservations.view' },
@@ -62,6 +66,7 @@ export default function BusinessPage() {
   const canViewReservations = useCan('reservations.view', selectedRestaurantId);
   const canViewSalesReports = useCan('reports.sales_reservations.view', selectedRestaurantId);
   const canViewReservationReports = useCan('reports.reservations.view', selectedRestaurantId);
+  const canManageDiscounts = useCan('discounts.manage', selectedRestaurantId);
   const canViewReports = canViewSalesReports || canViewReservationReports;
   const selectedMembership = memberships.find((membership) => String(membership.restaurant_id) === String(selectedRestaurantId));
   const [workspace, setWorkspace] = useState(null);
@@ -206,6 +211,7 @@ export default function BusinessPage() {
     'restaurant.view': canViewRestaurant,
     'orders.view': canViewOrders,
     'reservations.view': canViewReservations,
+    'discounts.manage': canManageDiscounts,
     'reports.sales_reservations.view': canViewReports,
     'reports.reservations.view': canViewReports,
   };
@@ -312,10 +318,23 @@ export default function BusinessPage() {
           />
         ) : currentPath === '/business/reservations' ? (
           <BusinessReservationsPage
-            key={`reservations-${selectedRestaurantId}`}
+            key={`reservations-${selectedRestaurantId}-${location.pathname}-${location.search}`}
             restaurantId={selectedRestaurantId}
             user={user}
             readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+          />
+        ) : currentPath === '/business/discounts' ? (
+          <BusinessDiscountsPage
+            key={`discounts-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
+            readOnly={Boolean(workspace?.restaurant?.is_read_only)}
+          />
+        ) : currentPath === '/business/calendar' ? (
+          <BusinessCalendarPage
+            key={`calendar-${selectedRestaurantId}`}
+            restaurantId={selectedRestaurantId}
+            user={user}
           />
         ) : currentPath === '/business/reports' ? (
           <BusinessReportsPage

@@ -1,0 +1,157 @@
+.business-discounts {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.business-discounts .business-page-heading h2,
+.business-discounts .business-page-heading p {
+  margin: 0;
+}
+
+.business-discounts .business-page-heading h2 {
+  margin-bottom: var(--space-2);
+}
+
+.business-discounts .business-page-heading > div > p:last-child {
+  color: var(--text-muted);
+}
+
+.business-discount-section {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.business-discount-filters {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 16rem) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.business-discount-filters label,
+.business-discount-form label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.business-discount-filters input,
+.business-discount-filters select,
+.business-discount-form input:not([type="checkbox"]),
+.business-discount-form select,
+.business-discount-form textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+.business-discount-filters > span {
+  padding-bottom: var(--space-3);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.business-discount-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.business-discount-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.business-discount-table th,
+.business-discount-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.business-discount-table th {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.business-discount-actions,
+.business-discount-form-actions,
+.business-discount-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.business-discount-pagination {
+  justify-content: flex-end;
+  padding: var(--space-3);
+}
+
+.business-discount-pagination span {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.business-discount-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.business-discount-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+}
+
+.business-discount-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-2) !important;
+  width: fit-content;
+}
+
+.business-discount-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--primary);
+}
+
+.business-discount-form-actions {
+  justify-content: flex-end;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 48rem) {
+  .business-discounts .business-page-heading,
+  .business-discount-filters {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .business-discounts .business-page-heading {
+    display: grid;
+  }
+
+  .business-discount-filters > span {
+    padding-bottom: 0;
+  }
+}

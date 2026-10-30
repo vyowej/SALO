@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   Store,
   Sun,
+  Tag,
   UserCircle2,
   Users,
   UtensilsCrossed,
@@ -45,6 +46,7 @@ const ICONS = {
   menu: UtensilsCrossed,
   team: Users,
   reports: BarChart3,
+  discounts: Tag,
   history: History,
 };
 

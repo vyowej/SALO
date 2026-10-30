@@ -7,6 +7,8 @@ use App\Repositories\Contracts\AuditLogRepository;
 use App\Repositories\Contracts\ApplicationDocumentRepository;
 use App\Repositories\Contracts\AdminRepository;
 use App\Repositories\Contracts\AuthTokenRepository;
+use App\Repositories\Contracts\BusinessDiscountRepository;
+use App\Repositories\Contracts\BusinessReportRepository;
 use App\Repositories\Contracts\PlatformSettingsRepository;
 use App\Repositories\Contracts\PsgcLocationRepository;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
@@ -15,8 +17,11 @@ use App\Repositories\Contracts\SessionRepository;
 use App\Repositories\Contracts\TeamRepository;
 use App\Repositories\Contracts\MenuRepository;
 use App\Repositories\Contracts\OrderRepository;
+use App\Repositories\Contracts\ReservationRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Database\DatabaseAuthTokenRepository;
+use App\Repositories\Database\DatabaseBusinessDiscountRepository;
+use App\Repositories\Database\DatabaseBusinessReportRepository;
 use App\Repositories\Database\DatabaseApplicationDocumentRepository;
 use App\Repositories\Database\DatabaseAuditLogRepository;
 use App\Repositories\Database\DatabasePlatformSettingsRepository;
@@ -27,6 +32,7 @@ use App\Repositories\Database\DatabaseSessionRepository;
 use App\Repositories\Database\DatabaseTeamRepository;
 use App\Repositories\Database\DatabaseMenuRepository;
 use App\Repositories\Database\DatabaseOrderRepository;
+use App\Repositories\Database\DatabaseReservationRepository;
 use App\Repositories\Database\DatabaseUserRepository;
 use App\Repositories\Stub\InMemoryAddressRepository;
 use App\Repositories\Stub\InMemoryAdminRepository;
@@ -50,5 +56,8 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(TeamRepository::class, DatabaseTeamRepository::class);
         $this->app->singleton(MenuRepository::class, DatabaseMenuRepository::class);
         $this->app->singleton(OrderRepository::class, DatabaseOrderRepository::class);
+        $this->app->singleton(ReservationRepository::class, DatabaseReservationRepository::class);
+        $this->app->singleton(BusinessDiscountRepository::class, DatabaseBusinessDiscountRepository::class);
+        $this->app->singleton(BusinessReportRepository::class, DatabaseBusinessReportRepository::class);
     }
 }

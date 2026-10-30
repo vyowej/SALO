@@ -34,6 +34,7 @@ class TeamAndAuditTest extends TestCase
 
         $invitation = \App\Models\Invitation::query()->firstOrFail();
         $this->assertSame(hash('sha256', $token), $invitation->token_hash);
+        $this->assertEqualsWithDelta(now()->addHours(72)->timestamp, $invitation->expires_at->timestamp, 2);
         $this->assertDatabaseHas('users', [
             'email' => 'new.invitee@example.test',
             'status' => 'invited',
@@ -162,6 +163,14 @@ class TeamAndAuditTest extends TestCase
             'status' => 'active',
             'joined_at' => now(),
         ]);
+        $staffMember = $this->createUser('staff-'.uniqid().'@example.test');
+        $staffMembership = RestaurantStaff::query()->create([
+            'restaurant_id' => $restaurant->getKey(),
+            'user_id' => $staffMember->getKey(),
+            'staff_role' => 'staff',
+            'status' => 'active',
+            'joined_at' => now(),
+        ]);
         $this->businessRequest($manager, $restaurant)
             ->getJson($this->path($restaurant, '/team'))
             ->assertOk()
@@ -175,6 +184,18 @@ class TeamAndAuditTest extends TestCase
 
         $this->businessRequest($manager, $restaurant)
             ->postJson($this->path($restaurant, '/team/email-check'), ['email' => 'person@example.test'])
+            ->assertForbidden();
+        $this->businessRequest($manager, $restaurant)
+            ->postJson($this->path($restaurant, '/team/invitations'), [
+                'email' => 'new.staff@example.test',
+                'position' => 'staff',
+            ])
+            ->assertForbidden();
+        $this->businessRequest($manager, $restaurant)
+            ->patchJson($this->path($restaurant, '/team/'.$staffMembership->getKey()), ['staff_role' => 'manager'])
+            ->assertForbidden();
+        $this->businessRequest($manager, $restaurant)
+            ->deleteJson($this->path($restaurant, '/team/'.$staffMembership->getKey()))
             ->assertForbidden();
         $this->businessRequest($manager, $restaurant)
             ->getJson($this->path($restaurant, '/audit'))
@@ -289,6 +310,15 @@ class TeamAndAuditTest extends TestCase
         $this->businessRequest($owner, $restaurant)
             ->postJson($this->path($restaurant, '/team/transfer-ownership'), [
                 'manager_id' => $manager->getKey(),
+                'password' => 'WrongPassword123',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password']);
+        $this->assertSame((int) $owner->getKey(), (int) $restaurant->fresh()->owner_user_id);
+
+        $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/team/transfer-ownership'), [
+                'manager_id' => $manager->getKey(),
                 'password' => 'Password123',
             ])
             ->assertOk()
@@ -354,11 +384,30 @@ class TeamAndAuditTest extends TestCase
             'name' => 'Another Restaurant',
             'status' => 'approved',
         ]);
+        $multiRoleOwner = $this->createUser('multi-role-owner@example.test');
+        $ownedRestaurant = Restaurant::query()->create([
+            'owner_user_id' => $multiRoleOwner->getKey(),
+            'name' => 'Owned Restaurant',
+            'status' => 'approved',
+        ]);
+        RestaurantStaff::query()->create([
+            'restaurant_id' => $secondRestaurant->getKey(),
+            'user_id' => $multiRoleOwner->getKey(),
+            'staff_role' => 'staff',
+            'status' => 'active',
+            'joined_at' => now(),
+        ]);
 
         $this->businessRequest($owner, $restaurant)
             ->getJson($this->path($restaurant, '/business'))
             ->assertOk();
         $this->businessRequest($owner, $secondRestaurant)
+            ->getJson($this->path($secondRestaurant, '/business'))
+            ->assertOk();
+        $this->businessRequest($multiRoleOwner, $ownedRestaurant)
+            ->getJson($this->path($ownedRestaurant, '/business'))
+            ->assertOk();
+        $this->businessRequest($multiRoleOwner, $secondRestaurant)
             ->getJson($this->path($secondRestaurant, '/business'))
             ->assertOk();
 
@@ -367,6 +416,12 @@ class TeamAndAuditTest extends TestCase
             ->assertOk();
         $this->businessRequest($owner, $restaurant)
             ->patchJson($this->path($restaurant, '/team/'.$staff->getKey()), ['status' => 'suspended'])
+            ->assertOk();
+        $this->businessRequest($member, $restaurant)
+            ->getJson($this->path($restaurant, '/business'))
+            ->assertForbidden();
+        $this->businessRequest($owner, $restaurant)
+            ->patchJson($this->path($restaurant, '/team/'.$staff->getKey()), ['status' => 'removed'])
             ->assertOk();
         $this->businessRequest($member, $restaurant)
             ->getJson($this->path($restaurant, '/business'))

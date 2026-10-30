@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Restaurant extends Model
 {
@@ -87,5 +88,20 @@ class Restaurant extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function discounts(): HasMany
+    {
+        return $this->hasMany(Discount::class);
+    }
+
+    public function restaurantTables(): HasMany
+    {
+        return $this->hasMany(RestaurantTable::class);
+    }
+
+    public function reservationSetting(): HasOne
+    {
+        return $this->hasOne(ReservationSetting::class);
     }
 }

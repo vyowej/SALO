@@ -1,6 +1,6 @@
 ﻿# SALO Business Side
 
-**Status:** B0 documentation and B1 onboarding are complete; B1 was hand-tested by the owner. B2-B5 implementation code is present, but backend tests and migration execution await a compatible PHP runtime; B2-B5 also await hand-testing. This document records the Business contract and database proposal; see `DATABASE_DESIGN.md` for the current schema design. [SALO_PLAN_v2.md](./SALO_PLAN_v2.md) is authoritative if requirements conflict.
+**Status:** B0 documentation and B1 onboarding are complete; B1 was hand-tested by the owner. B2-B6 implementation code is present, but backend tests and migration execution await a compatible PHP runtime; B2-B6 also await hand-testing. This document records the Business contract and database proposal; see `DATABASE_DESIGN.md` for the current schema design. [SALO_PLAN_v2.md](./SALO_PLAN_v2.md) is authoritative if requirements conflict.
 
 ## 1. B0 prerequisite audit
 
@@ -18,12 +18,12 @@ This audit is based on the checked-in Laravel code, React code, routes, tests, m
 | Local-disk storage | Implemented | Explicit public/private disks, upload services, generated names and photo metadata removal, plus authorized short-lived private-document links exist. |
 | Platform settings | Implemented | Settings are persisted through the database repository and settings table. |
 | Admin application queue | Implemented | Applications are database-backed; Admin review supports start-review, approve, reject, and request-revision. |
-| Database design and migrations | B0/B1 migrations exist; B2-B5 migrations written, not run | B2 page tables, B3 invitations, B4 menu tables, and B5 shared order tables match the documented proposal; no B2-B5 migrations were executed. |
-| Business backend and UI | B1 hand-tested; B2-B5 implemented, runtime verification pending | B2 page editor, B3 team and audit, B4 menu management, and B5 orders are implemented. Backend tests are blocked by the local PHP version; B2-B5 need compatible-runtime tests and hand-testing. |
+| Database design and migrations | B0/B1 migrations exist; B2-B6 migrations written, not run | B2 page tables, B3 invitations, B4 menu tables, B5 shared order tables, and B6 tables/reservation settings/reservations match the documented proposal; no B2-B6 migrations were executed. |
+| Business backend and UI | B1 hand-tested; B2-B6 implemented, runtime verification pending | B2 page editor, B3 team and audit, B4 menu management, B5 orders, and B6 tables/reservation management are implemented. Backend tests are blocked by the local PHP version; B2-B6 need compatible-runtime tests and hand-testing. |
 
 ### Remaining verification
 
-The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2-B5 tests and migration execution also await a compatible PHP runtime.
+The B0 foundation and B1 application workflow are implemented. Added B1 application/document isolation and idempotent-approval tests remain unexecuted because the available PHP CLI is 8.0.30, while installed Composer dependencies require PHP >=8.4.1. The official PSGC hierarchy still needs import/verification. B2-B6 tests and migration execution also await a compatible PHP runtime.
 
 ## 2. Contract conventions
 
@@ -117,13 +117,15 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 - Owner/Manager/Reservation Manager manage tables and reservations; Staff has no reservation/table permissions. Table number is unique in its restaurant; capacity is positive; stored status is Active, Maintenance, or Inactive.
 - Reservation settings include enablement, manual/automatic confirmation (default manual), review window, slot interval, dining duration, lead time, months ahead, party size, grace period, and cancellation cutoff.
 - Availability filters Active capacity-fitting tables with no overlapping reservation and checks restaurant hours/closures or 24/7. Booking locks the selected table row and checks overlap in the same transaction. Changing a table to Maintenance sends a Notification to the restaurant; the needs-attention list is derived from future active reservations on tables whose status is not Active.
-- Calendar supports day/week/month, confirm, decline, reschedule after availability check, cancel with reason, and No Show after grace period. Pending holds expire after the configured review window.
+- The Reservations page supports list/calendar views (day/week/month), confirm, decline, reschedule after availability checks, cancel with a reason, and No Show after the grace period. Pending holds expire after the configured review window; the expiry command runs every minute.
 
 ### B7 â€” Discounts, reports, and calendar
 
-- Restaurant discounts are restaurant-funded. Types: percentage, fixed, free delivery, first order. Validate dates, minimum amount, maximum, total/per-customer limits, and active state. Redemption counts are derived. Apply the plan's documented validation messages; never trust client-computed amounts.
+- Restaurant discounts are restaurant-funded. Benefit types are percentage, fixed, and free delivery; `first_order_only` is a separate eligibility flag. It means the customer has no prior non-cancelled order at that restaurant. Admin CRUD and a standalone server-side validation/quote function are in B7; checkout wiring and redemption recording are not.
+- The quote function checks scope, active dates, minimum order, total/per-customer limits, first-order eligibility, and calculates percentage (with optional cap), fixed (capped by eligible subtotal), and delivery discounts. It returns the plan's validation messages and a server-calculated total; checkout must revalidate inside its transaction.
 - Reports support date range and CSV: sales summary, orders by status, popular items, discount use, reservations, and no-show rate. Reservation Manager receives reservation-only reports. Owner and Manager receive sales and reservation reports.
 - Combined calendar displays operating hours, closure dates, and reservations. FullCalendar is the UI calendar component.
+- Report definitions: sales is completed-order `total_amount` after discounts, including fees. No-show rate is `no_show / (completed + no_show)`; other reservation states are excluded from its denominator.
 - Admin reads audit history through the Admin namespace in Phase 1; the Business audit route is for the restaurant Owner only.
 - An Admin-phase requirement: suspending a restaurant makes every restaurant role read-only, including for finishing in-flight orders. Admin cancels or resolves in-flight orders and reservations with a reason. Closing a restaurant is not suspension and does not make it blanket read-only.
 
@@ -232,26 +234,26 @@ Business orders list and update records from the shared order tables; Customer c
 |---|---|---|---|
 | `GET /api/v1/manage/restaurants/{restaurant}/tables` | Status/page filters | Table list | `tables.manage` |
 | `POST /api/v1/manage/restaurants/{restaurant}/tables` | `table_number`, positive `capacity`, `area`, `status` | Table resource | `tables.manage` |
-| `PATCH /api/v1/manage/restaurants/{restaurant}/tables/{table}` | Allowed table fields | Updated table and affected reservation warnings | `tables.manage` |
-| `DELETE /api/v1/manage/restaurants/{restaurant}/tables/{table}` | Confirmation | Inactive table or 204 where safe | `tables.manage` |
+| `PATCH /api/v1/manage/restaurants/{restaurant}/tables/{table}` | Allowed table fields | Updated table and count of affected future reservations | `tables.manage` |
+| `DELETE /api/v1/manage/restaurants/{restaurant}/tables/{table}` | Confirmation | 204 when no reservation history; otherwise validation error instructing the user to set the table Inactive | `tables.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/reservations` | Date/status/page filters | Paginated reservations | `reservations.view` |
 | `GET /api/v1/manage/restaurants/{restaurant}/reservations/{reservation}` | â€” | Reservation detail | `reservations.view` |
-| `PATCH /api/v1/manage/restaurants/{restaurant}/reservations/{reservation}/status` | Confirm/decline/cancel/no-show and required reason | Updated reservation | `reservations.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/reservations/{reservation}/reschedule` | New start and duration | Updated reservation or free-slot validation errors | `reservations.manage` |
+| `PATCH /api/v1/manage/restaurants/{restaurant}/reservations/{reservation}/status` | `status` (`confirmed`, `declined`, `cancelled`, `completed`, `no_show`); `reason` required for decline/cancel | Updated reservation; No Show is blocked until the configured grace period elapses | `reservations.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/reservations/{reservation}/reschedule` | `start_at`; optional `duration_minutes`, `table_id` | Updated reservation or availability validation errors | `reservations.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/reservation-settings` | â€” | Reservation settings | `reservations.view` |
 | `PUT /api/v1/manage/restaurants/{restaurant}/business/reservation-settings` | Full validated settings | Updated settings | `reservations.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/discounts` | Date/active/page filters | Discounts with derived usage counts | `discounts.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/discounts` | Code/type/value/date/minimum/limits; funded by restaurant | Discount resource | `discounts.manage` |
-| `PATCH /api/v1/manage/restaurants/{restaurant}/discounts/{discount}` | Allowed discount fields | Updated discount | `discounts.manage` |
+| `POST /api/v1/manage/restaurants/{restaurant}/discounts` | Code/type/value/date/minimum/limits, `first_order_only`; funded by restaurant | Discount resource | `discounts.manage` |
+| `PATCH /api/v1/manage/restaurants/{restaurant}/discounts/{discount}` | Allowed discount fields, including `first_order_only` | Updated discount | `discounts.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/discounts/{discount}` | Confirmation | Deactivated discount | `discounts.manage` |
 | `GET /api/v1/manage/restaurants/{restaurant}/reports/{report}` | `from`, `to`, filters | Report summary/series/table rows | Sales reports: `reports.sales_reservations.view`; reservation reports: `reports.reservations.view` |
 | `GET /api/v1/manage/restaurants/{restaurant}/reports/{report}/export` | Same filters; CSV accept header | CSV download | Same permission as report |
-| `GET /api/v1/manage/restaurants/{restaurant}/calendar` | `start`, `end`, event types | FullCalendar-compatible events | Matching reservations/hours permission; every included event policy-checked |
+| `GET /api/v1/manage/restaurants/{restaurant}/calendar` | `start`, `end` | FullCalendar-compatible hours, closure, and permitted reservation events | `restaurant.view` or `reservations.view`; reservation events are omitted without `reservations.view` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/dashboard` | Date range | Setup checklist or permitted daily summary | `restaurant.view` plus per-metric permission filtering |
 
 ## 6. Database proposal and sensitive edits
 
-The proposed business schema and field-level constraints are in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). No migrations are included. Any schema change must be added to that document and approved before migration.
+The proposed business schema and field-level constraints are in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). Any schema change must be added to that document and shown for approval before migration. B7's discount schema and migration are documented but the migration remains unrun.
 
 **Sensitive-field re-approval design:** reuse `RestaurantApplication` with `application_type` (`initial`, `sensitive_update`) and nullable `proposed_changes` JSON. A sensitive update is a new application record tied to the existing restaurant; it records submitter, reviewer, status, timestamps, and notes. Proposed values are not copied to the live `Restaurant` until an Admin approves. Permit files remain separate private `ApplicationDocument` rows. The user approved this approach and the initial-application lifecycle on 2026-10-30; this does not approve the full schema or authorize migrations.
 
@@ -263,7 +265,7 @@ The proposed business schema and field-level constraints are in [DATABASE_DESIGN
 | Expire pending restaurant application uploads | Retention policy | Delete rejected-application private documents after 30 days, subject to approved retention policy. |
 | Reset daily menu quantities | At each restaurant's opening time, `Asia/Manila` | Restore configured daily quantities and availability rules idempotently. |
 | Auto-cancel unanswered Placed orders | Every minute or equivalent | Cancel after 10 minutes with system reason; return stock and release discount atomically. |
-| Expire pending reservation holds | Periodic | Expire after each restaurant's configured review window; release table availability. |
+| Expire pending reservation holds | Every minute | Mark holds Expired when their configured review-window expiry is due; release table availability. |
 | Flag maintenance-affected reservations | On table status change | Notify/flag future reservations on a table moved to Maintenance. |
 | Purge owner audit history | Daily | Remove records older than 90 days, according to approved retention requirements. |
 
@@ -288,14 +290,22 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 | Menu `/business/menu` | Categories/items, lifecycle, price, tags, availability, quantities | Owner/Manager; Staff availability toggle only |
 | Orders `/business/orders` | Polling board, filters, status actions and new-order notice | Owner/Manager/Staff |
 | Order detail `/business/orders/:order` | Item snapshots, timeline, reasoned actions | Owner/Manager/Staff; actor names Owner only |
-| Tables `/business/tables` | Table list/editor/status and affected booking warnings | Owner/Manager/Reservation Manager |
-| Reservation settings `/business/reservations/settings` | Reservation policy and confirmation settings | Owner/Manager/Reservation Manager |
-| Reservations `/business/reservations` | List, actions, availability checks | Owner/Manager/Reservation Manager |
-| Calendar `/business/calendar` | Hours, closures, reservations, day/week/month | Permissions limited to included event types |
+| Tables (Reservations page tab; `/business/tables` alias) | Table list/editor/status and affected reservation counts | Owner/Manager/Reservation Manager |
+| Reservation settings (Reservations page tab) | Reservation policy and confirmation settings | Owner/Manager/Reservation Manager |
+| Reservations `/business/reservations` | Calendar/list, actions, availability checks | Owner/Manager/Reservation Manager |
 | Discounts `/business/discounts` | Restaurant-funded promotions and usage | Owner/Manager |
 | Reports `/business/reports` | Role-filtered report selector/date range/CSV export | Owner/Manager; Reservation Manager reservation-only |
+| Calendar `/business/calendar` | Combined operating hours, closures, and permitted reservations | Restaurant members; reservation events require `reservations.view` |
 
-## 9. B0-B4 readiness and status
+### B6 reservation and table behavior
+
+- Reservation states follow the approved plan: `pending`, `confirmed`, `declined`, `expired`, `cancelled`, `completed`, and `no_show`. Older documents and mock fixtures that use `rejected` or `seated` are not authoritative.
+- Pending holds expire after the configured review window via the every-minute expiry command. Availability checks consider only unexpired Pending holds and Confirmed reservations, require an Active table with sufficient capacity, and check restaurant hours, 24/7 status, and closure dates.
+- Rescheduling is available only for Pending or Confirmed reservations and must reserve a free table/slot transactionally. Table Maintenance does not delete reservations; it creates an Owner notification and future active reservations on any non-Active table are derived as needing attention.
+- Business management provides table/settings/reservation APIs and a reservation-only FullCalendar view. Customer booking endpoints remain outside this Business phase; the shared availability service is ready for that later integration.
+- Reservation cancellation-cutoff bounds are not defined by the plan's V9. The current settings validation accepts a non-negative integer and needs an Admin-configured range before the public booking flow is enabled. [VERIFY]
+
+## 9. B0-B7 readiness and status
 
 - [x] Inventory the foundation and record the Business API contract, page list, and scheduler requirements.
 - [x] Implement the B0 identity, OTP, server-checked mode/membership, permissions, local storage, settings, and persistent application-queue foundations.
@@ -318,6 +328,12 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 - [ ] Run B5 backend feature tests and shared-order migration with a compatible PHP runtime and supported MySQL; migration has not been run.
 - [ ] Complete B5 hand-testing for Owner/Manager/Staff order actions, actor visibility, status filters/details, auto-cancel, and suspended read-only behavior.
 - [ ] Extend cancellation to release discount redemptions when the shared discount/redemption records are implemented.
+- [x] Implement B6 tables, reservation settings, scoped reservation management, availability/rescheduling logic, reservation expiry, maintenance notifications, and reservation calendar. Customer booking remains out of scope.
+- [ ] Run B6 backend feature tests and migration with a compatible PHP runtime and supported MySQL; do not run the migration before schema approval.
+- [ ] Complete B6 hand-testing for table statuses, settings, reservation decisions/rescheduling, availability conflicts, closure/hour checks, hold expiry, and maintenance attention notifications.
+- [x] Implement B7 restaurant discount CRUD, documented discount schema/migration proposal, standalone discount validation/quote logic, date-range reports/CSV, and combined business calendar. Customer checkout/redemption recording remains out of scope.
+- [ ] Run B7 backend feature/unit tests and discount migration with a compatible PHP runtime and supported MySQL; do not run the migration before approval.
+- [ ] Complete B7 hand-testing for discount eligibility/pricing, report permissions and CSV export, calendar event composition, and suspended read-only behavior.
 
 ## 10. B8 QA acceptance checklist
 
@@ -331,9 +347,22 @@ Feature tests must verify:
 - A suspended restaurant is read-only. Business mode cannot start customer checkout.
 - Archived or sold-out items are not orderable; status transitions require valid permissions and required reasons.
 - Business orders are scoped by the route restaurant; only valid status transitions succeed; reject/cancel requires a reason; Staff cannot reject/cancel; only Owner sees status actors; unanswered Placed orders auto-cancel after 10 minutes.
+- Reservation state transitions match the plan; pending holds expire; overlapping bookings cannot claim one table; rescheduling checks current table availability; Maintenance notifications and attention reservations are scoped to the restaurant.
 - Staff can toggle only item availability; price changes require explicit confirmation; Halal-certified tags are blocked without a valid certificate.
 - Two simultaneous reservations for a table yield exactly one winner; hold expiry and order auto-cancel scheduler jobs run and are retry-safe.
 - Upload checks reject unsupported formats, oversized files, and fake MIME types. Unauthorized users cannot access private documents.
 - A restaurant cannot publish before every checklist requirement is satisfied.
 
 Then test every page at 375, 768, 1280, and 1920 px and with keyboard-only navigation. The final QA deliverable is a Double-Check Report mapping every route and permission, each business rule to its service and test, scheduler jobs, and assumptions.
+
+## 11. B8 execution status
+
+- [x] Add focused feature-test assertions for team/ownership and upload validation.
+- [x] Render the Business route/tab matrix at 375, 768, 1280, and 1920 px; resolve the Reservations/Tables mobile overflow.
+- [x] Run frontend lint and production build; complete a keyboard-navigation smoke check.
+- [x] Write the route/permission, service/test, scheduler, and assumptions report in `docs/BUSINESS_DOUBLE_CHECK_REPORT.md`.
+- [ ] Run backend feature/unit tests and supported-MySQL migrations; blocked because the available PHP runtime is 8.0.30 and Composer requires PHP >= 8.4.1. No migration was run.
+- [ ] Resolve the implemented `/api/v1/manage/restaurants/{restaurant}/...` versus approved `/api/v1/restaurants/{restaurant}/...` API base-path mismatch.
+- [ ] Add and run explicit concurrency coverage proving exactly one overlapping reservation wins; complete the remaining live-backend and exhaustive keyboard/manual checks.
+
+B8 remains partly complete until the blocked backend verification and listed acceptance gaps are resolved.

@@ -4,9 +4,15 @@ use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
+use App\Http\Controllers\Api\V1\Business\BusinessDiscountController;
+use App\Http\Controllers\Api\V1\Business\BusinessReportController;
+use App\Http\Controllers\Api\V1\Business\BusinessCalendarController;
 use App\Http\Controllers\Api\V1\Business\AuditLogController;
 use App\Http\Controllers\Api\V1\Business\MenuController;
 use App\Http\Controllers\Api\V1\Business\OrderController;
+use App\Http\Controllers\Api\V1\Business\ReservationController;
+use App\Http\Controllers\Api\V1\Business\ReservationSettingsController;
+use App\Http\Controllers\Api\V1\Business\RestaurantTableController;
 use App\Http\Controllers\Api\V1\Business\RestaurantPageController;
 use App\Http\Controllers\Api\V1\Business\TeamController;
 use App\Http\Controllers\Api\V1\Business\TeamInvitationController;
@@ -192,6 +198,49 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         Route::patch('/manage/restaurants/{restaurant}/orders/{order}/status', [OrderController::class, 'updateStatus'])
             ->middleware('restaurant.access:orders.status.update')
             ->whereNumber('order');
+        Route::get('/manage/restaurants/{restaurant}/tables', [RestaurantTableController::class, 'index'])
+            ->middleware('restaurant.access:tables.manage');
+        Route::post('/manage/restaurants/{restaurant}/tables', [RestaurantTableController::class, 'store'])
+            ->middleware('restaurant.access:tables.manage');
+        Route::patch('/manage/restaurants/{restaurant}/tables/{table}', [RestaurantTableController::class, 'update'])
+            ->middleware('restaurant.access:tables.manage')
+            ->whereNumber('table');
+        Route::delete('/manage/restaurants/{restaurant}/tables/{table}', [RestaurantTableController::class, 'destroy'])
+            ->middleware('restaurant.access:tables.manage')
+            ->whereNumber('table');
+        Route::get('/manage/restaurants/{restaurant}/reservations', [ReservationController::class, 'index'])
+            ->middleware('restaurant.access:reservations.view');
+        Route::get('/manage/restaurants/{restaurant}/reservations/{reservation}', [ReservationController::class, 'show'])
+            ->middleware('restaurant.access:reservations.view')
+            ->whereNumber('reservation');
+        Route::patch('/manage/restaurants/{restaurant}/reservations/{reservation}/status', [ReservationController::class, 'updateStatus'])
+            ->middleware('restaurant.access:reservations.manage')
+            ->whereNumber('reservation');
+        Route::post('/manage/restaurants/{restaurant}/reservations/{reservation}/reschedule', [ReservationController::class, 'reschedule'])
+            ->middleware('restaurant.access:reservations.manage')
+            ->whereNumber('reservation');
+        Route::get('/manage/restaurants/{restaurant}/business/reservation-settings', [ReservationSettingsController::class, 'show'])
+            ->middleware('restaurant.access:reservations.view');
+        Route::put('/manage/restaurants/{restaurant}/business/reservation-settings', [ReservationSettingsController::class, 'update'])
+            ->middleware('restaurant.access:reservations.manage');
+        Route::get('/manage/restaurants/{restaurant}/discounts', [BusinessDiscountController::class, 'index'])
+            ->middleware('restaurant.access:discounts.manage');
+        Route::post('/manage/restaurants/{restaurant}/discounts', [BusinessDiscountController::class, 'store'])
+            ->middleware('restaurant.access:discounts.manage');
+        Route::patch('/manage/restaurants/{restaurant}/discounts/{discount}', [BusinessDiscountController::class, 'update'])
+            ->middleware('restaurant.access:discounts.manage')
+            ->whereNumber('discount');
+        Route::delete('/manage/restaurants/{restaurant}/discounts/{discount}', [BusinessDiscountController::class, 'destroy'])
+            ->middleware('restaurant.access:discounts.manage')
+            ->whereNumber('discount');
+        Route::get('/manage/restaurants/{restaurant}/reports/{report}/export', [BusinessReportController::class, 'export'])
+            ->middleware('restaurant.access:restaurant.view')
+            ->whereIn('report', ['sales_summary', 'orders_by_status', 'popular_items', 'discount_usage', 'reservations', 'no_show_rate']);
+        Route::get('/manage/restaurants/{restaurant}/reports/{report}', [BusinessReportController::class, 'show'])
+            ->middleware('restaurant.access:restaurant.view')
+            ->whereIn('report', ['sales_summary', 'orders_by_status', 'popular_items', 'discount_usage', 'reservations', 'no_show_rate']);
+        Route::get('/manage/restaurants/{restaurant}/calendar', [BusinessCalendarController::class, 'index'])
+            ->middleware('restaurant.access:restaurant.view');
         Route::post('/manage/restaurants/{restaurant}/menu/categories', [MenuController::class, 'storeCategory'])
             ->middleware('restaurant.access:restaurant.menu.manage');
         Route::patch('/manage/restaurants/{restaurant}/menu/categories/{category}', [MenuController::class, 'updateCategory'])

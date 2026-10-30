@@ -87,6 +87,34 @@ export async function apiRequest(path, {
   return preserveEnvelope ? payload : payload?.data ?? payload;
 }
 
+export async function apiDownloadRequest(path) {
+  if (config.useMock) throw new Error('API requests are disabled while mock mode is enabled.');
+  const requestHeaders = new Headers({
+    Accept: 'text/csv',
+    'X-SALO-Mode': requestMode,
+  });
+  if (requestRestaurantId) requestHeaders.set('X-SALO-Restaurant', requestRestaurantId);
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    credentials: 'include',
+    headers: requestHeaders,
+  });
+  if (!response.ok) {
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ApiError('The report could not be downloaded.', { status: response.status });
+    }
+    const error = payload?.error;
+    throw new ApiError(error?.message || payload?.message || 'The report could not be downloaded.', {
+      status: response.status,
+      code: error?.code,
+      fields: error?.fields || payload?.errors,
+    });
+  }
+  return response.blob();
+}
+
 export async function apiUploadRequest(path, body, { method = 'POST', onProgress } = {}) {
   if (config.useMock) throw new Error('API requests are disabled while mock mode is enabled.');
   const apiBaseUrl = getApiBaseUrl();

@@ -68,4 +68,39 @@ class RestaurantPagePolicy
     {
         return $this->access->allows($user, $restaurant, 'audit.view');
     }
+
+    public function viewReservations(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'reservations.view');
+    }
+
+    public function manageReservations(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'reservations.manage');
+    }
+
+    public function manageTables(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'tables.manage');
+    }
+
+    public function manageDiscounts(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'discounts.manage');
+    }
+
+    public function viewCalendar(User $user, Restaurant $restaurant): bool
+    {
+        return $this->access->allows($user, $restaurant, 'restaurant.view')
+            || $this->access->allows($user, $restaurant, 'reservations.view');
+    }
+
+    public function viewReport(User $user, Restaurant $restaurant, string $report): bool
+    {
+        $permission = in_array($report, ['reservations', 'no_show_rate'], true)
+            ? 'reports.reservations.view'
+            : 'reports.sales_reservations.view';
+
+        return $this->access->allows($user, $restaurant, $permission);
+    }
 }

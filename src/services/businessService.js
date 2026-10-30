@@ -1,4 +1,4 @@
-import apiRequest, { apiUploadRequest } from './apiClient';
+import apiRequest, { apiDownloadRequest, apiUploadRequest } from './apiClient';
 import config from '../config';
 import { recordBusinessAudit } from './teamService';
 
@@ -15,6 +15,65 @@ function menuPath(restaurantId, endpoint = '') {
 
 function ordersPath(restaurantId, endpoint = '') {
   return `/manage/restaurants/${encodeURIComponent(restaurantId)}/orders${endpoint}`;
+}
+
+function reservationsPath(restaurantId, endpoint = '') {
+  return `/manage/restaurants/${encodeURIComponent(restaurantId)}/reservations${endpoint}`;
+}
+
+function tablesPath(restaurantId, endpoint = '') {
+  return `/manage/restaurants/${encodeURIComponent(restaurantId)}/tables${endpoint}`;
+}
+
+function discountsPath(restaurantId, endpoint = '') {
+  return `/manage/restaurants/${encodeURIComponent(restaurantId)}/discounts${endpoint}`;
+}
+
+function reportsPath(restaurantId, endpoint = '') {
+  return `/manage/restaurants/${encodeURIComponent(restaurantId)}/reports${endpoint}`;
+}
+
+function calendarPath(restaurantId) {
+  return `/manage/restaurants/${encodeURIComponent(restaurantId)}/calendar`;
+}
+
+function seedBusinessDiscounts() {
+  const now = new Date();
+  const inThirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  return [{
+    id: 'demo-discount-welcome',
+    code: 'WELCOME10',
+    name: 'Welcome offer',
+    description: 'A sample discount for the first order.',
+    funded_by: 'restaurant',
+    type: 'percentage',
+    first_order_only: true,
+    value: '10.00',
+    min_order_amount: '200.00',
+    max_discount: '100.00',
+    starts_at: now.toISOString(),
+    ends_at: inThirtyDays.toISOString(),
+    usage_limit: 100,
+    per_customer_limit: 1,
+    usage_count: 7,
+    is_active: true,
+  }];
+}
+
+function seedReservationSettings() {
+  return {
+    accepts_reservations: true,
+    confirm_mode: 'manual',
+    review_window_hours: 2,
+    slot_minutes: 30,
+    dining_minutes: 90,
+    min_lead_hours: 1,
+    max_months_ahead: 3,
+    max_party_size: 12,
+    grace_minutes: 15,
+    cancel_cutoff_hours: 2,
+    is_configured: true,
+  };
 }
 
 function seedBusinessOrders(restaurantId) {
@@ -94,18 +153,20 @@ function seedBusinessOrders(restaurantId) {
 
 function seedBusinessReservations(restaurantId) {
   const reservedAt = (daysAhead, hour, minute = 0) => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysAhead);
-    date.setHours(hour, minute, 0, 0);
-    return date.toISOString();
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    const [year, month, day] = today.split('-').map(Number);
+    const target = new Date(Date.UTC(year, month - 1, day + daysAhead)).toISOString().slice(0, 10);
+    return new Date(`${target}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`).toISOString();
   };
   return [
     {
       id: `demo-${restaurantId}-reservation-201`,
       reference_code: 'SALO-DEMO-201',
       customer: { name: 'Sample Customer', phone: '09XX XXX 1201' },
-      reserved_for: reservedAt(0, 19, 0),
-      party_size: 4,
+      start_at: reservedAt(0, 19, 0),
+      end_at: reservedAt(0, 20, 30),
+      duration_minutes: 90,
+      guest_count: 4,
       table_id: `demo-${restaurantId}-table-2`,
       status: 'pending',
       special_request: 'Window seat, if available.',
@@ -115,8 +176,10 @@ function seedBusinessReservations(restaurantId) {
       id: `demo-${restaurantId}-reservation-202`,
       reference_code: 'SALO-DEMO-202',
       customer: { name: 'Demo Guest', phone: '09XX XXX 1202' },
-      reserved_for: reservedAt(0, 20, 0),
-      party_size: 2,
+      start_at: reservedAt(0, 20, 0),
+      end_at: reservedAt(0, 21, 30),
+      duration_minutes: 90,
+      guest_count: 2,
       table_id: `demo-${restaurantId}-table-1`,
       status: 'confirmed',
       special_request: '',
@@ -126,8 +189,10 @@ function seedBusinessReservations(restaurantId) {
       id: `demo-${restaurantId}-reservation-203`,
       reference_code: 'SALO-DEMO-203',
       customer: { name: 'Sample Party', phone: '09XX XXX 1203' },
-      reserved_for: reservedAt(1, 18, 30),
-      party_size: 6,
+      start_at: reservedAt(1, 18, 30),
+      end_at: reservedAt(1, 20, 0),
+      duration_minutes: 90,
+      guest_count: 6,
       table_id: `demo-${restaurantId}-table-3`,
       status: 'confirmed',
       special_request: 'High chair requested.',
@@ -138,9 +203,9 @@ function seedBusinessReservations(restaurantId) {
 
 function seedBusinessTables(restaurantId) {
   return [
-    { id: `demo-${restaurantId}-table-1`, name: 'Table 1', capacity: 2, status: 'active' },
-    { id: `demo-${restaurantId}-table-2`, name: 'Table 2', capacity: 4, status: 'active' },
-    { id: `demo-${restaurantId}-table-3`, name: 'Table 3', capacity: 6, status: 'active' },
+    { id: `demo-${restaurantId}-table-1`, table_number: '1', capacity: 2, area: 'Indoor', status: 'active', attention_count: 0 },
+    { id: `demo-${restaurantId}-table-2`, table_number: '2', capacity: 4, area: 'Window', status: 'active', attention_count: 0 },
+    { id: `demo-${restaurantId}-table-3`, table_number: '3', capacity: 6, area: 'Patio', status: 'active', attention_count: 0 },
   ];
 }
 
@@ -197,6 +262,8 @@ function mockState(restaurantId, user) {
   if (!Array.isArray(state.businessOrders)) state.businessOrders = seedBusinessOrders(restaurantId);
   if (!Array.isArray(state.businessReservations)) state.businessReservations = seedBusinessReservations(restaurantId);
   if (!Array.isArray(state.businessTables)) state.businessTables = seedBusinessTables(restaurantId);
+  if (!Array.isArray(state.businessDiscounts)) state.businessDiscounts = seedBusinessDiscounts();
+  if (!state.reservationSettings) state.reservationSettings = seedReservationSettings();
   return { state, save };
 }
 
@@ -922,21 +989,61 @@ export async function updateBusinessOrderStatus(restaurantId, orderId, status, r
   return serializeMockOrder(order, mockCanViewOrderActors(restaurantId, user));
 }
 
-export async function getBusinessReservations(restaurantId, user) {
+export async function getBusinessReservations(restaurantId, user, filters = {}) {
   if (!config.useMock) {
-    throw new Error('Restaurant reservation management is not connected to a Business API yet. No customer reservation data was loaded.');
+    const query = new URLSearchParams(Object.entries(filters)
+      .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+      .map(([key, value]) => [key, String(value)]));
+    const [reservationResult, tables, settings] = await Promise.all([
+      apiRequest(`${reservationsPath(restaurantId)}${query.size ? `?${query}` : ''}`, { preserveEnvelope: true }),
+      apiRequest(tablesPath(restaurantId)),
+      apiRequest(restaurantPath(restaurantId, '/reservation-settings')),
+    ]);
+    return {
+      reservations: reservationResult.data || [],
+      meta: reservationResult.meta,
+      tables: Array.isArray(tables) ? tables : tables.data || [],
+      settings,
+    };
   }
   const { state, save } = mockState(restaurantId, user);
   save();
+  let reservations = [...state.businessReservations];
+  if (filters.status) reservations = reservations.filter((item) => item.status === filters.status);
+  if (filters.from) reservations = reservations.filter((item) => new Date(item.start_at) >= new Date(filters.from));
+  if (filters.to) reservations = reservations.filter((item) => new Date(item.start_at) < new Date(filters.to));
+  if (filters.table_id) reservations = reservations.filter((item) => String(item.table_id) === String(filters.table_id));
+  if (filters.needs_attention) {
+    const tableIds = state.businessTables.filter((table) => table.status !== 'active').map((table) => String(table.id));
+    reservations = reservations.filter((item) => (
+      ['pending', 'confirmed'].includes(item.status)
+      && new Date(item.start_at) > new Date()
+      && tableIds.includes(String(item.table_id))
+    ));
+  }
+  reservations.sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const updatedTables = state.businessTables.map((table) => ({
+    ...table,
+    attention_count: table.status === 'active' ? 0 : reservations.filter((reservation) => (
+      String(reservation.table_id) === String(table.id)
+      && activeReservationsForMock(reservation)
+      && new Date(reservation.start_at) > new Date()
+    )).length,
+  }));
   return {
-    reservations: [...state.businessReservations].sort((a, b) => a.reserved_for.localeCompare(b.reserved_for)),
-    tables: [...state.businessTables],
+    reservations,
+    tables: updatedTables,
+    settings: { ...state.reservationSettings },
+    meta: { current_page: 1, per_page: reservations.length, total: reservations.length, last_page: 1 },
   };
 }
 
 export async function updateBusinessReservationStatus(restaurantId, reservationId, status, reason, user) {
   if (!config.useMock) {
-    throw new Error('Restaurant reservation management is not connected to a Business API yet.');
+    return apiRequest(reservationsPath(restaurantId, `/${encodeURIComponent(reservationId)}/status`), {
+      method: 'PATCH',
+      body: { status, ...(reason ? { reason } : {}) },
+    });
   }
   const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
     ?.permissions || [];
@@ -945,18 +1052,21 @@ export async function updateBusinessReservationStatus(restaurantId, reservationI
   const reservation = state.businessReservations.find((item) => String(item.id) === String(reservationId));
   if (!reservation) throw new Error('Reservation not found.');
   const allowedTransitions = {
-    pending: ['confirmed', 'rejected'],
-    confirmed: ['seated', 'cancelled', 'no_show'],
-    seated: ['completed'],
+    pending: ['confirmed', 'declined', 'cancelled'],
+    confirmed: ['completed', 'cancelled', 'no_show'],
   };
   if (!allowedTransitions[reservation.status]?.includes(status)) {
     throw new Error('This reservation cannot move from its current status to the requested status.');
   }
-  if (['rejected', 'cancelled', 'no_show'].includes(status) && !reason?.trim()) {
-    throw new Error('A reason is required for this reservation status.');
+  if (['declined', 'cancelled'].includes(status) && !reason?.trim()) {
+    throw new Error('A reason is required to decline or cancel a reservation.');
+  }
+  if (status === 'no_show' && Date.now() < new Date(reservation.start_at).getTime() + state.reservationSettings.grace_minutes * 60_000) {
+    throw new Error('The reservation grace period has not elapsed.');
   }
   reservation.status = status;
-  reservation.status_reason = reason?.trim() || null;
+  reservation.response_reason = status === 'declined' ? reason.trim() : reservation.response_reason || null;
+  reservation.cancel_reason = status === 'cancelled' ? reason.trim() : reservation.cancel_reason || null;
   reservation.updated_at = new Date().toISOString();
   save();
   return reservation;
@@ -964,7 +1074,16 @@ export async function updateBusinessReservationStatus(restaurantId, reservationI
 
 export async function saveBusinessTable(restaurantId, table, user) {
   if (!config.useMock) {
-    throw new Error('Table management is not connected to a Business API yet.');
+    const data = {
+      table_number: String(table.table_number).trim(),
+      capacity: Number(table.capacity),
+      area: table.area?.trim() || null,
+      status: table.status || 'active',
+    };
+    return apiRequest(tablesPath(restaurantId, table.id ? `/${encodeURIComponent(table.id)}` : ''), {
+      method: table.id ? 'PATCH' : 'POST',
+      body: data,
+    });
   }
   const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
     ?.permissions || [];
@@ -973,13 +1092,30 @@ export async function saveBusinessTable(restaurantId, table, user) {
   if (table.id) {
     const existing = state.businessTables.find((item) => String(item.id) === String(table.id));
     if (!existing) throw new Error('Table not found.');
-    Object.assign(existing, { name: table.name.trim(), capacity: Number(table.capacity), status: table.status });
+    const previousStatus = existing.status;
+    const previousCapacity = Number(existing.capacity);
+    Object.assign(existing, {
+      table_number: String(table.table_number).trim(),
+      area: table.area?.trim() || null,
+      capacity: Number(table.capacity),
+      status: table.status,
+    });
     save();
-    return existing;
+    const affectedReservations = state.businessReservations.filter((reservation) => (
+      String(reservation.table_id) === String(existing.id)
+      && activeReservationsForMock(reservation)
+      && new Date(reservation.start_at) > new Date()
+      && (
+        (existing.status !== 'active' && previousStatus === 'active')
+        || (Number(existing.capacity) < previousCapacity && Number(reservation.guest_count) > Number(existing.capacity))
+      )
+    )).length;
+    return { ...existing, affected_reservations: affectedReservations };
   }
   const created = {
     id: `demo-${restaurantId}-table-${Date.now()}`,
-    name: table.name.trim(),
+    table_number: String(table.table_number).trim(),
+    area: table.area?.trim() || null,
     capacity: Number(table.capacity),
     status: 'active',
   };
@@ -990,20 +1126,355 @@ export async function saveBusinessTable(restaurantId, table, user) {
 
 export async function deleteBusinessTable(restaurantId, tableId, user) {
   if (!config.useMock) {
-    throw new Error('Table management is not connected to a Business API yet.');
+    return apiRequest(tablesPath(restaurantId, `/${encodeURIComponent(tableId)}`), { method: 'DELETE' });
   }
   const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
     ?.permissions || [];
   if (!permissions.includes('tables.manage')) throw new Error('You do not have permission to manage tables.');
   const { state, save } = mockState(restaurantId, user);
-  if (state.businessReservations.some((reservation) => (
-    String(reservation.table_id) === String(tableId)
-    && ['pending', 'confirmed', 'seated'].includes(reservation.status)
-  ))) {
-    throw new Error('This table is assigned to an active reservation and cannot be removed.');
+  if (state.businessReservations.some((reservation) => String(reservation.table_id) === String(tableId))) {
+    throw new Error('Tables with reservation history cannot be deleted. Set the table to Inactive instead.');
   }
   state.businessTables = state.businessTables.filter((table) => String(table.id) !== String(tableId));
   save();
+}
+
+export async function updateBusinessReservationSettings(restaurantId, settings, user) {
+  if (!config.useMock) {
+    return apiRequest(restaurantPath(restaurantId, '/reservation-settings'), {
+      method: 'PUT',
+      body: settings,
+    });
+  }
+  const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
+    ?.permissions || [];
+  if (!permissions.includes('reservations.manage')) throw new Error('You do not have permission to manage reservation settings.');
+  const { state, save } = mockState(restaurantId, user);
+  state.reservationSettings = { ...settings, is_configured: true };
+  save();
+  return { ...state.reservationSettings };
+}
+
+export async function rescheduleBusinessReservation(restaurantId, reservationId, data, user) {
+  if (!config.useMock) {
+    return apiRequest(reservationsPath(restaurantId, `/${encodeURIComponent(reservationId)}/reschedule`), {
+      method: 'POST',
+      body: data,
+    });
+  }
+  const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
+    ?.permissions || [];
+  if (!permissions.includes('reservations.manage')) throw new Error('You do not have permission to manage reservations.');
+  const { state, save } = mockState(restaurantId, user);
+  const reservation = state.businessReservations.find((item) => String(item.id) === String(reservationId));
+  if (!reservation) throw new Error('Reservation not found.');
+  if (!['pending', 'confirmed'].includes(reservation.status)) {
+    throw new Error('Only Pending or Confirmed reservations can be rescheduled.');
+  }
+  const start = new Date(data.start_at);
+  if (Number.isNaN(start.getTime()) || start <= new Date()) throw new Error('Choose a future reservation time.');
+  const duration = Number(data.duration_minutes || reservation.duration_minutes);
+  const end = new Date(start.getTime() + duration * 60_000);
+  const settings = state.reservationSettings;
+  if (!settings.accepts_reservations) throw new Error('This restaurant is not accepting reservations.');
+  if (Number(reservation.guest_count) > Number(settings.max_party_size)) throw new Error('The party exceeds this restaurant’s reservation limit.');
+  if (start < new Date(Date.now() + Number(settings.min_lead_hours) * 3_600_000)) throw new Error('Choose a time that meets the minimum lead time.');
+  const latest = new Date();
+  latest.setMonth(latest.getMonth() + Number(settings.max_months_ahead));
+  if (start > latest) throw new Error('Reservations are not available that far in advance.');
+  const candidates = state.businessTables
+    .filter((table) => table.status === 'active' && Number(table.capacity) >= Number(reservation.guest_count))
+    .filter((table) => !data.table_id || String(table.id) === String(data.table_id))
+    .sort((left, right) => Number(left.capacity) - Number(right.capacity));
+  const table = candidates.find((candidate) => !state.businessReservations.some((other) => {
+    if (String(other.id) === String(reservation.id) || String(other.table_id) !== String(candidate.id) || !activeReservationsForMock(other)) return false;
+    const otherStart = new Date(other.start_at);
+    const otherEnd = new Date(other.end_at || (otherStart.getTime() + Number(other.duration_minutes) * 60_000));
+    return otherStart < end && otherEnd > start;
+  }));
+  if (!table) throw new Error('No suitable table is available for that time.');
+  reservation.start_at = start.toISOString();
+  reservation.duration_minutes = duration;
+  reservation.end_at = end.toISOString();
+  reservation.table_id = String(table.id);
+  save();
+  return { ...reservation };
+}
+
+function activeReservationsForMock(reservation) {
+  return ['pending', 'confirmed'].includes(reservation.status)
+    && (reservation.status !== 'pending' || !reservation.expires_at || new Date(reservation.expires_at) > new Date());
+}
+
+function membershipPermissions(restaurantId, user) {
+  return user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
+    ?.permissions || [];
+}
+
+function assertBusinessPermission(restaurantId, user, permission) {
+  if (!membershipPermissions(restaurantId, user).includes(permission)) {
+    throw new Error('You do not have permission to access this business resource.');
+  }
+}
+
+function mockReport(restaurantId, report, from, to, user) {
+  const { state } = mockState(restaurantId, user);
+  const orders = state.businessOrders.filter((order) => (
+    order.placed_at.slice(0, 10) >= from && order.placed_at.slice(0, 10) <= to
+  ));
+  const reservations = state.businessReservations.filter((reservation) => (
+    reservation.start_at.slice(0, 10) >= from && reservation.start_at.slice(0, 10) <= to
+  ));
+  if (report === 'sales_summary') {
+    const completed = orders.filter((order) => order.status === 'completed');
+    const series = orders.reduce((days, order) => {
+      const date = order.placed_at.slice(0, 10);
+      days[date] ||= { date, orders: 0, completed_orders: 0, sales: 0 };
+      days[date].orders += 1;
+      if (order.status === 'completed') {
+        days[date].completed_orders += 1;
+        days[date].sales += Number(order.totals.total);
+      }
+      return days;
+    }, {});
+    const rows = Object.values(series).sort((a, b) => a.date.localeCompare(b.date));
+    return {
+      report,
+      summary: {
+        orders: orders.length,
+        completed_orders: completed.length,
+        cancelled_orders: orders.filter((order) => ['cancelled', 'rejected', 'delivery_failed'].includes(order.status)).length,
+        sales: completed.reduce((sum, order) => sum + Number(order.totals.total), 0),
+        discounts: completed.reduce((sum, order) => sum + Number(order.totals.discount_amount || 0), 0),
+      },
+      columns: ['date', 'orders', 'completed_orders', 'sales'],
+      rows,
+      series: rows,
+    };
+  }
+  if (report === 'orders_by_status') {
+    const rows = Object.entries(orders.reduce((counts, order) => {
+      counts[order.status] ||= { status: order.status, orders: 0, order_value: 0 };
+      counts[order.status].orders += 1;
+      counts[order.status].order_value += Number(order.totals.total || 0);
+      return counts;
+    }, {})).map(([, row]) => row);
+    return { report, summary: { orders: orders.length }, columns: ['status', 'orders', 'order_value'], rows, series: rows };
+  }
+  if (report === 'popular_items') {
+    const items = orders.filter((order) => order.status === 'completed').flatMap((order) => order.items);
+    const rows = Object.values(items.reduce((counts, item) => {
+      counts[item.name] ||= { item: item.name, quantity: 0, order_lines: 0, sales: 0 };
+      counts[item.name].quantity += Number(item.quantity);
+      counts[item.name].order_lines += 1;
+      counts[item.name].sales += Number(item.line_total);
+      return counts;
+    }, {})).sort((a, b) => b.quantity - a.quantity);
+    return { report, summary: { items_sold: rows.reduce((sum, row) => sum + row.quantity, 0) }, columns: ['item', 'quantity', 'order_lines', 'sales'], rows, series: rows };
+  }
+  if (report === 'discount_usage') {
+    const rows = state.businessDiscounts.map((discount) => ({
+      code: discount.code,
+      name: discount.name,
+      type: discount.type,
+      uses: Number(discount.usage_count || 0),
+      amount_applied: 0,
+    }));
+    return {
+      report,
+      summary: { uses: rows.reduce((sum, row) => sum + row.uses, 0), amount_applied: 0 },
+      columns: ['code', 'name', 'type', 'uses', 'amount_applied'],
+      rows,
+      series: rows,
+    };
+  }
+  const counts = reservations.reduce((result, reservation) => {
+    result[reservation.status] = (result[reservation.status] || 0) + 1;
+    return result;
+  }, {});
+  if (report === 'reservations') {
+    const rows = Object.entries(counts).map(([status, count]) => ({ status, reservations: count }));
+    return { report, summary: { reservations: reservations.length }, columns: ['status', 'reservations'], rows, series: rows };
+  }
+  const completed = counts.completed || 0;
+  const noShows = counts.no_show || 0;
+  const eligible = completed + noShows;
+  const rows = [{ status: 'completed', reservations: completed }, { status: 'no_show', reservations: noShows }];
+  return {
+    report,
+    summary: { eligible_reservations: eligible, no_shows: noShows, no_show_rate_percent: eligible ? (noShows / eligible) * 100 : 0 },
+    columns: ['status', 'reservations'],
+    rows,
+    series: rows,
+  };
+}
+
+export async function getBusinessDiscounts(restaurantId, filters = {}, user) {
+  assertBusinessPermission(restaurantId, user, 'discounts.manage');
+  if (!config.useMock) {
+    const query = new URLSearchParams(Object.entries(filters)
+      .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+      .map(([key, value]) => [key, String(value)]));
+    return apiRequest(`${discountsPath(restaurantId)}${query.size ? `?${query}` : ''}`, { preserveEnvelope: true });
+  }
+  const { state } = mockState(restaurantId, user);
+  const search = String(filters.search || '').toLocaleLowerCase();
+  const matched = state.businessDiscounts.filter((discount) => (
+    (filters.is_active === undefined || String(discount.is_active) === String(filters.is_active))
+    && (!search || `${discount.code} ${discount.name}`.toLocaleLowerCase().includes(search))
+  ));
+  const perPage = Math.min(100, Math.max(1, Number(filters.per_page) || 25));
+  const page = Math.max(1, Number(filters.page) || 1);
+  return {
+    data: matched.slice((page - 1) * perPage, page * perPage),
+    meta: { current_page: page, per_page: perPage, total: matched.length, last_page: Math.max(1, Math.ceil(matched.length / perPage)) },
+  };
+}
+
+export async function saveBusinessDiscount(restaurantId, discount, user) {
+  assertBusinessPermission(restaurantId, user, 'discounts.manage');
+  if (!config.useMock) {
+    return apiRequest(discountsPath(restaurantId, discount.id ? `/${encodeURIComponent(discount.id)}` : ''), {
+      method: discount.id ? 'PATCH' : 'POST',
+      body: discount,
+    });
+  }
+  const { state, save } = mockState(restaurantId, user);
+  const duplicate = state.businessDiscounts.find((existing) => (
+    existing.code.toLocaleLowerCase() === discount.code.trim().toLocaleLowerCase()
+    && String(existing.id) !== String(discount.id || '')
+  ));
+  if (duplicate) throw new Error('A discount with this code already exists.');
+  const item = {
+    ...discount,
+    id: discount.id || `demo-${restaurantId}-discount-${Date.now()}`,
+    code: discount.code.trim().toUpperCase(),
+    funded_by: 'restaurant',
+    usage_count: Number(discount.usage_count || 0),
+  };
+  if (discount.id) {
+    const index = state.businessDiscounts.findIndex((existing) => String(existing.id) === String(discount.id));
+    if (index < 0) throw new Error('Discount not found.');
+    state.businessDiscounts[index] = item;
+  } else {
+    state.businessDiscounts.unshift(item);
+  }
+  save();
+  recordBusinessAudit(restaurantId, user, discount.id ? 'discount.updated' : 'discount.created', discount.id ? discount : null, item);
+  return item;
+}
+
+export async function deactivateBusinessDiscount(restaurantId, discountId, user) {
+  assertBusinessPermission(restaurantId, user, 'discounts.manage');
+  if (!config.useMock) {
+    return apiRequest(discountsPath(restaurantId, `/${encodeURIComponent(discountId)}`), { method: 'DELETE' });
+  }
+  const { state, save } = mockState(restaurantId, user);
+  const discount = state.businessDiscounts.find((item) => String(item.id) === String(discountId));
+  if (!discount) throw new Error('Discount not found.');
+  const before = { ...discount };
+  discount.is_active = false;
+  save();
+  recordBusinessAudit(restaurantId, user, 'discount.deactivated', before, discount);
+}
+
+export async function getBusinessReport(restaurantId, report, filters, user) {
+  const permission = ['reservations', 'no_show_rate'].includes(report)
+    ? 'reports.reservations.view'
+    : 'reports.sales_reservations.view';
+  assertBusinessPermission(restaurantId, user, permission);
+  if (!config.useMock) {
+    const query = new URLSearchParams({ from: filters.from, to: filters.to });
+    return apiRequest(reportsPath(restaurantId, `/${encodeURIComponent(report)}?${query}`));
+  }
+  return mockReport(restaurantId, report, filters.from, filters.to, user);
+}
+
+export async function downloadBusinessReport(restaurantId, report, filters, user) {
+  const permission = ['reservations', 'no_show_rate'].includes(report)
+    ? 'reports.reservations.view'
+    : 'reports.sales_reservations.view';
+  assertBusinessPermission(restaurantId, user, permission);
+  const query = new URLSearchParams({ from: filters.from, to: filters.to });
+  if (!config.useMock) {
+    return apiDownloadRequest(reportsPath(restaurantId, `/${encodeURIComponent(report)}/export?${query}`));
+  }
+  const result = mockReport(restaurantId, report, filters.from, filters.to, user);
+  const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const csv = [
+    result.columns.map(quote).join(','),
+    ...result.rows.map((row) => result.columns.map((column) => quote(row[column])).join(',')),
+  ].join('\r\n');
+  return new Blob([csv], { type: 'text/csv;charset=utf-8' });
+}
+
+export async function getBusinessCalendar(restaurantId, range, user) {
+  if (!config.useMock) {
+    const query = new URLSearchParams({ start: range.start, end: range.end });
+    return apiRequest(`${calendarPath(restaurantId)}?${query}`);
+  }
+  const permissions = membershipPermissions(restaurantId, user);
+  if (!permissions.includes('restaurant.view') && !permissions.includes('reservations.view')) {
+    throw new Error('You do not have permission to view this calendar.');
+  }
+  const { state } = mockState(restaurantId, user);
+  const includeReservations = permissions.includes('reservations.view');
+  const events = [];
+  const manilaDate = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(date);
+  const startDate = manilaDate(new Date(range.start));
+  const endDate = manilaDate(new Date(new Date(range.end).getTime() - 1));
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (state.restaurant.is_24_7) {
+    const endExclusive = new Date(end);
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+    events.push({ id: 'hours-24-7', title: 'Open 24/7', start: startDate, end: endExclusive.toISOString().slice(0, 10), allDay: true, extendedProps: { type: 'hours' } });
+  } else {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    for (let day = new Date(start); day <= end; day = new Date(day.getTime() + 86400000)) {
+      const date = day.toISOString().slice(0, 10);
+      const weekday = dayNames[day.getUTCDay()];
+      (state.hours[weekday] || []).forEach((shift, index) => {
+        const eventStart = new Date(`${date}T${String(shift.open_time).slice(0, 5)}:00+08:00`);
+        const eventEnd = new Date(`${date}T${String(shift.close_time).slice(0, 5)}:00+08:00`);
+        if (shift.crosses_midnight) eventEnd.setUTCDate(eventEnd.getUTCDate() + 1);
+        events.push({
+          id: `hours-${weekday}-${index}-${date}`,
+          title: `Open · ${String(shift.open_time).slice(0, 5)}–${String(shift.close_time).slice(0, 5)}`,
+          start: eventStart.toISOString(),
+          end: eventEnd.toISOString(),
+          display: 'background',
+          extendedProps: { type: 'hours' },
+        });
+      });
+    }
+  }
+  state.closures.forEach((closure) => {
+    if (closure.closure_date >= startDate && closure.closure_date <= endDate) {
+      events.push({ id: `closure-${closure.id}`, title: closure.reason ? `Closed · ${closure.reason}` : 'Closed', start: closure.closure_date, allDay: true, display: 'background', extendedProps: { type: 'closure' } });
+    }
+  });
+  if (includeReservations) {
+    state.businessReservations.forEach((reservation) => {
+      const startAt = new Date(reservation.start_at);
+      const endAt = new Date(reservation.end_at);
+      if (startAt < new Date(range.end) && endAt > new Date(range.start)) {
+        events.push({
+          id: `reservation-${reservation.id}`,
+          title: reservation.reference_code,
+          start: reservation.start_at,
+          end: reservation.end_at,
+          extendedProps: {
+            type: 'reservation',
+            status: reservation.status,
+            table_number: state.businessTables.find((table) => String(table.id) === String(reservation.table_id))?.table_number || null,
+            guest_count: reservation.guest_count,
+          },
+        });
+      }
+    });
+  }
+  return { data: events };
 }
 
 export const businessService = {
@@ -1044,4 +1515,12 @@ export const businessService = {
   updateBusinessReservationStatus,
   saveBusinessTable,
   deleteBusinessTable,
+  updateBusinessReservationSettings,
+  rescheduleBusinessReservation,
+  getBusinessDiscounts,
+  saveBusinessDiscount,
+  deactivateBusinessDiscount,
+  getBusinessReport,
+  downloadBusinessReport,
+  getBusinessCalendar,
 };

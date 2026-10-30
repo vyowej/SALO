@@ -308,6 +308,40 @@ class MenuManagementTest extends \Tests\TestCase
         ]);
     }
 
+    public function test_menu_photo_rejects_unsupported_oversized_and_fake_mime_uploads(): void
+    {
+        Storage::fake('public');
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $category = MenuCategory::query()->create([
+            'restaurant_id' => $restaurant->getKey(),
+            'name' => 'Uploads',
+            'status' => 'active',
+        ]);
+        $item = MenuItem::query()->create([
+            'category_id' => $category->getKey(),
+            'name' => 'Sample item',
+            'price' => '25.00',
+            'lifecycle_status' => 'draft',
+            'is_available' => true,
+        ]);
+        $path = $this->menuPath($restaurant, '/items/'.$item->getKey().'/photo');
+
+        $this->businessRequest($owner, $restaurant)
+            ->post($path, ['file' => UploadedFile::fake()->create('menu.gif', 10, 'image/gif')], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+        $this->businessRequest($owner, $restaurant)
+            ->post($path, ['file' => UploadedFile::fake()->image('large.png')->size(2049)], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+        $this->businessRequest($owner, $restaurant)
+            ->post($path, ['file' => UploadedFile::fake()->createWithContent('fake.png', 'not an actual PNG')], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+
+        $this->assertSame([], Storage::disk('public')->allFiles());
+    }
+
     public function test_daily_quantity_reset_uses_the_first_shift_opening_time(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();

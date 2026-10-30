@@ -175,6 +175,8 @@ export const NAVIGATION_GROUPS = {
         { label: SHELL_LABELS.nav.business, path: '/business/profile', icon: 'business', permission: 'restaurant.view' },
         { label: SHELL_LABELS.nav.orders, path: '/business/orders', icon: 'orders', permission: 'orders.view' },
         { label: SHELL_LABELS.nav.reservations, path: '/business/reservations', icon: 'calendar', permission: 'reservations.view' },
+        { label: 'Discounts', path: '/business/discounts', icon: 'discounts', permission: 'discounts.manage' },
+        { label: 'Calendar', path: '/business/calendar', icon: 'calendar', permission: 'restaurant.view' },
         { label: SHELL_LABELS.nav.menu, path: '/business/menu', icon: 'menu', permission: 'restaurant.view' },
         { label: SHELL_LABELS.nav.team, path: '/business/team', icon: 'team', permission: 'team.view' },
         { label: SHELL_LABELS.nav.reports, path: '/business/reports', icon: 'reports', permissions: ['reports.sales_reservations.view', 'reports.reservations.view'] },

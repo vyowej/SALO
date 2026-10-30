@@ -1,5 +1,6 @@
 .business-reservations {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-width: 0;
 }
@@ -76,6 +77,7 @@
 
 .business-reservation-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -137,56 +139,197 @@
   color: var(--text-muted);
 }
 
-.business-reservation-list {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.business-reservation-card,
-.business-table-card {
-  display: flex;
-  justify-content: space-between;
+.business-reservation-view-switch {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  padding: var(--space-1);
   background: var(--surface-dense);
 }
 
-.business-reservation-card__main {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.business-reservation-card__main h3,
-.business-reservation-card__main p,
-.business-table-card h3,
-.business-table-card p {
-  margin: 0;
-}
-
-.business-reservation-card__main h3,
-.business-table-card h3 {
-  margin-top: var(--space-1);
-}
-
-.business-reservation-card__main p,
-.business-table-card p {
+.business-reservation-view-switch button {
+  min-height: 2.4rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
 }
 
-.business-reservation-card__heading {
-  display: flex;
+.business-reservation-view-switch button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.business-reservation-calendar {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.business-reservation-calendar .fc {
+  color: var(--text);
+  font-family: inherit;
+}
+
+.business-reservation-calendar .fc .fc-button-primary {
+  border-color: var(--border-subtle);
+  background: var(--surface-control);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.business-reservation-calendar .fc .fc-button-primary:hover,
+.business-reservation-calendar .fc .fc-button-primary:focus {
+  border-color: var(--border);
+  background: var(--surface-dense);
+  color: var(--text);
+}
+
+.business-reservation-calendar .fc .fc-button-primary:not(:disabled).fc-button-active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+}
+
+.business-reservation-calendar .fc .fc-button:focus {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.business-reservation-calendar .fc-theme-standard td,
+.business-reservation-calendar .fc-theme-standard th,
+.business-reservation-calendar .fc-theme-standard .fc-scrollgrid {
+  border-color: var(--border-subtle);
+}
+
+.business-reservation-calendar .fc .fc-daygrid-day-number,
+.business-reservation-calendar .fc .fc-col-header-cell-cushion {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.business-reservation-calendar .fc .fc-event {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+}
+
+.business-reservation-calendar .fc .fc-timegrid-event {
+  padding: 2px 4px;
+}
+
+.business-settings-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.business-settings-form > label:not(.business-setting-toggle) {
+  max-width: 28rem;
+}
+
+.business-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-3);
+}
+
+.business-setting-toggle {
+  display: flex !important;
   align-items: center;
+  gap: var(--space-2) !important;
+  width: fit-content;
+}
+
+.business-setting-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--primary);
+}
+
+.business-reschedule-form {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.business-reschedule-form > div {
+  display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.business-reservation-note {
-  color: var(--text) !important;
+.business-table-attention {
+  color: var(--danger, #8b241f) !important;
+  font-weight: var(--font-weight-semibold);
+}
+
+.business-reservation-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.business-reservation-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.business-reservation-table th,
+.business-reservation-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.business-reservation-table th {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.business-reservation-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.business-reservation-pagination span {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.business-reservation-table-inventory {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.business-reservation-table-inventory > label {
+  width: min(100%, 24rem);
+}
+
+.business-reservation-table--inventory {
+  min-width: 680px;
+}
+
+.business-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .business-reservation-status {
@@ -327,15 +470,39 @@
 
 @media (max-width: 540px) {
   .business-reservations .business-page-heading,
-  .business-reservation-card,
-  .business-table-card,
   .business-reservation-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .business-reservation-card > button {
+  .business-reservations .business-page-heading,
+  .business-reservations .business-page-heading > div {
     width: 100%;
+    min-width: 0;
+  }
+
+  .business-reservation-tabs button {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  .business-reservation-calendar .fc .fc-header-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: var(--space-2);
+  }
+
+  .business-reservation-calendar .fc .fc-toolbar-chunk {
+    display: flex;
+    max-width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .business-reservation-calendar .fc .fc-toolbar-title {
+    text-align: center;
+    font-size: var(--font-size-lg);
   }
 
   .business-table-form {
@@ -346,10 +513,6 @@
     grid-column: auto;
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .business-table-card > div:last-child {
-    width: 100%;
   }
 
   .business-reservation-actions > button,

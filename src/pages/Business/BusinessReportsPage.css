@@ -1,0 +1,114 @@
+.business-reports {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.business-reports .business-page-heading h2,
+.business-reports .business-page-heading p {
+  margin: 0;
+}
+
+.business-reports .business-page-heading h2 {
+  margin-bottom: var(--space-2);
+}
+
+.business-reports .business-page-heading > div > p:last-child {
+  color: var(--text-muted);
+}
+
+.business-report-filters {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1.4fr) repeat(2, minmax(10rem, 1fr)) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.business-report-filters label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.business-report-filters input,
+.business-report-filters select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+.business-report-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.business-report-chart {
+  min-height: 20rem;
+}
+
+.business-report-chart h3 {
+  margin: 0;
+}
+
+.business-report-chart > div {
+  min-height: 17rem;
+  width: 100%;
+}
+
+.business-report-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.business-report-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.business-report-table th,
+.business-report-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.business-report-table th {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 52rem) {
+  .business-report-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .business-report-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 34rem) {
+  .business-report-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .business-report-filter-actions {
+    grid-column: auto;
+  }
+
+  .business-report-filter-actions > button {
+    flex: 1;
+  }
+}
