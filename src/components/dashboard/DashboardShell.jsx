@@ -49,6 +49,7 @@ export function DashboardShell({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  const [modeError, setModeError] = useState('');
   const [navQuery, setNavQuery] = useState('');
   const accountRef = useRef(null);
   const drawerRef = useRef(null);
@@ -129,11 +130,17 @@ export function DashboardShell({ children }) {
     }
   };
 
-  const handleModeChange = (event) => {
+  const handleModeChange = async (event) => {
     const nextMode = event.target.value;
-    if (!switchView(nextMode)) return;
-    navigate(ROLE_PATHS[nextMode]);
-    setDrawerOpen(false);
+    setModeError('');
+    try {
+      if (!await switchView(nextMode)) return;
+      navigate(ROLE_PATHS[nextMode]);
+      setDrawerOpen(false);
+    } catch (error) {
+      console.error('Unable to switch account mode.', error);
+      setModeError('We couldn’t switch modes. Please try again.');
+    }
   };
 
   const renderNavigation = () => (
@@ -243,6 +250,7 @@ export function DashboardShell({ children }) {
             <ChevronDown aria-hidden="true" size={15} />
           </label>
         ) : null}
+        {modeError ? <p className="dashboard-account-menu__error" role="alert">{modeError}</p> : null}
 
         <nav className="dashboard-sidebar__nav" aria-label={SHELL_LABELS.navigation}>
           {renderNavigation()}

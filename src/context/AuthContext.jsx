@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService } from '../services/authService';
 import { addressService } from '../services/addressService';
+import { setApiRequestContext } from '../services/apiClient';
 import { config } from '../config';
 
 const AuthContext = createContext(null);
@@ -17,25 +18,32 @@ export const USER_ROLES = {
 
 const accounts = authService.getDemoAccounts();
 const emptyAuth = { user: null, capabilities: [], activeView: USER_ROLES.GUEST, emailVerified: true };
+const modeToView = {
+  customer: USER_ROLES.CUSTOMER,
+  business: USER_ROLES.RESTAURANT_OWNER,
+  driver: USER_ROLES.RIDER,
+  admin: USER_ROLES.ADMIN,
+};
+const viewToMode = {
+  [USER_ROLES.CUSTOMER]: 'customer',
+  [USER_ROLES.RESTAURANT_OWNER]: 'business',
+  [USER_ROLES.RIDER]: 'driver',
+  [USER_ROLES.ADMIN]: 'admin',
+};
 const authForApiUser = (user) => {
   const capabilities = [
-    ...(user.capabilities || []),
-    ...(user.capabilities?.includes('driver') ? [USER_ROLES.RIDER] : []),
+    ...(user.capabilities || []).map((capability) => (capability === 'business'
+      ? USER_ROLES.RESTAURANT_OWNER
+      : capability === 'driver' ? USER_ROLES.RIDER : capability)),
     ...(user.memberships?.some((membership) => membership.status === 'active') ? [USER_ROLES.RESTAURANT_OWNER] : []),
   ];
-  const activeView = capabilities.includes(USER_ROLES.ADMIN)
-    ? USER_ROLES.ADMIN
-    : capabilities.includes(USER_ROLES.RIDER)
-      ? USER_ROLES.RIDER
-      : capabilities.includes(USER_ROLES.RESTAURANT_OWNER)
-        ? USER_ROLES.RESTAURANT_OWNER
-        : USER_ROLES.CUSTOMER;
+  const activeView = modeToView[user.active_mode] || USER_ROLES.CUSTOMER;
 
   return {
     user,
     capabilities: [...new Set(capabilities)],
     activeView,
-    emailVerified: user.email_verified,
+    emailVerified: user.email_verified ?? Boolean(user.email_verified_at),
   };
 };
 
@@ -77,6 +85,7 @@ export function AuthProvider({ children }) {
     authService.getCurrentUser()
       .then((user) => {
         if (!active) return;
+        setApiRequestContext(user.active_mode, user.selected_restaurant_id);
         setAuth(authForApiUser(user));
         setAuthError('');
       })
@@ -97,6 +106,9 @@ export function AuthProvider({ children }) {
   const persistAuth = useCallback((nextAuth) => {
     setAuth(nextAuth);
     setAuthError('');
+    if (!config.useMock && nextAuth.user) {
+      setApiRequestContext(nextAuth.user.active_mode, nextAuth.user.selected_restaurant_id);
+    }
     if (config.useMock) window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
   }, []);
 
@@ -159,16 +171,71 @@ export function AuthProvider({ children }) {
     return user;
   }, [auth, persistAuth]);
 
-  const switchView = useCallback((view) => {
+  const refreshUser = useCallback(async () => {
+    if (config.useMock) return null;
+    const user = await authService.getCurrentUser();
+    persistAuth(authForApiUser(user));
+    return user;
+  }, [persistAuth]);
+
+  const switchView = useCallback(async (view) => {
     if (!auth.capabilities.includes(view)) return false;
+    if (!config.useMock) {
+      const mode = viewToMode[view];
+      const membership = auth.user?.memberships?.find((item) => item.status === 'active');
+      const selectedRestaurantId = mode === 'business'
+        ? (auth.user?.selected_restaurant_id || membership?.restaurant_id)
+        : undefined;
+      const user = await authService.setActiveMode(mode, selectedRestaurantId);
+      persistAuth(authForApiUser(user));
+      return true;
+    }
     const nextAuth = { ...auth, activeView: view };
     setAuth(nextAuth);
-    if (config.useMock) window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
     return true;
-  }, [auth]);
+  }, [auth, persistAuth]);
+
+  const switchRestaurant = useCallback(async (restaurantId) => {
+    const id = String(restaurantId);
+    let memberships = auth.user?.memberships || [];
+    let membership = memberships.find((item) => (
+      item.restaurant_id === id && item.status === 'active'
+    ));
+    if (!membership && config.useMock && auth.user?.restaurantId === id) {
+      membership = {
+        restaurant_id: id,
+        restaurant_name: 'Mang Toma Kitchen',
+        role: 'owner',
+        status: 'active',
+        permissions: [],
+      };
+      memberships = [...memberships, membership];
+    }
+    if (!membership || !auth.capabilities.includes(USER_ROLES.RESTAURANT_OWNER)) {
+      throw new Error('You do not have an active membership for this restaurant.');
+    }
+
+    if (!config.useMock) {
+      const user = await authService.setActiveMode('business', id);
+      persistAuth(authForApiUser(user));
+      return true;
+    }
+
+    const nextAuth = {
+      ...auth,
+      user: { ...auth.user, memberships, active_mode: 'business', selected_restaurant_id: id },
+      activeView: USER_ROLES.RESTAURANT_OWNER,
+    };
+    setApiRequestContext('business', id);
+    setAuth(nextAuth);
+    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+    return true;
+  }, [auth, persistAuth]);
 
   const clearAuth = useCallback(() => {
     if (config.useMock) window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    setApiRequestContext('customer');
     setAuth(emptyAuth);
   }, []);
 
@@ -196,11 +263,13 @@ export function AuthProvider({ children }) {
     verifyEmail,
     sendVerificationEmail,
     updateUser,
+    refreshUser,
     logout,
     deactivateAccount,
     switchView,
+    switchRestaurant,
     USER_ROLES,
-  }), [auth, authLoading, authError, login, register, verifyEmail, sendVerificationEmail, updateUser, logout, deactivateAccount, switchView]);
+  }), [auth, authLoading, authError, login, register, verifyEmail, sendVerificationEmail, updateUser, refreshUser, logout, deactivateAccount, switchView, switchRestaurant]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

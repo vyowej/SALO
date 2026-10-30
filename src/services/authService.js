@@ -169,7 +169,17 @@ export const authService = {
   async verifyEmailToken(token) {
     return normalizeApiUser(await apiRequest('/auth/email/verification/verify', {
       method: 'POST',
-      body: { token },
+      body: { code: token },
+    }));
+  },
+
+  async setActiveMode(mode, selectedRestaurantId) {
+    return normalizeApiUser(await apiRequest('/auth/mode', {
+      method: 'POST',
+      body: {
+        mode,
+        selected_restaurant_id: selectedRestaurantId,
+      },
     }));
   },
 

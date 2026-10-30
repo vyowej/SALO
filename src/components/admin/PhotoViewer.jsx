@@ -4,7 +4,8 @@ import { ADMIN_COPY } from '../../constants/admin';
 import { resolvePhoto } from '../../mock/admin/photoStore';
 
 export function PhotoViewer({ photoRef, onClose }) {
-  const src = photoRef ? resolvePhoto(photoRef) : null;
+  const isDirectUrl = typeof photoRef === 'string' && (/^https?:\/\//i.test(photoRef) || photoRef.startsWith('/'));
+  const src = photoRef ? (isDirectUrl ? photoRef : resolvePhoto(photoRef)) : null;
   const dialogRef = useRef(null);
   useEffect(() => {
     if (!photoRef) return undefined;

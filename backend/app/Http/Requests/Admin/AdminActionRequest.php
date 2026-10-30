@@ -58,6 +58,9 @@ class AdminActionRequest extends FormRequest
         if (str_contains($uri, 'applications/{type}/{id}/reject')) {
             return ['note' => ['required', 'string', 'min:1', 'max:500']];
         }
+        if (str_contains($uri, 'applications/{type}/{id}/request-revision')) {
+            return ['note' => ['required', 'string', 'min:1', 'max:500']];
+        }
         if (str_contains($uri, 'applications/{type}/{id}/approve')) {
             return ['note' => ['sometimes', 'nullable', 'string', 'max:500']];
         }
@@ -84,7 +87,15 @@ class AdminActionRequest extends FormRequest
             return ['date' => ['required', 'date'], 'slots' => ['sometimes', 'array'], 'slots.*.start_time' => ['required_with:slots', 'date_format:H:i'], 'slots.*.end_time' => ['required_with:slots', 'date_format:H:i', 'after:slots.*.start_time']];
         }
         if ($resource === 'settings') {
-            return ['app_name' => ['sometimes', 'string', 'max:100'], 'default_delivery_fee' => ['sometimes', 'numeric', 'min:0'], 'max_riders_per_area' => ['sometimes', 'integer', 'min:1'], 'rider_slots' => ['sometimes', 'array']];
+            return [
+                'app_name' => ['sometimes', 'string', 'max:100'],
+                'default_delivery_fee' => ['sometimes', 'numeric', 'min:0'],
+                'max_riders_per_area' => ['sometimes', 'integer', 'min:1'],
+                'rider_slots' => ['sometimes', 'array'],
+                'otp_validity_minutes' => ['sometimes', 'integer', 'min:1', 'max:60'],
+                'otp_max_attempts' => ['sometimes', 'integer', 'min:1', 'max:10'],
+                'otp_resend_cooldown_seconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
+            ];
         }
 
         return [];

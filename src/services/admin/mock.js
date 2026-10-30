@@ -169,6 +169,29 @@ export const adminMock = {
     if (!body?.note?.trim()) failure(422, 'The submitted data is invalid.', { note: ['Add a note to document this decision.'] });
     return reviewApplication(type, id, false, body.note);
   },
+  async requestRevisionApplication(type, id, body) {
+    await wait();
+    if (!body?.note?.trim()) failure(422, 'The submitted data is invalid.', { note: ['Add the requested changes.'] });
+    const application = find(applications, id);
+    if (application.type !== type || application.status !== 'under_review') {
+      failure(422, 'The submitted data is invalid.', { status: ['Only an application in review can be returned.'] });
+    }
+    application.status = 'needs_revision';
+    application.review_note = body.note;
+    application.reviewed_at = new Date().toISOString();
+    addHistory('application', id, 'needs_revision', { note: body.note });
+    return copy(application);
+  },
+  async startReviewApplication(type, id) {
+    await wait();
+    const application = find(applications, id);
+    if (application.type !== type || !['pending', 'submitted'].includes(application.status)) {
+      failure(422, 'The submitted data is invalid.', { status: ['Only submitted applications can enter review.'] });
+    }
+    application.status = 'under_review';
+    addHistory('application', id, 'under_review');
+    return copy(application);
+  },
   async listRiders(params = {}) { await wait(); return listRecords('riders', riders, params); },
   async getRider(id) { await wait(); return copy(find(riders, id)); },
   async setRiderStatus(id, body) {
@@ -319,7 +342,7 @@ function restaurantDefaults(body) {
 function reviewApplication(type, id, approve, note) {
   const application = find(applications, id);
   if (application.type !== type) failure(404, 'The requested record was not found.');
-  if (application.status !== 'pending') failure(422, 'The submitted data is invalid.', { status: ['Only pending applications can be reviewed.'] });
+  if (application.status !== 'under_review') failure(422, 'The submitted data is invalid.', { status: ['Move the application into review before recording a decision.'] });
   const applicant = find(users, application.applicant.id);
   if (approve && type === 'rider') {
     const capabilities = [...new Set([...applicant.capabilities, 'driver'])];
@@ -351,14 +374,16 @@ function reviewApplication(type, id, approve, note) {
         latitude: application.details.latitude,
         longitude: application.details.longitude,
       },
-      status: 'active',
+      status: 'approved',
+      is_published: false,
     });
     restaurants.unshift(restaurant);
     applicant.memberships = [...(applicant.memberships || []), {
       restaurant_id: restaurant.id,
+      restaurant_name: restaurant.name,
       role: 'owner',
       status: 'active',
-      permissions: ['restaurant.view', 'restaurant.edit', 'menu.manage', 'orders.view', 'orders.manage', 'reservations.view', 'reservations.manage', 'tables.manage', 'discounts.manage', 'team.manage', 'analytics.view'],
+      permissions: ['restaurant.view', 'restaurant.page.edit', 'restaurant.publish'],
     }];
   }
   application.status = approve ? 'approved' : 'rejected';

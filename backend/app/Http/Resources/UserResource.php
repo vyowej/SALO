@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Http\Authorization\PermissionMap;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,9 +14,13 @@ class UserResource extends JsonResource
 
             return [
                 'restaurant_id' => $membership['restaurant_id'],
+                'restaurant_name' => $membership['restaurant_name'] ?? null,
                 'role' => $role,
-                'status' => $membership['status'] ?? 'active',
-                'permissions' => PermissionMap::forRole($role),
+                'status' => $membership['status'],
+                'restaurant_status' => $membership['restaurant_status'] ?? null,
+                'permissions' => $membership['status'] === 'active'
+                    ? PermissionMap::forRole($role)
+                    : [],
             ];
         })->values();
 
@@ -30,6 +33,8 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'capabilities' => $this->capabilities ?? ['customer'],
             'memberships' => $memberships,
+            'active_mode' => $this->active_mode,
+            'selected_restaurant_id' => $this->selected_restaurant_id,
             'email_verified_at' => $this->email_verified_at?->toISOString(),
             'driver_state' => $this->driver_state,
         ];

@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Http\Authorization\PermissionMap;
 use App\Repositories\Contracts\AdminRepository;
+use App\Repositories\Contracts\PlatformSettingsRepository;
+use App\Repositories\Contracts\RestaurantApplicationRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -11,10 +13,18 @@ use Illuminate\Validation\ValidationException;
 
 class AdminService
 {
-    public function __construct(private readonly AdminRepository $repository) {}
+    public function __construct(
+        private readonly AdminRepository $repository,
+        private readonly RestaurantApplicationRepository $applications,
+        private readonly PlatformSettingsRepository $platformSettings,
+    ) {}
 
     public function list(string $resource, array $params): array
     {
+        if ($resource === 'applications') {
+            return $this->applications->paginate($params);
+        }
+
         $items = $this->repository->all($resource);
         foreach ($params as $key => $value) {
             if ($value === null || $value === '' || in_array($key, ['page', 'per_page', 'search', 'sort', 'direction'], true)) {
@@ -90,6 +100,12 @@ class AdminService
 
     public function find(string $resource, string $id): array
     {
+        if ($resource === 'applications') {
+            $application = $this->applications->find($id) ?? abort(404);
+
+            return $this->applications->toArray($application);
+        }
+
         $record = $this->repository->find($resource, $id) ?? abort(404);
 
         return $resource === 'users' ? $this->safeUser($record) : $record;
@@ -186,6 +202,27 @@ class AdminService
 
     public function decideApplication(string $type, string $id, bool $approve, ?string $note, object $actor): array
     {
+        if (in_array($type, ['restaurant', 'partner'], true)) {
+            $application = $this->applications->find($id) ?? abort(404);
+            if ($application->status !== 'under_review') {
+                throw ValidationException::withMessages(['status' => ['Move the application into review before recording a decision.']]);
+            }
+            if ($application->application_type !== 'initial') {
+                throw ValidationException::withMessages(['type' => ['Only initial restaurant applications are supported in this phase.']]);
+            }
+
+            $updated = $approve
+                ? $this->applications->approveInitial($application, (int) $actor->getAuthIdentifier())
+                : $this->applications->transition(
+                    $application,
+                    'rejected',
+                    (string) $note,
+                    (int) $actor->getAuthIdentifier(),
+                );
+
+            return $this->applications->toArray($updated);
+        }
+
         $application = collect($this->repository->all('applications'))->first(fn ($item) => $item['id'] === $id && $item['type'] === $type);
         abort_if($application === null, 404);
         if ($application['status'] !== 'pending') {
@@ -221,6 +258,48 @@ class AdminService
         $this->history($actor, 'application', $id, $approve ? 'approved' : 'rejected', ['note' => $note, 'type' => $type]);
 
         return $updated;
+    }
+
+    public function startApplicationReview(string $type, string $id, object $actor): array
+    {
+        if (! in_array($type, ['restaurant', 'partner'], true)) {
+            throw ValidationException::withMessages(['type' => ['Only restaurant applications support review.']]);
+        }
+
+        $application = $this->applications->find($id) ?? abort(404);
+        if ($application->application_type !== 'initial' || $application->status !== 'submitted') {
+            throw ValidationException::withMessages(['status' => ['Only submitted initial applications can enter review.']]);
+        }
+
+        $updated = $this->applications->transition(
+            $application,
+            'under_review',
+            (string) $application->review_notes,
+            (int) $actor->getAuthIdentifier(),
+        );
+
+        return $this->applications->toArray($updated);
+    }
+
+    public function requestApplicationRevision(string $type, string $id, string $note, object $actor): array
+    {
+        if (! in_array($type, ['restaurant', 'partner'], true)) {
+            throw ValidationException::withMessages(['type' => ['Only restaurant applications support revision requests.']]);
+        }
+
+        $application = $this->applications->find($id) ?? abort(404);
+        if ($application->status !== 'under_review') {
+            throw ValidationException::withMessages(['status' => ['Move the application into review before requesting revision.']]);
+        }
+
+        $updated = $this->applications->transition(
+            $application,
+            'needs_revision',
+            $note,
+            (int) $actor->getAuthIdentifier(),
+        );
+
+        return $this->applications->toArray($updated);
     }
 
     public function setRiderStatus(string $id, string $status, object $actor): array
@@ -321,20 +400,26 @@ class AdminService
 
     public function settings(): array
     {
-        $settings = $this->repository->all('settings')[0] ?? [];
-        unset($settings['id']);
-
-        return $settings;
+        return array_replace([
+            'app_name' => 'SALO',
+            'default_delivery_fee' => 40.0,
+            'max_riders_per_area' => 50,
+            'rider_slots' => [
+                ['label' => 'Morning', 'start_time' => '08:00', 'end_time' => '14:00'],
+                ['label' => 'Evening', 'start_time' => '14:00', 'end_time' => '22:00'],
+            ],
+            'otp_validity_minutes' => 10,
+            'otp_max_attempts' => 5,
+            'otp_resend_cooldown_seconds' => 60,
+        ], $this->platformSettings->all());
     }
 
     public function updateSettings(array $data, object $actor): array
     {
-        $settings = $this->repository->all('settings')[0] ?? [];
-        $updated = $this->repository->update('settings', (string) ($settings['id'] ?? ''), $data);
-        if ($updated === null) {
-            $updated = $this->repository->create('settings', array_replace($settings, $data));
-        }
-        $this->history($actor, 'settings', $updated['id'], 'updated', ['fields' => array_keys($data)]);
+        $adminId = $actor->platformAdmin?->admin_id;
+        abort_unless($adminId !== null, 403);
+        $updated = $this->platformSettings->update($data, (int) $adminId);
+        $this->history($actor, 'settings', 'platform', 'updated', ['fields' => array_keys($data)]);
 
         return $updated;
     }

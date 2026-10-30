@@ -235,7 +235,7 @@ function FormFields({ resource, values, onChange, errors = {}, editing }) {
   );
 }
 
-function RecordDetails({ record, resource, onPhoto }) {
+function RecordDetails({ record, resource, onPhoto, onDocument }) {
   const photoReferences = [];
   const entries = [];
   const visit = (value, prefix = '') => {
@@ -252,7 +252,7 @@ function RecordDetails({ record, resource, onPhoto }) {
       return;
     }
     Object.entries(value).forEach(([key, child]) => {
-      if (['photo_ref', 'logo_ref', 'cover_ref'].includes(key) && typeof child === 'string') {
+      if (['photo_ref', 'logo_ref', 'cover_ref', 'logo_url', 'cover_url'].includes(key) && typeof child === 'string') {
         photoReferences.push(child);
       } else {
         visit(child, prefix ? `${prefix}.${key}` : key);
@@ -273,7 +273,9 @@ function RecordDetails({ record, resource, onPhoto }) {
           <h3>{ADMIN_COPY.documents}</h3>
           <div className="admin-photo-list">
             {record.documents.map((document) => (
-              <button type="button" className="btn btn--secondary btn--sm" key={document.id} onClick={() => onPhoto(document.photo_ref)}>
+              <button type="button" className="btn btn--secondary btn--sm" key={document.id} onClick={() => (
+                document.photo_ref ? onPhoto(document.photo_ref) : onDocument(document.id)
+              )}>
                 <Eye aria-hidden="true" size={16} />{humanize(document.doc_type)}
               </button>
             ))}
@@ -304,7 +306,7 @@ function RecordDetails({ record, resource, onPhoto }) {
           </div>
         </section>
       ) : null}
-      {resource === 'applications' && record.status === 'pending' ? <p className="admin-detail-hint">{ADMIN_COPY.applicationReviewHint}</p> : null}
+      {resource === 'applications' && ['pending', 'submitted', 'under_review', 'needs_revision'].includes(record.status) ? <p className="admin-detail-hint">{ADMIN_COPY.applicationReviewHint}</p> : null}
     </div>
   );
 }
@@ -434,6 +436,22 @@ function AdminWorkspace({ pageKey }) {
 
   const reload = () => setRetry((value) => value + 1);
   const closePhoto = useCallback(() => setPhotoRef(''), []);
+  const openApplicationDocument = useCallback(async (documentId) => {
+    const newTab = window.open('about:blank', '_blank');
+    if (!newTab) {
+      setError('Allow pop-ups to open the authorized application document.');
+      return;
+    }
+    newTab.opener = null;
+    try {
+      const result = await adminService.getApplicationDocumentUrl(documentId);
+      if (!result?.url) throw new Error('The authorized document link was not returned.');
+      newTab.location.replace(result.url);
+    } catch (documentError) {
+      newTab.close();
+      setError(documentError.message || 'Unable to open this application document.');
+    }
+  }, []);
   const cancelConfirmation = useCallback(() => setDialog(null), []);
   const showFlash = (message) => {
     setFlash(message);
@@ -604,22 +622,39 @@ function AdminWorkspace({ pageKey }) {
               success: ADMIN_COPY.deleted,
             })} aria-label={`${ADMIN_COPY.delete}: ${record.name}`} title={ADMIN_COPY.delete}><Trash2 aria-hidden="true" size={16} /></button>
           ) : null}
-          {target === 'applications' && record.status === 'pending' ? (
+          {target === 'applications' && ['pending', 'submitted', 'under_review'].includes(record.status) ? (
             <>
-              <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
+              {['pending', 'submitted'].includes(record.status) ? (
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
+                  title: ADMIN_COPY.reviewTitle,
+                  message: ADMIN_COPY.startReviewMessage,
+                  confirmLabel: ADMIN_COPY.startReview,
+                  onConfirm: () => adminService.startReviewApplication(record.type, record.id),
+                })}>{ADMIN_COPY.startReview}</button>
+              ) : null}
+              {record.status === 'under_review' ? <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
                 title: ADMIN_COPY.reviewTitle,
                 message: ADMIN_COPY.approveApplicationMessage,
                 confirmLabel: ADMIN_COPY.approve,
                 fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea' }],
                 onConfirm: (values) => adminService.approveApplication(record.type, record.id, { note: values.note || '' }),
-              })}>{ADMIN_COPY.approve}</button>
-              <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
+              })}>{ADMIN_COPY.approve}</button> : null}
+              {record.status === 'under_review' ? (
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
+                  title: ADMIN_COPY.reviewTitle,
+                  message: ADMIN_COPY.requestRevisionMessage,
+                  confirmLabel: ADMIN_COPY.requestRevision,
+                  fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea', required: true }],
+                  onConfirm: (values) => adminService.requestRevisionApplication(record.type, record.id, { note: values.note }),
+                })}>{ADMIN_COPY.requestRevision}</button>
+              ) : null}
+              {record.status === 'under_review' ? <button type="button" className="btn btn--secondary btn--sm" onClick={() => openConfirmation({
                 title: ADMIN_COPY.reviewTitle,
                 message: ADMIN_COPY.rejectApplicationMessage,
                 confirmLabel: ADMIN_COPY.reject,
                 fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea', required: true }],
                 onConfirm: (values) => adminService.rejectApplication(record.type, record.id, { note: values.note }),
-              })}>{ADMIN_COPY.reject}</button>
+              })}>{ADMIN_COPY.reject}</button> : null}
             </>
           ) : null}
           {target === 'riders' ? (
@@ -870,7 +905,7 @@ function AdminWorkspace({ pageKey }) {
               <div><h2 id="admin-detail-title">{ADMIN_COPY.detailsTitle}</h2><p>{ADMIN_COPY.resourceLabels[detail.resource]}</p></div>
               <button type="button" className="admin-icon-button" aria-label={ADMIN_COPY.close} onClick={() => setDetail(null)}><X aria-hidden="true" size={18} /></button>
             </div>
-            <RecordDetails record={dataForDetail} resource={detail.resource} onPhoto={setPhotoRef} />
+            <RecordDetails record={dataForDetail} resource={detail.resource} onPhoto={setPhotoRef} onDocument={openApplicationDocument} />
             {detail.resource === 'restaurants' ? (
               <div className="admin-detail-action-row">
                 <button type="button" className="btn btn--secondary" onClick={() => changeDetailStatus({
@@ -885,22 +920,41 @@ function AdminWorkspace({ pageKey }) {
                 })}>{ADMIN_COPY.chooseStatus}</button>
               </div>
             ) : null}
-            {detail.resource === 'applications' && dataForDetail.status === 'pending' ? (
+            {detail.resource === 'applications' && ['pending', 'submitted', 'under_review'].includes(dataForDetail.status) ? (
               <div className="admin-detail-action-row">
-                <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
-                  title: ADMIN_COPY.reviewTitle,
-                  message: ADMIN_COPY.approveApplicationMessage,
-                  confirmLabel: ADMIN_COPY.approve,
-                  fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea' }],
-                  onConfirm: (values) => adminService.approveApplication(dataForDetail.type, dataForDetail.id, { note: values.note || '' }),
-                })}>{ADMIN_COPY.approve}</button>
-                <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
-                  title: ADMIN_COPY.reviewTitle,
-                  message: ADMIN_COPY.rejectApplicationMessage,
-                  confirmLabel: ADMIN_COPY.reject,
-                  fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea', required: true }],
-                  onConfirm: (values) => adminService.rejectApplication(dataForDetail.type, dataForDetail.id, { note: values.note }),
-                })}>{ADMIN_COPY.reject}</button>
+                {['pending', 'submitted'].includes(dataForDetail.status) ? (
+                  <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
+                    title: ADMIN_COPY.reviewTitle,
+                    message: ADMIN_COPY.startReviewMessage,
+                    confirmLabel: ADMIN_COPY.startReview,
+                    onConfirm: () => adminService.startReviewApplication(dataForDetail.type, dataForDetail.id),
+                  })}>{ADMIN_COPY.startReview}</button>
+                ) : null}
+                {dataForDetail.status === 'under_review' ? (
+                  <>
+                    <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
+                      title: ADMIN_COPY.reviewTitle,
+                      message: ADMIN_COPY.approveApplicationMessage,
+                      confirmLabel: ADMIN_COPY.approve,
+                      fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea' }],
+                      onConfirm: (values) => adminService.approveApplication(dataForDetail.type, dataForDetail.id, { note: values.note || '' }),
+                    })}>{ADMIN_COPY.approve}</button>
+                    <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
+                      title: ADMIN_COPY.reviewTitle,
+                      message: ADMIN_COPY.requestRevisionMessage,
+                      confirmLabel: ADMIN_COPY.requestRevision,
+                      fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea', required: true }],
+                      onConfirm: (values) => adminService.requestRevisionApplication(dataForDetail.type, dataForDetail.id, { note: values.note }),
+                    })}>{ADMIN_COPY.requestRevision}</button>
+                    <button type="button" className="btn btn--secondary" onClick={() => openConfirmation({
+                      title: ADMIN_COPY.reviewTitle,
+                      message: ADMIN_COPY.rejectApplicationMessage,
+                      confirmLabel: ADMIN_COPY.reject,
+                      fields: [{ key: 'note', label: ADMIN_COPY.applicationNote, type: 'textarea', required: true }],
+                      onConfirm: (values) => adminService.rejectApplication(dataForDetail.type, dataForDetail.id, { note: values.note }),
+                    })}>{ADMIN_COPY.reject}</button>
+                  </>
+                ) : null}
               </div>
             ) : null}
             <div className="admin-dialog__actions"><button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>{ADMIN_COPY.close}</button></div>

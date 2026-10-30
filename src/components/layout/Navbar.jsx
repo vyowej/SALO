@@ -32,6 +32,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  const [modeError, setModeError] = useState('');
   const [scrolled, setScrolled] = useState(() => window.scrollY > 8);
   const closeAddressPicker = useCallback(() => setAddressOpen(false), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
@@ -92,10 +93,16 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
     return location.pathname === to || location.pathname.startsWith(`${to}/`);
   };
 
-  const selectView = (view) => {
-    if (!switchView(view)) return;
-    setMenuOpen(false);
-    navigate(viewDetails[view].to);
+  const selectView = async (view) => {
+    setModeError('');
+    try {
+      if (!await switchView(view)) return;
+      setMenuOpen(false);
+      navigate(viewDetails[view].to);
+    } catch (error) {
+      console.error('Unable to switch account mode.', error);
+      setModeError('We couldn’t switch modes. Please try again.');
+    }
   };
 
   const handleLogout = async () => {
@@ -233,6 +240,7 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
                       </>
                     ) : null}
                     {logoutError ? <p className="user-menu__error" role="alert">{logoutError}</p> : null}
+                    {modeError ? <p className="user-menu__error" role="alert">{modeError}</p> : null}
                     <button type="button" className="user-menu__item user-menu__item--logout" role="menuitem" onClick={handleLogout}><LogOut size={14} /> {SHELL_LABELS.logout}</button>
                   </div>
                 ) : null}

@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\AdminActionRequest;
 use App\Http\Requests\Admin\AdminListRequest;
 use App\Http\Resources\AdminCollection;
 use App\Http\Resources\AdminResource;
+use App\Models\RestaurantApplication;
 use App\Services\AdminService;
 use App\Services\ScheduleGenerator;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,11 @@ class AdminController extends Controller
 
     public function index(AdminListRequest $request, AdminService $service): AdminCollection
     {
-        $result = $service->list((string) $request->route('resource'), $request->validated());
+        $resource = (string) $request->route('resource');
+        if ($resource === 'applications') {
+            $this->authorize('viewAny', RestaurantApplication::class);
+        }
+        $result = $service->list($resource, $request->validated());
 
         return new AdminCollection($result['data'], $result['meta']);
     }
@@ -29,9 +34,15 @@ class AdminController extends Controller
     public function show(Request $request, AdminService $service): AdminResource
     {
         $resource = (string) $request->route('resource');
+        if ($resource === 'applications') {
+            $this->authorize('viewAny', RestaurantApplication::class);
+        }
         $record = $service->find($resource, (string) $request->route('id'));
-        if ($resource === 'applications' && $record['type'] !== $request->route('type')) {
-            abort(404);
+        if ($resource === 'applications') {
+            $requestedType = (string) $request->route('type');
+            $matchesApplicationType = $record['type'] === $requestedType
+                || ($requestedType === 'partner' && $record['type'] === 'restaurant');
+            abort_unless($matchesApplicationType, 404);
         }
 
         return AdminResource::make($record);
@@ -71,12 +82,39 @@ class AdminController extends Controller
 
     public function applicationApprove(AdminActionRequest $request, AdminService $service): AdminResource
     {
+        $this->authorize('review', RestaurantApplication::class);
+
         return AdminResource::make($service->decideApplication((string) $request->route('type'), (string) $request->route('id'), true, $request->validated('note'), $request->user()));
     }
 
     public function applicationReject(AdminActionRequest $request, AdminService $service): AdminResource
     {
+        $this->authorize('review', RestaurantApplication::class);
+
         return AdminResource::make($service->decideApplication((string) $request->route('type'), (string) $request->route('id'), false, $request->validated('note'), $request->user()));
+    }
+
+    public function applicationRequestRevision(AdminActionRequest $request, AdminService $service): AdminResource
+    {
+        $this->authorize('review', RestaurantApplication::class);
+
+        return AdminResource::make($service->requestApplicationRevision(
+            (string) $request->route('type'),
+            (string) $request->route('id'),
+            $request->validated('note'),
+            $request->user(),
+        ));
+    }
+
+    public function applicationStartReview(AdminActionRequest $request, AdminService $service): AdminResource
+    {
+        $this->authorize('review', RestaurantApplication::class);
+
+        return AdminResource::make($service->startApplicationReview(
+            (string) $request->route('type'),
+            (string) $request->route('id'),
+            $request->user(),
+        ));
     }
 
     public function riderStatus(AdminActionRequest $request, AdminService $service): AdminResource

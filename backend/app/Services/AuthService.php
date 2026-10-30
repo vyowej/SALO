@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepository;
 use App\Repositories\Contracts\UserRepository;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
@@ -13,7 +14,11 @@ use Illuminate\Validation\ValidationException;
 
 class AuthService
 {
-    public function __construct(private readonly UserRepository $users) {}
+    public function __construct(
+        private readonly UserRepository $users,
+        private readonly AuthTokenService $tokens,
+        private readonly SessionRepository $sessions,
+    ) {}
 
     public function register(array $data, Request $request): User
     {
@@ -31,9 +36,6 @@ class AuthService
             'email' => $email,
             'phone' => $data['phone'] ?? null,
             'status' => 'active',
-            'capabilities' => ['customer'],
-            'memberships' => [],
-            'driver_state' => null,
             'email_verified_at' => null,
             'password' => Hash::make($data['password']),
         ]);
@@ -42,8 +44,11 @@ class AuthService
             app(AddressService::class)->create((string) $user->getAuthIdentifier(), $data['address']);
         }
 
+        $this->tokens->sendEmailVerification($user);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
+        $request->session()->put('salo.active_mode', 'customer');
+        $request->session()->forget('salo.selected_restaurant_id');
 
         return $user;
     }
@@ -56,10 +61,11 @@ class AuthService
             throw new AuthenticationException('Authentication is required.');
         }
 
-        // DB-INTEGRATION: hydrate the authenticated account from its durable repository on later requests.
-        $user = $this->users->update($user, []);
+        $user = $this->users->update($user, ['last_login_at' => now()]);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
+        $request->session()->put('salo.active_mode', 'customer');
+        $request->session()->forget('salo.selected_restaurant_id');
 
         return $user;
     }
@@ -86,7 +92,6 @@ class AuthService
 
     public function updateSettings(User $user, array $preferences): array
     {
-        // DB-INTEGRATION: merge supported settings fields into the durable account preference record.
         return $this->users->update($user, [
             'preferences' => array_replace($this->settings($user), $preferences),
         ])->preferences;
@@ -100,11 +105,10 @@ class AuthService
             ]);
         }
 
-        // DB-INTEGRATION: mark the account deactivated while preserving transaction history.
         $this->users->update($user, [
             'status' => 'deactivated',
-            'deactivation_reason' => $reason,
         ]);
+        $this->sessions->deleteForUser((int) $user->getAuthIdentifier());
         $this->logout($request);
     }
 }

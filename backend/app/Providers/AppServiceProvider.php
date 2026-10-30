@@ -2,11 +2,8 @@
 
 namespace App\Providers;
 
-use App\Auth\InMemoryUserProvider;
-use App\Repositories\Contracts\UserRepository;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -26,10 +23,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Auth::provider('salo-memory', function ($app, array $config) {
-            return new InMemoryUserProvider($app->make(UserRepository::class));
-        });
-
         RateLimiter::for('auth-login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
 
@@ -41,6 +34,13 @@ class AppServiceProvider extends ServiceProvider
             $identity = Str::lower((string) ($request->input('email') ?? $request->user()?->getAuthIdentifier()));
 
             return Limit::perMinute(max(1, (int) config('salo.auth.recovery_attempts_per_minute', 5)))
+                ->by($identity.'|'.$request->ip());
+        });
+
+        RateLimiter::for('auth-otp', function (Request $request) {
+            $identity = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            return Limit::perMinute(max(1, (int) config('salo.auth.otp_requests_per_minute', 5)))
                 ->by($identity.'|'.$request->ip());
         });
     }

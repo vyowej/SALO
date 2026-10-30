@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminController;
+use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
+use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
+use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\Api\V1\Business\BusinessController;
+use App\Http\Controllers\Api\V1\Auth\ActiveModeController;
 use App\Http\Controllers\Api\V1\Auth\CurrentAccountController;
 use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
@@ -10,9 +13,12 @@ use App\Http\Controllers\Api\V1\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\V1\Customer\AddressController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use App\Http\Controllers\Api\V1\Customer\SettingsController;
+use App\Http\Controllers\Api\V1\Locations\PsgcLocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('force.json')->group(function (): void {
+    Route::get('/locations/psgc', [PsgcLocationController::class, 'index']);
+
     Route::middleware('guest:web')->group(function (): void {
         Route::post('/auth/register', [RegisteredUserController::class, 'store']);
         Route::post('/auth/login', [AuthenticatedSessionController::class, 'store'])
@@ -26,10 +32,30 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('/auth/logout', [AuthenticatedSessionController::class, 'destroy']);
         Route::get('/auth/me', [CurrentAccountController::class, 'show']);
+        Route::post('/auth/mode', [ActiveModeController::class, 'update']);
+        Route::get('/applications/documents/{document}/download-url', [ApplicationDocumentController::class, 'temporaryUrl']);
+        Route::get('/private-documents/{document}', [ApplicationDocumentController::class, 'download'])
+            ->middleware('signed')
+            ->name('api.v1.private-documents.download');
         Route::post('/auth/email/verification/send', [EmailVerificationController::class, 'send'])
-            ->middleware('throttle:auth-recovery');
+            ->middleware('throttle:auth-otp');
         Route::post('/auth/email/verification/verify', [EmailVerificationController::class, 'verify'])
-            ->middleware('throttle:auth-recovery');
+            ->middleware('throttle:auth-otp');
+
+        Route::middleware('capability:customer')->prefix('applications/restaurants')->group(function (): void {
+            Route::post('/', [RestaurantApplicationController::class, 'store']);
+            Route::get('/mine', [RestaurantApplicationController::class, 'mine']);
+            Route::get('/{application}', [RestaurantApplicationController::class, 'show']);
+            Route::patch('/{application}', [RestaurantApplicationController::class, 'update']);
+            Route::post('/{application}/business-email/otp', [RestaurantApplicationController::class, 'sendBusinessEmailOtp'])
+                ->middleware('throttle:auth-otp');
+            Route::post('/{application}/business-email/verify', [RestaurantApplicationController::class, 'verifyBusinessEmail'])
+                ->middleware('throttle:auth-otp');
+            Route::post('/{application}/documents', [RestaurantApplicationController::class, 'uploadDocument']);
+            Route::delete('/{application}/documents/{document}', [RestaurantApplicationController::class, 'deleteDocument']);
+            Route::post('/{application}/photos', [RestaurantApplicationController::class, 'uploadPhoto']);
+            Route::post('/{application}/submit', [RestaurantApplicationController::class, 'submit']);
+        });
 
         Route::middleware('capability:customer')->prefix('customer')->group(function (): void {
             Route::get('/profile', [ProfileController::class, 'show']);
@@ -63,6 +89,8 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::get('/applications/{type}/{id}', [AdminController::class, 'show'])->defaults('resource', 'applications');
             Route::post('/applications/{type}/{id}/approve', [AdminController::class, 'applicationApprove']);
             Route::post('/applications/{type}/{id}/reject', [AdminController::class, 'applicationReject']);
+            Route::post('/applications/{type}/{id}/request-revision', [AdminController::class, 'applicationRequestRevision']);
+            Route::post('/applications/{type}/{id}/start-review', [AdminController::class, 'applicationStartReview']);
             Route::patch('/riders/{id}/status', [AdminController::class, 'riderStatus']);
             Route::get('/riders/{id}/proofs', [AdminController::class, 'riderProofs']);
             Route::post('/orders/{id}/cancel', [AdminController::class, 'cancelOrder']);
@@ -76,20 +104,8 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::post('/schedules/generate', [AdminController::class, 'generateSchedule']);
         });
 
-        Route::middleware(['auth:sanctum', 'restaurant.member'])->prefix('business')->group(function (): void {
-            Route::get('/dashboard', [BusinessController::class, 'dashboard']);
-            Route::get('/orders', [BusinessController::class, 'orders']);
-            Route::get('/orders/{id}', [BusinessController::class, 'orderDetail']);
-            Route::patch('/orders/{id}/status', [BusinessController::class, 'updateOrderStatus']);
-            Route::get('/menu', [BusinessController::class, 'menu']);
-            Route::get('/reservations', [BusinessController::class, 'reservations']);
-            Route::get('/tables', [BusinessController::class, 'tables']);
-            Route::get('/calendar', [BusinessController::class, 'calendar']);
-            Route::get('/profile', [BusinessController::class, 'profile']);
-            Route::get('/hours', [BusinessController::class, 'hours']);
-            Route::get('/staff', [BusinessController::class, 'staff']);
-            Route::get('/reports/{report}', [BusinessController::class, 'reports'])->whereIn('report', ['sales', 'orders-by-status', 'top-items']);
-            Route::get('/history', [BusinessController::class, 'history']);
-        });
+        Route::get('/manage/restaurants/{restaurant}/business', [BusinessWorkspaceController::class, 'show'])
+            ->middleware('restaurant.access:restaurant.view');
+
     });
 });

@@ -19,7 +19,7 @@ class EmailVerificationController extends Controller
         $user = $request->user();
         $tokens->sendEmailVerification($user);
 
-        return JsonResource::make(['message' => 'If verification is needed, a link will be sent to your email.'])
+        return JsonResource::make(['message' => 'If verification is needed, a code will be sent to your email.'])
             ->response();
     }
 
@@ -28,6 +28,6 @@ class EmailVerificationController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        return UserResource::make($tokens->verifyEmail($user, $request->validated('token')));
+        return UserResource::make($tokens->verifyEmail($user, $request->validated('code')));
     }
 }

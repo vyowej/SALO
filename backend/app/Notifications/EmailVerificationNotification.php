@@ -11,8 +11,7 @@ class EmailVerificationNotification extends Notification
     use Queueable;
 
     public function __construct(
-        public readonly string $token,
-        private readonly string $frontendUrl,
+        public readonly string $code,
     ) {}
 
     public function via(object $notifiable): array
@@ -22,12 +21,10 @@ class EmailVerificationNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = rtrim($this->frontendUrl, '/').'/verify-email?token='.rawurlencode($this->token);
-
         return (new MailMessage)
             ->subject('Verify your SALO email')
-            ->line('Confirm your email address to keep your SALO account details current.')
-            ->action('Verify email', $url)
-            ->line('If you did not create this account, you can ignore this message.');
+            ->line('Enter this code to verify your SALO email address:')
+            ->line($this->code)
+            ->line('This code expires in 10 minutes. If you did not create this account, you can ignore this message.');
     }
 }

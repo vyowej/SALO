@@ -1,6 +1,13 @@
 import { config } from '../config';
 
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+let requestMode = 'customer';
+let requestRestaurantId = null;
+
+export function setApiRequestContext(mode, restaurantId = null) {
+  requestMode = mode === 'restaurantOwner' ? 'business' : mode;
+  requestRestaurantId = restaurantId === null ? null : String(restaurantId);
+}
 
 export class ApiError extends Error {
   constructor(message, { status, code, fields } = {}) {
@@ -42,7 +49,10 @@ export async function apiRequest(path, {
   const normalizedMethod = method.toUpperCase();
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Accept', 'application/json');
-  if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
+  requestHeaders.set('X-SALO-Mode', requestMode);
+  if (requestRestaurantId) requestHeaders.set('X-SALO-Restaurant', requestRestaurantId);
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isFormData) requestHeaders.set('Content-Type', 'application/json');
   if (config.useMock) throw new Error('API requests are disabled while mock mode is enabled.');
   const apiBaseUrl = getApiBaseUrl();
 
@@ -54,7 +64,7 @@ export async function apiRequest(path, {
     method: normalizedMethod,
     credentials: 'include',
     headers: requestHeaders,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
   if (response.status === 204) return null;
@@ -67,10 +77,10 @@ export async function apiRequest(path, {
   }
   if (!response.ok) {
     const error = payload?.error;
-    throw new ApiError(error?.message || 'The request could not be completed.', {
+    throw new ApiError(error?.message || payload?.message || 'The request could not be completed.', {
       status: response.status,
       code: error?.code,
-      fields: error?.fields,
+      fields: error?.fields || payload?.errors,
     });
   }
 

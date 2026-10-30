@@ -2,6 +2,7 @@ import { barangays, cities, provinces, regions } from '../mock/locations/philipp
 import { defaultMockAddress, defaultMockCoordinates, mockPlaceSearchResults } from '../mock/locationData';
 import { locationSettings } from '../mock/locationSettings';
 import { config } from '../config';
+import { apiRequest } from './apiClient';
 
 const wait = (ms = config.mockDelay) => new Promise((resolve) => setTimeout(resolve, ms));
 const unsupportedProvider = () => {
@@ -11,6 +12,11 @@ const unsupportedProvider = () => {
 };
 
 const findByName = (list, term) => list.find((entry) => entry.name.toLowerCase().includes(term.toLowerCase()));
+const loadPsgcLocations = (level, parentCode) => {
+  const params = new URLSearchParams({ level });
+  if (parentCode) params.set('parent_code', parentCode);
+  return apiRequest(`/locations/psgc?${params.toString()}`);
+};
 
 export const locationService = {
   getDefaultMapCenter() {
@@ -18,24 +24,28 @@ export const locationService = {
   },
 
   async getRegions() {
+    if (!config.useMock) return loadPsgcLocations('region');
     await wait();
     unsupportedProvider();
     return regions;
   },
 
   async getProvinces(regionCode) {
+    if (!config.useMock) return loadPsgcLocations('province', regionCode);
     await wait(300);
     unsupportedProvider();
     return provinces[regionCode] || [];
   },
 
   async getCities(provinceCode) {
+    if (!config.useMock) return loadPsgcLocations('city', provinceCode);
     await wait(300);
     unsupportedProvider();
     return cities[provinceCode] || [];
   },
 
   async getBarangays(cityCode) {
+    if (!config.useMock) return loadPsgcLocations('barangay', cityCode);
     await wait(300);
     unsupportedProvider();
     return barangays[cityCode] || [];

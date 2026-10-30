@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Restaurant extends Model
+{
+    protected $fillable = [
+        'owner_user_id',
+        'name',
+        'branch_label',
+        'description',
+        'legal_name',
+        'contact_number',
+        'business_email',
+        'business_email_verified_at',
+        'psgc_code',
+        'street',
+        'latitude',
+        'longitude',
+        'logo_path',
+        'cover_path',
+        'delivery_radius_km',
+        'prep_minutes',
+        'is_24_7',
+        'status',
+        'is_published',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'business_email_verified_at' => 'datetime',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+            'delivery_radius_km' => 'decimal:2',
+            'is_24_7' => 'boolean',
+            'is_published' => 'boolean',
+        ];
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function staff(): HasMany
+    {
+        return $this->hasMany(RestaurantStaff::class);
+    }
+
+    public function applications(): HasMany
+    {
+        return $this->hasMany(RestaurantApplication::class);
+    }
+}

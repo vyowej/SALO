@@ -26,7 +26,6 @@ import ProfilePage from './pages/Profile/ProfilePage';
 import SettingsPage from './pages/Settings/SettingsPage';
 import PartnerApplyPage from './pages/PartnerApply/PartnerApplyPage';
 import RiderApplyPage from './pages/RiderApply/RiderApplyPage';
-import DashboardPage from './pages/Dashboard/DashboardPage';
 import BusinessPage from './pages/Business/BusinessPage';
 import RiderPage from './pages/Rider/RiderPage';
 import NotFoundPage from './pages/NotFound/NotFoundPage';
@@ -104,7 +103,7 @@ function App() {
               <Route path="/settings" element={<Layout><GuestFeatureRoute><SettingsPage /></GuestFeatureRoute></Layout>} />
               <Route path="/partner/apply" element={<Layout><PartnerApplyPage /></Layout>} />
               <Route path="/rider/apply" element={<Layout><RiderApplyPage /></Layout>} />
-              <Route path="/dashboard" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Layout><DashboardPage /></Layout></RequireCapability>} />
+              <Route path="/dashboard" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Navigate to="/business" replace /></RequireCapability>} />
               <Route path="/business/*" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Layout><BusinessPage /></Layout></RequireCapability>} />
               <Route path="/rider" element={<RequireCapability capability={USER_ROLES.RIDER}><Layout><RiderPage /></Layout></RequireCapability>} />
               <Route path="/admin/*" element={<RequireCapability capability={USER_ROLES.ADMIN}><Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><AdminPage /></Suspense></RequireCapability>} />
