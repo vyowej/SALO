@@ -1,0 +1,374 @@
+.business-reservations {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.business-reservations .business-page-heading,
+.business-reservations .business-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.business-reservations .business-page-heading h2,
+.business-reservations .business-page-heading p,
+.business-reservations .business-panel-heading h3,
+.business-reservations .business-panel-heading p {
+  margin: 0;
+}
+
+.business-reservations .business-page-heading h2 {
+  margin-bottom: var(--space-2);
+}
+
+.business-reservations .business-page-heading > div > p:last-child,
+.business-reservations .business-panel-heading p {
+  color: var(--text-muted);
+}
+
+.business-reservations label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.business-reservations input:not([type="checkbox"]),
+.business-reservations select,
+.business-reservations textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-control);
+  color: var(--text);
+  font: inherit;
+}
+
+.business-reservations input:hover,
+.business-reservations select:hover,
+.business-reservations textarea:hover {
+  border-color: var(--border);
+}
+
+.business-reservations input:focus-visible,
+.business-reservations select:focus-visible,
+.business-reservations textarea:focus-visible {
+  border-color: var(--primary);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.business-reservations input:disabled,
+.business-reservations select:disabled,
+.business-reservations textarea:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.business-reservations textarea {
+  resize: vertical;
+}
+
+.business-reservation-tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.business-reservation-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.8rem;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.business-reservation-tabs button.is-selected {
+  border-bottom-color: var(--primary);
+  color: var(--text);
+}
+
+.business-reservation-tabs button span {
+  display: inline-grid;
+  min-width: 1.4rem;
+  min-height: 1.4rem;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-dense);
+  font-size: var(--font-size-sm);
+}
+
+.business-reservation-section {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.business-reservation-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.business-reservation-toolbar label {
+  width: min(100%, 22rem);
+}
+
+.business-reservation-toolbar > span {
+  padding-bottom: var(--space-3);
+  color: var(--text-muted);
+}
+
+.business-reservation-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.business-reservation-card,
+.business-table-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-dense);
+}
+
+.business-reservation-card__main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.business-reservation-card__main h3,
+.business-reservation-card__main p,
+.business-table-card h3,
+.business-table-card p {
+  margin: 0;
+}
+
+.business-reservation-card__main h3,
+.business-table-card h3 {
+  margin-top: var(--space-1);
+}
+
+.business-reservation-card__main p,
+.business-table-card p {
+  color: var(--text-muted);
+}
+
+.business-reservation-card__heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.business-reservation-note {
+  color: var(--text) !important;
+}
+
+.business-reservation-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: capitalize;
+}
+
+.business-reservation-status--pending,
+.business-reservation-status--confirmed {
+  color: var(--primary-strong, var(--primary));
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.business-reservation-status--seated,
+.business-reservation-status--completed,
+.business-reservation-status--active {
+  color: var(--success, #1d6845);
+  background: color-mix(in srgb, var(--success, #238456) 10%, transparent);
+}
+
+.business-reservation-status--cancelled,
+.business-reservation-status--rejected,
+.business-reservation-status--no_show,
+.business-reservation-status--inactive {
+  color: var(--danger, #8b241f);
+  background: color-mix(in srgb, var(--danger, #b83a30) 10%, transparent);
+}
+
+.business-reservation-empty {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.business-reservation-empty h3,
+.business-reservation-empty p {
+  margin: 0;
+}
+
+.business-reservation-empty p {
+  color: var(--text-muted);
+}
+
+.business-table-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, .45fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-dense);
+}
+
+.business-table-form > div,
+.business-table-card > div:last-child,
+.business-reservation-actions,
+.business-reservation-reason > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.business-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+}
+
+.business-table-card {
+  align-items: flex-start;
+}
+
+.business-table-card > div:first-child {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.business-reservation-detail,
+.business-reservation-reason {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.business-reservation-detail > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.business-reservation-actions {
+  justify-content: flex-end;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.business-reservation-reason > div {
+  justify-content: flex-end;
+}
+
+.business-reservations .modal {
+  width: min(42rem, calc(100% - 1.5rem));
+  max-height: min(90dvh, 52rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.business-reservations .modal__header {
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.business-reservations .modal__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+@media (max-width: 760px) {
+  .business-table-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .business-table-form > div {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 540px) {
+  .business-reservations .business-page-heading,
+  .business-reservation-card,
+  .business-table-card,
+  .business-reservation-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .business-reservation-card > button {
+    width: 100%;
+  }
+
+  .business-table-form {
+    grid-template-columns: 1fr;
+  }
+
+  .business-table-form > div {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .business-table-card > div:last-child {
+    width: 100%;
+  }
+
+  .business-reservation-actions > button,
+  .business-reservation-reason > div > button {
+    flex: 1 1 100%;
+  }
+
+  .business-reservations .modal-backdrop {
+    padding: .5rem;
+  }
+
+  .business-reservations .modal {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    border-radius: var(--radius-md);
+  }
+
+  .business-reservations .modal__header,
+  .business-reservations .modal__body {
+    padding: var(--space-4);
+  }
+}

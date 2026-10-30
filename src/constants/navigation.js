@@ -59,6 +59,7 @@ export const SHELL_LABELS = {
     discover: 'Discover',
     activity: 'Your activity',
     workspace: 'Workspace',
+    operations: 'Restaurant operations',
     account: 'Account',
   },
   pages: {
@@ -99,8 +100,12 @@ export const SHELL_LABELS = {
     profile: 'Account',
     dashboard: 'Overview',
     business: 'Business',
+    menu: 'Menu',
     rider: 'Overview',
     admin: 'Overview',
+    team: 'Team',
+    reports: 'Reports',
+    history: 'Audit history',
     settings: 'Settings',
   },
 };
@@ -127,6 +132,10 @@ export const ROLE_PATHS = {
 };
 
 export function getShellRole(pathname, activeRole, capabilities) {
+  if ((pathname === '/business' || pathname.startsWith('/business/'))
+    && capabilities.includes(USER_ROLES.RESTAURANT_OWNER)) {
+    return USER_ROLES.RESTAURANT_OWNER;
+  }
   const routeRoles = {
     '/dashboard': USER_ROLES.RESTAURANT_OWNER,
     '/rider': USER_ROLES.RIDER,
@@ -160,17 +169,23 @@ export const NAVIGATION_GROUPS = {
   ],
   [USER_ROLES.RESTAURANT_OWNER]: [
     {
-      label: SHELL_LABELS.groups.workspace,
+      label: SHELL_LABELS.groups.operations,
       items: [
-        { label: SHELL_LABELS.nav.dashboard, path: '/dashboard', icon: 'store' },
-        { label: SHELL_LABELS.nav.business, path: '/business', icon: 'business' },
+        { label: SHELL_LABELS.nav.dashboard, path: '/business', icon: 'dashboard', permission: 'restaurant.view' },
+        { label: SHELL_LABELS.nav.business, path: '/business/profile', icon: 'business', permission: 'restaurant.view' },
+        { label: SHELL_LABELS.nav.orders, path: '/business/orders', icon: 'orders', permission: 'orders.view' },
+        { label: SHELL_LABELS.nav.reservations, path: '/business/reservations', icon: 'calendar', permission: 'reservations.view' },
+        { label: SHELL_LABELS.nav.menu, path: '/business/menu', icon: 'menu', permission: 'restaurant.view' },
+        { label: SHELL_LABELS.nav.team, path: '/business/team', icon: 'team', permission: 'team.view' },
+        { label: SHELL_LABELS.nav.reports, path: '/business/reports', icon: 'reports', permissions: ['reports.sales_reservations.view', 'reports.reservations.view'] },
+        { label: SHELL_LABELS.nav.history, path: '/business/history', icon: 'history', permission: 'audit.view' },
       ],
     },
     {
-      label: SHELL_LABELS.groups.activity,
+      label: SHELL_LABELS.groups.account,
       items: [
-        { label: SHELL_LABELS.nav.orders, path: '/orders', icon: 'orders' },
-        { label: SHELL_LABELS.nav.reservations, path: '/reservations', icon: 'calendar' },
+        { label: SHELL_LABELS.nav.profile, path: '/profile', icon: 'account' },
+        { label: SHELL_LABELS.nav.settings, path: '/settings', icon: 'settings' },
       ],
     },
   ],
@@ -230,6 +245,13 @@ export const PAGE_TITLES = [
   { path: '/settings', title: SHELL_LABELS.pages.settings },
   { path: '/dashboard', title: SHELL_LABELS.pages.dashboard },
   { path: '/business', title: SHELL_LABELS.pages.dashboard },
+  { path: '/business/profile', title: 'Business' },
+  { path: '/business/orders', title: 'Restaurant orders' },
+  { path: '/business/reservations', title: 'Restaurant reservations' },
+  { path: '/business/menu', title: 'Restaurant menu' },
+  { path: '/business/team', title: 'Restaurant team' },
+  { path: '/business/reports', title: 'Restaurant reports' },
+  { path: '/business/history', title: 'Restaurant audit history' },
   { path: '/rider', title: SHELL_LABELS.pages.rider },
   { path: '/admin', title: SHELL_LABELS.pages.admin },
   { path: '/', title: SHELL_LABELS.pages.home },

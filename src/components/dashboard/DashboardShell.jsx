@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bike,
+  BarChart3,
   CalendarDays,
   ChevronDown,
   CircleHelp,
+  History,
   Home,
   LayoutDashboard,
   LogOut,
@@ -19,6 +21,8 @@ import {
   Store,
   Sun,
   UserCircle2,
+  Users,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { useAuth, USER_ROLES } from '../../context/AuthContext';
@@ -38,6 +42,10 @@ const ICONS = {
   admin: ShieldCheck,
   dashboard: LayoutDashboard,
   business: Store,
+  menu: UtensilsCrossed,
+  team: Users,
+  reports: BarChart3,
+  history: History,
 };
 
 export function DashboardShell({ children }) {
@@ -55,7 +63,18 @@ export function DashboardShell({ children }) {
   const accountRef = useRef(null);
   const drawerRef = useRef(null);
   const activeRole = getShellRole(location.pathname, userRole, capabilities);
-  const groups = NAVIGATION_GROUPS[activeRole] || NAVIGATION_GROUPS[USER_ROLES.CUSTOMER];
+  const permissions = user?.memberships?.find(
+    (membership) => String(membership.restaurant_id) === String(user?.selected_restaurant_id),
+  )?.permissions || [];
+  const groups = (NAVIGATION_GROUPS[activeRole] || NAVIGATION_GROUPS[USER_ROLES.CUSTOMER])
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => (
+        (!item.permission || permissions.includes(item.permission))
+        && (!item.permissions || item.permissions.some((permission) => permissions.includes(permission)))
+      )),
+    }))
+    .filter((group) => group.items.length > 0);
   const normalizedQuery = navQuery.trim().toLocaleLowerCase();
   const visibleGroups = useMemo(() => groups
     .map((group) => ({
@@ -162,6 +181,8 @@ export function DashboardShell({ children }) {
           <div className="dashboard-nav-group__items">
             {group.items.map(({ label, path, icon }) => {
               const Icon = ICONS[icon];
+              const profileToolPaths = ['/business/profile/edit', '/business/photos', '/business/hours', '/business/publish'];
+              const businessProfileActive = path === '/business/profile' && profileToolPaths.includes(location.pathname);
               return (
                 <NavLink
                   key={path}
@@ -169,7 +190,7 @@ export function DashboardShell({ children }) {
                   end={path === '/'}
                   title={collapsed ? label : undefined}
                   aria-label={collapsed ? label : undefined}
-                  className={({ isActive }) => ['dashboard-nav-link', isActive ? 'is-active' : ''].filter(Boolean).join(' ')}
+                  className={({ isActive }) => ['dashboard-nav-link', isActive || businessProfileActive ? 'is-active' : ''].filter(Boolean).join(' ')}
                   onClick={() => setDrawerOpen(false)}
                 >
                   <Icon aria-hidden="true" size={19} />
