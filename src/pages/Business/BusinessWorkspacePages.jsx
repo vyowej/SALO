@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, Clock3, MapPin, UtensilsCrossed } from 'lucide-react';
 import config from '../../config';
 import { businessService } from '../../services/businessService';
+import { teamService } from '../../services/teamService';
 import { formatPeso } from '../../utils/formatPeso';
 import './BusinessWorkspacePages.css';
 
@@ -161,10 +162,12 @@ export function BusinessOverviewPage({ restaurantId, user, workspace, canViewOrd
   );
 }
 
-export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhotos, canManageHours }) {
+export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhotos, canManageHours, canViewTeam }) {
   const [preview, setPreview] = useState(null);
   const [menu, setMenu] = useState(null);
   const [profile, setProfile] = useState({});
+  const [team, setTeam] = useState(null);
+  const [teamError, setTeamError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -183,8 +186,13 @@ export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhoto
       })
       .catch((loadError) => { if (active) setError(loadError.message || 'Restaurant preview could not be loaded.'); })
       .finally(() => { if (active) setLoading(false); });
+    if (canViewTeam) {
+      teamService.getTeam(restaurantId, user, { page: 1, per_page: 5, status: 'active' })
+        .then((teamResult) => { if (active) setTeam(teamResult); })
+        .catch((loadError) => { if (active) setTeamError(loadError.message || 'Team summary could not be loaded.'); });
+    }
     return () => { active = false; };
-  }, [restaurantId, user]);
+  }, [canViewTeam, restaurantId, user]);
 
   const restaurant = preview?.restaurant;
   const profileRestaurant = profile;
@@ -193,6 +201,7 @@ export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhoto
     item.lifecycle_status === 'published' && item.is_available
   ));
   const photos = restaurant?.photos || [];
+  const teamMembers = (team?.members?.data || []).filter((member) => member.status === 'active');
 
   if (loading) return <p className="business-loading" role="status">Loading your customer-facing restaurant preview…</p>;
   if (error) return <p className="business-error" role="alert">{error}</p>;
@@ -267,6 +276,28 @@ export function BusinessPublicPage({ restaurantId, user, canEdit, canManagePhoto
           ) : null}
         </div>
       </article>
+      {canViewTeam ? (
+        <section className="business-public-team" aria-label="Internal team summary">
+          <div className="business-panel-heading">
+            <div><p className="business-eyebrow">Internal workspace · not shown to customers</p><h3>Our Team</h3></div>
+            <Link to="/business/team">View Team</Link>
+          </div>
+          {teamError ? <p className="business-error" role="alert">{teamError}</p> : team ? (
+            teamMembers.length ? (
+              <ul className="business-public-team__list">
+                {teamMembers.slice(0, 5).map((member) => (
+                  <li key={member.id}>
+                    <span className="business-public-team__avatar" aria-hidden="true">
+                      {(member.name || '?').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
+                    </span>
+                    <span><strong>{member.name}</strong><small>{member.position_name || member.position}</small></span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p>No active team members to display.</p>
+          ) : <p className="business-loading" role="status">Loading team summary…</p>}
+        </section>
+      ) : null}
     </div>
   );
 }

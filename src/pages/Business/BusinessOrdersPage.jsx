@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Button } from '../../components/ui/Button';
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog';
@@ -47,6 +47,8 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingOrderId, setSavingOrderId] = useState('');
+  const actionInFlight = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reasonTarget, setReasonTarget] = useState(null);
@@ -90,12 +92,21 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
     }
   }, [onAccessDenied, restaurantId, user]);
 
-  const transitionOrder = async (order, status, statusReason = null) => {
+  const transitionOrder = useCallback(async (order, status, statusReason = null) => {
+    if (actionInFlight.current) return false;
+    actionInFlight.current = true;
     setSaving(true);
+    setSavingOrderId(String(order.id));
     setError('');
     setNotice('');
     try {
       await businessService.updateBusinessOrderStatus(restaurantId, order.id, status, statusReason, user);
+      setOrders((current) => ({
+        ...current,
+        data: (current.data || []).map((item) => String(item.id) === String(order.id)
+          ? { ...item, status, cancel_reason: statusReason || item.cancel_reason }
+          : item),
+      }));
       setNotice(`Order ${order.reference_code} updated to ${statusLabel(status)}.`);
       await loadOrders();
       if (selectedOrder?.id === order.id) await openOrder(order.id);
@@ -105,9 +116,11 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
       setError(actionError.message || 'Order status could not be updated.');
       return false;
     } finally {
+      actionInFlight.current = false;
+      setSavingOrderId('');
       setSaving(false);
     }
-  };
+  }, [loadOrders, onAccessDenied, openOrder, restaurantId, selectedOrder, user]);
 
   const submitReason = async (event) => {
     event.preventDefault();
@@ -118,6 +131,41 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
       setReason('');
     }
   };
+
+  const statusActions = useCallback((order) => {
+    if (!canUpdate) return null;
+    const pending = saving && savingOrderId === String(order.id);
+    const nextAction = (status, label) => (
+      <Button disabled={saving} onClick={() => transitionOrder(order, status)}>
+        {pending ? 'Updating…' : label}
+      </Button>
+    );
+    const cancelAction = (status, label) => canCancel ? (
+      <Button variant="secondary" disabled={saving} onClick={() => { setReasonTarget({ order, status }); setReason(''); }}>{label}</Button>
+    ) : null;
+
+    if (order.status === 'placed') {
+      return <>{nextAction('confirmed', 'Accept order')}{cancelAction('rejected', 'Reject')}</>;
+    }
+    if (order.status === 'confirmed') {
+      return <>{nextAction('preparing', 'Start preparing')}{cancelAction('cancelled', 'Cancel order')}</>;
+    }
+    if (order.status === 'preparing') {
+      return <>{nextAction('ready', 'Mark as ready')}{cancelAction('cancelled', 'Cancel order')}</>;
+    }
+    if (order.status === 'ready' && order.order_type === 'pick_up') {
+      return (
+        <>
+          <Button disabled={saving} onClick={() => setConfirmTarget(order)}>{pending ? 'Updating…' : 'Mark as picked up'}</Button>
+          {cancelAction('cancelled', 'Cancel order')}
+        </>
+      );
+    }
+    if (order.status === 'ready' && order.order_type === 'delivery') {
+      return <p className="business-order-waiting">Waiting for rider assignment</p>;
+    }
+    return null;
+  }, [canCancel, canUpdate, saving, savingOrderId, transitionOrder]);
 
   const columns = useMemo(() => [
     { accessorKey: 'reference_code', header: 'Order' },
@@ -135,11 +183,16 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
     },
     { accessorFn: (row) => row.totals.total, id: 'total', header: 'Total', cell: ({ getValue }) => money(getValue()) },
     {
-      id: 'details',
-      header: '',
-      cell: ({ row }) => <Button variant="secondary" size="sm" onClick={() => openOrder(row.original.id)}>View details</Button>,
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <div className="business-order-row-actions">
+          <Button variant="secondary" size="sm" onClick={() => openOrder(row.original.id)}>View details</Button>
+          {statusActions(row.original)}
+        </div>
+      ),
     },
-  ], [openOrder]);
+  ], [openOrder, statusActions]);
 
   // TanStack Table is required for this data-heavy view and is intentionally not compiler-memoized.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -150,45 +203,6 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
     manualPagination: true,
   });
 
-  const statusActions = (order) => {
-    if (!canUpdate) return null;
-    if (order.status === 'placed') {
-      return (
-        <>
-          <Button disabled={saving} onClick={() => transitionOrder(order, 'confirmed')}>Accept order</Button>
-          {canCancel ? <Button variant="secondary" disabled={saving} onClick={() => { setReasonTarget({ order, status: 'rejected' }); setReason(''); }}>Reject</Button> : null}
-        </>
-      );
-    }
-    if (order.status === 'confirmed') {
-      return (
-        <>
-          <Button disabled={saving} onClick={() => transitionOrder(order, 'preparing')}>Start preparing</Button>
-          {canCancel ? <Button variant="secondary" disabled={saving} onClick={() => { setReasonTarget({ order, status: 'cancelled' }); setReason(''); }}>Cancel order</Button> : null}
-        </>
-      );
-    }
-    if (order.status === 'preparing') {
-      return (
-        <>
-          <Button disabled={saving} onClick={() => transitionOrder(order, 'ready')}>Mark ready</Button>
-          {canCancel ? <Button variant="secondary" disabled={saving} onClick={() => { setReasonTarget({ order, status: 'cancelled' }); setReason(''); }}>Cancel order</Button> : null}
-        </>
-      );
-    }
-    if (order.status === 'ready' && order.order_type === 'pick_up') {
-      return (
-        <>
-          <Button disabled={saving} onClick={() => setConfirmTarget(order)}>Mark collected</Button>
-          {canCancel ? <Button variant="secondary" disabled={saving} onClick={() => { setReasonTarget({ order, status: 'cancelled' }); setReason(''); }}>Cancel order</Button> : null}
-        </>
-      );
-    }
-    if (order.status === 'ready' && order.order_type === 'delivery') {
-      return <p className="business-order-waiting">Waiting for rider assignment</p>;
-    }
-    return null;
-  };
   const selectedOrderActions = selectedOrder ? statusActions(selectedOrder) : null;
 
   if (!canView) return <p className="business-error" role="alert">You do not have permission to view orders.</p>;
@@ -248,7 +262,7 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
                 {table.getRowModel().rows.map((row) => (
                   <tr key={row.id}>{row.getVisibleCells().map((cell) => {
                     const header = cell.column.columnDef.header;
-                    const label = typeof header === 'string' && header ? header : cell.column.id === 'details' ? 'Actions' : cell.column.id;
+                    const label = typeof header === 'string' && header ? header : cell.column.id;
                     return <td key={cell.id} data-label={label}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>;
                   })}</tr>
                 ))}

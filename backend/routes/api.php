@@ -153,6 +153,11 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
                 ->middleware('restaurant.access:restaurant.publish');
             Route::post('/close', [RestaurantPageController::class, 'close'])
                 ->middleware('restaurant.access:restaurant.publish');
+            Route::post('/deactivate', [RestaurantPageController::class, 'deactivate'])
+                ->middleware('restaurant.access:restaurant.publish');
+            Route::post('/reactivate', [RestaurantPageController::class, 'reactivate'])
+                ->middleware('restaurant.access:restaurant.publish')
+                ->name('business.restaurants.reactivate');
         });
 
         Route::get('/manage/restaurants/{restaurant}/team', [TeamController::class, 'index'])

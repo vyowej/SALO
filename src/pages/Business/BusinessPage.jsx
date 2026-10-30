@@ -67,6 +67,7 @@ export default function BusinessPage() {
   const [workspace, setWorkspace] = useState(null);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState('');
+  const [businessAccessDeniedFor, setBusinessAccessDeniedFor] = useState('');
   const loading = switching || (
     activeView === USER_ROLES.RESTAURANT_OWNER
     && Boolean(selectedRestaurantId)
@@ -84,6 +85,10 @@ export default function BusinessPage() {
     try {
       const refreshedUser = await refreshUser();
       const membership = refreshedUser?.memberships?.find((item) => String(item.restaurant_id) === String(selectedRestaurantId));
+      if (membership?.restaurant_status === 'inactive' && membership.role !== 'owner') {
+        setBusinessAccessDeniedFor(String(selectedRestaurantId));
+        return true;
+      }
       if (membership?.status === 'active') return false;
       window.sessionStorage.setItem('salo.business.accessChanged', 'true');
       await switchView(USER_ROLES.CUSTOMER);
@@ -174,6 +179,21 @@ export default function BusinessPage() {
     );
   }
 
+  if (businessAccessDeniedFor === String(selectedRestaurantId)
+    || (workspace?.restaurant?.status === 'inactive' && selectedMembership?.role !== 'owner')
+    || (selectedMembership?.restaurant_status === 'inactive' && selectedMembership.role !== 'owner')) {
+    return (
+      <div className="section-shell business-shell">
+        <section className="business-empty business-access-denied" role="alert">
+          <h1>Access Denied</h1>
+          <p>This business account has been deactivated by its Owner.</p>
+          <p>You no longer have access to this business workspace.</p>
+          <Link className="btn btn--secondary btn--md" to="/">Back to Home</Link>
+        </section>
+      </div>
+    );
+  }
+
   const section = [...SECTIONS, ...BUSINESS_TOOLS].find((item) => item.to === currentPath);
   const permissionAccess = {
     'restaurant.publish': canPublish,
@@ -246,6 +266,7 @@ export default function BusinessPage() {
             canEdit={canEditPage}
             canManagePhotos={canManagePhotos}
             canManageHours={canManageHours}
+            canViewTeam={canViewTeam}
           />
         ) : ['/business/profile/edit', '/business/photos', '/business/hours', '/business/publish'].includes(currentPath) ? (
           <BusinessSetupSection

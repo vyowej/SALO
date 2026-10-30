@@ -140,6 +140,16 @@ function mockAudit(state, action, entityId, before, after) {
   });
 }
 
+export function recordBusinessAudit(restaurantId, user, action, before, after) {
+  if (!config.useMock) return;
+  const { state, save } = mockState(restaurantId, user);
+  mockAudit(state, action, restaurantId, before, after);
+  const entry = state.audit[0];
+  entry.actor = { id: String(user?.id || 'demo-user'), name: user?.name || 'Current user' };
+  entry.entity_type = 'restaurant';
+  save();
+}
+
 function mockFindInvitation(token) {
   const states = readStates();
   for (const [restaurantId, state] of Object.entries(states)) {
@@ -459,6 +469,7 @@ export const teamService = {
   updateTeamMember,
   removeTeamMember,
   transferTeamOwnership,
+  recordBusinessAudit,
   getAuditLogs,
   acceptTeamInvitation,
   activateTeamInvitation,

@@ -1,5 +1,6 @@
 import apiRequest, { apiUploadRequest } from './apiClient';
 import config from '../config';
+import { recordBusinessAudit } from './teamService';
 
 const mockStorageKey = 'salo.business.pages.mock.v1';
 const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -318,7 +319,8 @@ export async function getWorkspace(restaurantId, user) {
   return {
     restaurant: {
       ...state.restaurant,
-      is_read_only: state.restaurant.status === 'suspended',
+      is_read_only: ['suspended', 'inactive'].includes(state.restaurant.status),
+      is_deactivated: state.restaurant.status === 'inactive',
     },
     setup_checklist: [
       { key: 'profile', label: 'Complete restaurant profile', complete: Boolean(state.restaurant.category && state.restaurant.description), href: '/business/profile' },
@@ -516,6 +518,50 @@ export async function setRestaurantClosed(restaurantId, closed, reason, user) {
   state.restaurant.status = closed ? 'closed' : 'approved';
   save();
   return { status: state.restaurant.status };
+}
+
+export async function deactivateRestaurant(restaurantId, user) {
+  if (!config.useMock) {
+    return apiRequest(restaurantPath(restaurantId, '/deactivate'), { method: 'POST' });
+  }
+  const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
+    ?.permissions || [];
+  if (!permissions.includes('restaurant.publish')) throw new Error('Only the Owner can deactivate this business.');
+  const { state, save } = mockState(restaurantId, user);
+  if (state.restaurant.status === 'suspended') {
+    throw new Error('A suspended restaurant can only be resolved by an administrator.');
+  }
+  const before = { status: state.restaurant.status, is_published: state.restaurant.is_published };
+  state.restaurant.status = 'inactive';
+  state.restaurant.is_published = false;
+  save();
+  recordBusinessAudit(restaurantId, user, 'restaurant.deactivated', before, {
+    status: 'inactive',
+    is_published: false,
+  });
+  return { status: 'inactive', is_published: false };
+}
+
+export async function reactivateRestaurant(restaurantId, user) {
+  if (!config.useMock) {
+    return apiRequest(restaurantPath(restaurantId, '/reactivate'), { method: 'POST' });
+  }
+  const permissions = user?.memberships?.find((membership) => String(membership.restaurant_id) === String(restaurantId))
+    ?.permissions || [];
+  if (!permissions.includes('restaurant.publish')) throw new Error('Only the Owner can reactivate this business.');
+  const { state, save } = mockState(restaurantId, user);
+  if (state.restaurant.status !== 'inactive') {
+    throw new Error('Only a business deactivated by its Owner can be reactivated here.');
+  }
+  const before = { status: state.restaurant.status, is_published: state.restaurant.is_published };
+  state.restaurant.status = 'approved';
+  state.restaurant.is_published = false;
+  save();
+  recordBusinessAudit(restaurantId, user, 'restaurant.reactivated', before, {
+    status: 'approved',
+    is_published: false,
+  });
+  return { status: 'approved', is_published: false };
 }
 
 export async function getPublicationChecklist(restaurantId, user) {
@@ -960,6 +1006,8 @@ export const businessService = {
   deleteClosure,
   updatePublication,
   setRestaurantClosed,
+  deactivateRestaurant,
+  reactivateRestaurant,
   getPublicationChecklist,
   getMenu,
   createMenuCategory,

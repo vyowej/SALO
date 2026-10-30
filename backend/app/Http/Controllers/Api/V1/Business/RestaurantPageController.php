@@ -205,6 +205,22 @@ class RestaurantPageController extends Controller
         ));
     }
 
+    public function deactivate(BusinessWorkspaceRequest $request, RestaurantPageService $service): BusinessWorkspaceResource
+    {
+        $restaurant = $this->restaurant($request);
+        $this->authorize('publish', $restaurant);
+
+        return BusinessWorkspaceResource::make($service->deactivate($restaurant, $this->user($request)));
+    }
+
+    public function reactivate(BusinessWorkspaceRequest $request, RestaurantPageService $service): BusinessWorkspaceResource
+    {
+        $restaurant = $this->restaurant($request);
+        $this->authorize('publish', $restaurant);
+
+        return BusinessWorkspaceResource::make($service->reactivate($restaurant, $this->user($request)));
+    }
+
     private function restaurant(Request $request): Restaurant
     {
         $restaurant = $request->attributes->get('restaurant');

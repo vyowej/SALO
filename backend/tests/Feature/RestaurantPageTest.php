@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\Restaurant;
 use App\Models\RestaurantApplication;
+use App\Models\RestaurantStaff;
 use App\Models\User;
 use App\Models\PlatformAdmin;
 
@@ -65,6 +66,75 @@ class RestaurantPageTest extends TestCase
         $this->businessRequest($otherUser, $restaurant)
             ->patchJson($this->path($restaurant, '/profile'), ['name' => 'Unauthorized'])
             ->assertNotFound();
+    }
+
+    public function test_owner_deactivation_is_audited_and_blocks_staff_access(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $staff = $this->createUser('staff-'.uniqid().'@example.test');
+        RestaurantStaff::query()->create([
+            'restaurant_id' => $restaurant->getKey(),
+            'user_id' => $staff->getKey(),
+            'staff_role' => 'staff',
+            'status' => 'active',
+            'joined_at' => now(),
+        ]);
+        $restaurant->forceFill(['is_published' => true])->save();
+
+        $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/deactivate'))
+            ->assertOk()
+            ->assertJsonPath('data.status', 'inactive')
+            ->assertJsonPath('data.is_published', false);
+
+        $this->assertSame('inactive', $restaurant->fresh()->status);
+        $this->assertFalse((bool) $restaurant->fresh()->is_published);
+        $this->assertDatabaseHas('audit_logs', [
+            'restaurant_id' => $restaurant->getKey(),
+            'action' => 'restaurant.deactivated',
+        ]);
+
+        $this->businessRequest($staff, $restaurant)
+            ->getJson('/api/v1/manage/restaurants/'.$restaurant->getKey().'/business')
+            ->assertForbidden();
+
+        $this->businessRequest($owner, $restaurant)
+            ->getJson('/api/v1/manage/restaurants/'.$restaurant->getKey().'/business')
+            ->assertOk()
+            ->assertJsonPath('data.restaurant.status', 'inactive')
+            ->assertJsonPath('data.restaurant.is_read_only', true);
+    }
+
+    public function test_owner_can_reactivate_an_owner_deactivated_restaurant_but_it_stays_unpublished(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $restaurant->forceFill(['status' => 'inactive', 'is_published' => false])->save();
+
+        $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/reactivate'))
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.is_published', false);
+
+        $this->assertSame('approved', $restaurant->fresh()->status);
+        $this->assertFalse((bool) $restaurant->fresh()->is_published);
+        $this->assertDatabaseHas('audit_logs', [
+            'restaurant_id' => $restaurant->getKey(),
+            'actor_user_id' => $owner->getKey(),
+            'action' => 'restaurant.reactivated',
+        ]);
+    }
+
+    public function test_owner_cannot_reactivate_a_restaurant_suspended_by_admin(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $restaurant->forceFill(['status' => 'suspended'])->save();
+
+        $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/reactivate'))
+            ->assertForbidden();
+
+        $this->assertSame('suspended', $restaurant->fresh()->status);
     }
 
     public function test_publish_checklist_requires_a_published_orderable_menu_item(): void

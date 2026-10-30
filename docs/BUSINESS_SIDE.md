@@ -38,7 +38,7 @@ The B0 foundation and B1 application workflow are implemented. Added B1 applicat
 
 ## 3. Permission map contract
 
-The keys below are the proposed stable identifiers for the single `PermissionMap`. The implementation must not reproduce grants in controllers or client-side role-name checks.
+The keys below are the proposed stable identifiers for the single `PermissionMap`. The implementation must not reproduce grants in controllers or client-side role-name checks. `ownership.transfer.request` and `ownership.transfer.review` are proposed additions and are not implemented in the current PermissionMap.
 
 | Permission | Owner | Manager | Reservation Manager | Staff |
 |---|---:|---:|---:|---:|
@@ -61,6 +61,8 @@ The keys below are the proposed stable identifiers for the single `PermissionMap
 | `reports.reservations.view` | Yes | Yes | Yes | No |
 | `team.view` | Yes | Yes | No | No |
 | `team.manage` | Yes | No | No | No |
+| **[PROPOSED]** `ownership.transfer.request` | Yes | Yes | No | No |
+| **[PROPOSED]** `ownership.transfer.review` | Yes | No | No | No |
 | `audit.view` | Yes | No | No | No |
 
 Managers may see the team list, but only the Owner receives management actions. Owner audit history is not inherited by managers. A suspended restaurant is read-only for all memberships. Restaurant membership never grants platform capability.
@@ -88,12 +90,12 @@ The Owner membership shown by `/auth/me` and Team is synthesized from `restauran
 
 ### B3 â€” Team and hierarchy
 
-- Team page displays Owner > Manager > Reservation Manager and Staff, position descriptions, current holders, and a permission preview.
-- Owner and Manager can read members; Managers see masked emails and no management actions. Only Owner invites, changes position, suspends/reactivates, removes, and transfers ownership.
+- Team page displays Owner > Manager > Reservation Manager and Staff, current members, position descriptions, current holders, and a permission preview. Staff invitations and appointment are accessed in Settings → Staff & Permissions; only the Owner can perform them.
+- Owner and Manager can read members; Managers see masked emails and no staff-management actions. Only Owner invites, changes position, suspends/reactivates, and removes staff.
 - Owner enters an exact email only. Existing account lookup returns only the minimal confirmation identity and requires the invitee's acceptance. A new email creates an Invited account. At invitation time, create the `restaurant_staff` row with status Invited; the `invitations` row owns the token hash, expiry, and invitation status. Never accept a password from the Owner.
 - Existing invitees accept through an authenticated, email-matched endpoint. New invitees use the unauthenticated, token-gated activation endpoint to set their own password; it is rate-limited and single-use. Acceptance/activation changes the invitation to Accepted, the Invited account to Active when applicable, and the staff row to Active atomically. Expiry or cancellation changes the invitation to Expired/Cancelled and the staff row to Removed. Resending a pending invitation updates its expiry and token.
 - Invitation links expire after 72 hours; resend and cancel are available. Rate-limit lookup at 10/minute/owner and audit checks/invitations. This exact-email feature intentionally reveals limited account existence to a restaurant Owner; do not expose a directory or broader search.
-- One `restaurant_staff` row per user per restaurant, including Removed rows, which are reactivated rather than duplicated on re-invitation. Role changes/removal affect the next API request. Staff cannot self-escalate; no one can edit the Owner; the final Owner cannot leave without transfer. Ownership transfer requires current password and an Active Manager; `restaurants.owner_user_id` changes to the target, the target's staff row becomes Removed, and the previous Owner's existing row is created or reactivated as Manager in one transaction. A user may own multiple restaurants.
+- One `restaurant_staff` row per user per restaurant, including Removed rows, which are reactivated rather than duplicated on re-invitation. Role changes/removal affect the next API request. Staff cannot self-escalate; no one can edit the Owner; the final Owner cannot leave without transfer. Owner-initiated transfer is immediate only after current-password validation, explicit confirmation, and target identity review; the target must be an Active SALO account other than the current Owner and need not be restaurant staff. A Manager may request transfer to an Active SALO account other than the current Owner or requester; the target need not be restaurant staff. Manager lookup is exact-email only and returns minimal identity confirmation, not a browsable user directory. Only one request can be pending per restaurant. The request creates a notification for the current Owner; no ownership or permission changes occur until the Owner approves. The Owner can approve or reject. Approval atomically changes `restaurants.owner_user_id`, marks or creates the new Owner's staff row as Removed, and creates or reactivates the former Owner's row as Manager. The Manager requester remains a Manager. Request, approval/rejection, actor, previous/new Owner, and timestamp are audited. A user may own multiple restaurants.
 - Only Owner can read searchable/filterable audit history. Audit retention is 90 days.
 
 ### B4 â€” Menu
@@ -155,7 +157,7 @@ The Admin `restaurant` application queue includes both initial and sensitive-upd
 
 | Method and URL | Request | Response | Required permission |
 |---|---|---|---|
-| `GET /api/v1/manage/restaurants/{restaurant}/business` | â€” | Restaurant profile, membership role, `permissions[]`, suspended/read-only flag | `restaurant.view` |
+| `GET /api/v1/manage/restaurants/{restaurant}/business` | â€” | Restaurant profile, membership role, `permissions[]`, suspended/inactive read-only flag | `restaurant.view` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/profile` | Editable normal page fields | Updated profile | `restaurant.page.edit` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/sensitive-profile` | Legal name/address/permit proposal | Pending change request; live values unchanged | `restaurant.sensitive.edit` |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/preview` | â€” | Customer-visible restaurant resource | `restaurant.view` |
@@ -163,6 +165,8 @@ The Admin `restaurant` application queue includes both initial and sensitive-upd
 | `GET /api/v1/manage/restaurants/{restaurant}/business/publish-checklist` | â€” | Current publish checks, including the orderable-item check | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/unpublish` | Confirmation | Updated publish state | `restaurant.publish` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/close` | `closed`, optional reason | Updated operational state | `restaurant.publish` |
+| `POST /api/v1/manage/restaurants/{restaurant}/business/deactivate` | Confirmation | Sets status to `inactive`, unpublishes, and records before/after audit; Owner retains read-only access and other staff are denied | Owner-only `restaurant.publish` |
+| `POST /api/v1/manage/restaurants/{restaurant}/business/reactivate` | Confirmation | Owner-only reactivation from `inactive` to `approved`; remains unpublished; before/after audit | Owner-only `restaurant.publish`; Admin-suspended restaurants cannot use this endpoint |
 | `GET /api/v1/manage/restaurants/{restaurant}/business/photos` | â€” | Ordered photo list | `restaurant.view` |
 | `POST /api/v1/manage/restaurants/{restaurant}/business/photos` | Multipart `file`, `thumbnail`, `medium`, `kind`, `alt_text` | Photo resource with public URL | `restaurant.photos.manage` |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/business/photos/{photo}` | `alt_text`, `sort_order`, `is_primary` | Updated photo | `restaurant.photos.manage` |
@@ -188,11 +192,16 @@ B2 frontend includes the profile editor, Owner-only sensitive proposal, compress
 | `POST /api/v1/team-invitations/{token}/activate` | Unauthenticated `first_name`, `last_name`, `password`, `password_confirmation`; token in URL | Active invited account and membership | New invitee; rate-limited, valid unexpired single-use token |
 | `PATCH /api/v1/manage/restaurants/{restaurant}/team/{membership}` | `position` or `status` | Updated membership | `team.manage` |
 | `DELETE /api/v1/manage/restaurants/{restaurant}/team/{membership}` | Confirmation | Removed membership | `team.manage` |
-| `POST /api/v1/manage/restaurants/{restaurant}/team/transfer-ownership` | `manager_id` (active Manager user ID), current `password` | New Owner; prior Owner becomes Manager | `team.manage` (Owner only) |
+| **[PROPOSED]** `POST /api/v1/manage/restaurants/{restaurant}/team/ownership-transfer-target-check` | Exact normalized `email` | Minimal identity confirmation for an Active account; no directory results | `ownership.transfer.request`; rate-limited |
+| **[PROPOSED]** `POST /api/v1/manage/restaurants/{restaurant}/team/ownership-transfer-requests` | `proposed_owner_user_id` from exact-email confirmation | Pending request and Owner notification; ownership unchanged | `ownership.transfer.request` (Active Manager only) |
+| **[PROPOSED]** `GET /api/v1/manage/restaurants/{restaurant}/team/ownership-transfer-requests` | â€” | Pending ownership request for Owner review | `ownership.transfer.review` |
+| **[PROPOSED]** `POST /api/v1/manage/restaurants/{restaurant}/team/ownership-transfer-requests/{request}/approve` | â€” | Transfer applied atomically; former Owner becomes Manager | `ownership.transfer.review` |
+| **[PROPOSED]** `POST /api/v1/manage/restaurants/{restaurant}/team/ownership-transfer-requests/{request}/reject` | Optional `reason` | Request rejected; ownership unchanged | `ownership.transfer.review` |
+| **[PROPOSED]** `POST /api/v1/manage/restaurants/{restaurant}/team/transfer-ownership` | `proposed_owner_user_id` (Active SALO account, not current Owner), current `password` | Immediate confirmed transfer; prior Owner becomes Manager | `team.manage` (Owner only) |
 | `GET /api/v1/manage/restaurants/{restaurant}/audit` | Search/action/date/page filters | Paginated before/after audit records | `audit.view` (Owner only) |
 | `POST /api/v1/admin/restaurants/{restaurant}/transfer-ownership` | Active Manager `manager_id`, required `reason` | New Owner; prior Owner becomes Manager | Admin capability |
 
-The Team response includes `positions` with permission previews and an `assignable` flag, `position_holders`, paginated `members` with a server-computed `can_manage_member` flag, pending `invitations`, and `can_manage`. Member filters are `search`, `position`, `status`, `page`, and `per_page`; Managers' search matches names only so masked emails cannot be inferred. Email-check and invitation audit entries store a one-way email hash rather than the searched address. A new account is created in `invited` state with temporary placeholder name values because the user schema requires names; the invitee replaces them with their own first and last names during activation. The Owner never sets or receives a password. Activation is not available to authenticated sessions; an already-active account must authenticate and use the acceptance endpoint. The exact-email existence check intentionally reveals limited account existence to an Owner; no directory or broader search is exposed.
+The Team response includes `positions` with permission previews and an `assignable` flag, `position_holders`, paginated `members` with a server-computed `can_manage_member` flag, pending `invitations`, and `can_manage`. Member filters are `search`, `position`, `status`, `page`, and `per_page`; Managers' search matches names only so masked emails cannot be inferred. Staff email-check and invitation audit entries store a one-way email hash rather than the searched address. A new account is created in `invited` state with temporary placeholder name values because the user schema requires names; the invitee replaces them with their own first and last names during activation. The Owner never sets or receives a password. Activation is not available to authenticated sessions; an already-active account must authenticate and use the acceptance endpoint. Ownership target lookup is a separate exact-email check for Active accounts and returns minimal identity confirmation; it does not expose a directory. Ownership requests and decisions retain actor/target IDs in audit history. The Manager-request and Owner-review routes, permissions, and persistence are **proposed only**; they are not implemented and must not be used until the design is approved.
 
 The Admin ownership-reassignment endpoint is in the Admin namespace and is not a Business route. Ownership-transfer events are included in the normal 90-day audit purge; whether to exempt them remains an owner decision.
 
@@ -273,7 +282,8 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 | Photo manager `/business/photos` | Logo, cover, gallery upload/reorder/alt text | Owner/Manager |
 | Hours and closures `/business/hours` | Weekly shifts, 24/7, closure calendar | Owner/Manager |
 | Publish checklist `/business/publish` | Readiness items, publish/unpublish/close controls | Owner |
-| Team `/business/team` | Hierarchy, permission preview, searchable/filterable membership and invitations | Read Owner/Manager; actions Owner |
+| Team `/business/team` | Appointed members, hierarchy, permission preview, searchable/filterable membership | Read Owner/Manager; member actions Owner |
+| Business Settings `/settings` in Business mode | Staff & Permissions, existing Owner-to-Manager transfer, proposed any-Active-account transfer/request review, business deactivation danger zone | Staff actions Owner-only; proposed ownership actions use permissions below |
 | Audit history `/business/history` | Searchable before/after event list | Owner only |
 | Menu `/business/menu` | Categories/items, lifecycle, price, tags, availability, quantities | Owner/Manager; Staff availability toggle only |
 | Orders `/business/orders` | Polling board, filters, status actions and new-order notice | Owner/Manager/Staff |
@@ -297,6 +307,7 @@ All pages must support `config.useMock`, use design tokens/shared components, sh
 - [x] Implement B2 management routes, frontend surfaces, and migration for documented entities; do not run the migration until a compatible backend environment is available.
 - [ ] Run backend feature tests and migration against the supported MySQL version, then complete B2 hand-testing.
 - [x] Implement B3 team hierarchy, invitations, membership management, ownership transfer, and Owner audit history using the documented schema.
+- [ ] Approve and implement the proposed Manager-request/Owner-review transfer flow and any-Active-account target policy; the `ownership_transfer_requests` schema and new permissions are not approved or implemented.
 - [ ] Run B3 backend tests and migration using a supported PHP runtime; the invitations migration is written but has not been run.
 - [ ] Complete B3 hand-testing of existing-account acceptance, new-account activation, membership changes, ownership transfer, and Owner-only audit history.
 - [x] Implement B4 categories, items, dietary tags, photos, availability, bulk publish, audit writes, quantity-reset scheduling, and the published/orderable publish check.

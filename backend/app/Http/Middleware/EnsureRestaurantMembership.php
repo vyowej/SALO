@@ -44,8 +44,22 @@ class EnsureRestaurantMembership
             abort_if($knownMembership, 403);
             abort(404);
         }
+        abort_if(
+            $restaurant->status === 'inactive'
+                && $membership['role'] !== 'owner',
+            403,
+        );
         abort_unless($policy->allows($user, $restaurant, $permission), 403);
-        abort_if(! $policy->mayWrite($restaurant) && ! $request->isMethod('GET') && ! $request->isMethod('HEAD'), 403);
+        $isOwnerReactivation = $request->routeIs('business.restaurants.reactivate')
+            && $membership['role'] === 'owner'
+            && $restaurant->status === 'inactive';
+        abort_if(
+            ! $policy->mayWrite($restaurant)
+                && ! $request->isMethod('GET')
+                && ! $request->isMethod('HEAD')
+                && ! $isOwnerReactivation,
+            403,
+        );
 
         $request->attributes->set('restaurant', $restaurant);
         $request->attributes->set('restaurant_membership', $membership);

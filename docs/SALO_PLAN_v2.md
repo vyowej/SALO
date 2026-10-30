@@ -185,6 +185,7 @@ User enters email, the system always answers "If that email exists, we sent a li
 - **New person:** the Owner enters an email and a position; the invitee gets a single-use link (valid 72 hours), sets their own password, and the membership moves from Invited to Active. The Owner never creates a password for someone else.
 - **Existing user:** the Owner searches by **exact email** (there is no browsable user list, to protect privacy); the user receives an invitation to accept.
 - Only the Owner can change or remove a position. Staff cannot raise their own role, and the last Owner cannot leave without transferring ownership.
+- **Ownership transfer:** the Owner can initiate a direct transfer to any Active SALO account except themself, after reviewing the target identity, confirming with their current password, and explicitly confirming the consequences. A Manager may request a transfer to any Active SALO account other than the current Owner or the requesting Manager; the target need not already belong to the restaurant. Manager lookup is exact-email only and returns minimal identity confirmation, not a browsable user directory. Only one Manager request may be pending per restaurant. The request creates a notification for the current Owner and does not change ownership or permissions until that Owner approves it; the Owner may reject it. The Owner's approval atomically transfers ownership, removes the new Owner's restaurant-staff membership if one exists, and creates or reactivates the former Owner's Manager membership. If no row exists for the new Owner, create one as Removed so the unique restaurant/user pair remains reusable. Record request, approval/rejection, previous/new Owner, actor, and timestamp in audit history. Owner-initiated transfers use the same ownership update and audit transaction.
 
 ### 5.6 Sensitive changes
 
@@ -856,6 +857,7 @@ Failures of external services (email, maps, routing) never leave partial records
 
 - **Customer deactivation:** settings, confirm password, show consequences, status Deactivated. Order and reservation history stays; personal data is anonymized after the retention period.
 - **Owner deactivation:** the restaurants become Inactive or Closed: no new orders or reservations, existing transactions are resolved or preserved, active discounts are deactivated, history is kept.
+- An Owner may reactivate a restaurant they deactivated (Inactive) from Business Settings; it returns to Approved and remains unpublished until the Owner publishes it again. A restaurant suspended by Admin is reinstated only by Admin.
 - **Restaurant deletion:** an owner cannot hard-delete a restaurant. The owner can close or deactivate it; only the status changes.
 - **Staff removal:** membership becomes Removed and access ends on the next request.
 - **Rider resign:** allowed with no active delivery and settled cash; status Resigned; capacity is freed; history stays.

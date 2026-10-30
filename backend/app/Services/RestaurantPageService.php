@@ -537,6 +537,74 @@ class RestaurantPageService
         });
     }
 
+    public function deactivate(Restaurant $restaurant, User $actor): array
+    {
+        return DB::transaction(function () use ($restaurant, $actor): array {
+            $locked = $this->pages->lockRestaurant((int) $restaurant->getKey());
+            abort_unless((int) $locked->owner_user_id === (int) $actor->getKey(), 403);
+            if ($locked->status === 'suspended') {
+                throw ValidationException::withMessages([
+                    'status' => ['A suspended restaurant can only be resolved by an administrator.'],
+                ]);
+            }
+
+            if ($locked->status !== 'inactive') {
+                $before = [
+                    'status' => $locked->status,
+                    'is_published' => (bool) $locked->is_published,
+                ];
+                $this->pages->updateRestaurant($locked, [
+                    'status' => 'inactive',
+                    'is_published' => false,
+                ]);
+                $this->record(
+                    $actor,
+                    $locked,
+                    'restaurant.deactivated',
+                    'restaurant',
+                    (string) $locked->getKey(),
+                    $before,
+                    ['status' => 'inactive', 'is_published' => false],
+                );
+            }
+
+            return ['status' => 'inactive', 'is_published' => false];
+        });
+    }
+
+    public function reactivate(Restaurant $restaurant, User $actor): array
+    {
+        return DB::transaction(function () use ($restaurant, $actor): array {
+            $locked = $this->pages->lockRestaurant((int) $restaurant->getKey());
+            abort_unless((int) $locked->owner_user_id === (int) $actor->getKey(), 403);
+            if ($locked->status !== 'inactive') {
+                throw ValidationException::withMessages([
+                    'status' => ['Only a restaurant deactivated by its Owner can be reactivated here.'],
+                ]);
+            }
+
+            $before = [
+                'status' => $locked->status,
+                'is_published' => (bool) $locked->is_published,
+            ];
+            $this->pages->updateRestaurant($locked, [
+                'status' => 'approved',
+                'is_published' => false,
+            ]);
+            $this->record(
+                $actor,
+                $locked,
+                'restaurant.reactivated',
+                'restaurant',
+                (string) $locked->getKey(),
+                $before,
+                ['status' => 'approved', 'is_published' => false],
+            );
+
+            return ['status' => 'approved', 'is_published' => false];
+        });
+    }
+
     private function pendingSensitiveUpdate(Restaurant $restaurant): ?array
     {
         $application = $this->applications->findPendingSensitiveUpdate((int) $restaurant->getKey());

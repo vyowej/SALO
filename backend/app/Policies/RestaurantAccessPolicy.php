@@ -24,7 +24,7 @@ class RestaurantAccessPolicy
 
     public function mayWrite(Restaurant $restaurant): bool
     {
-        return $restaurant->status !== 'suspended';
+        return ! in_array($restaurant->status, ['suspended', 'inactive'], true);
     }
 
     public function contains(Restaurant $restaurant, Model $resource): bool

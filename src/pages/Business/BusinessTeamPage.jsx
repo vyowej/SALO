@@ -40,7 +40,7 @@ function localDate(value) {
   return new Date(value).toLocaleDateString();
 }
 
-export default function BusinessTeamPage({ restaurantId, user, readOnly, onAccessDenied }) {
+export default function BusinessTeamPage({ restaurantId, user, readOnly, onAccessDenied, variant = 'team' }) {
   const { refreshUser, updateUser } = useAuth();
   const canManage = useCan('team.manage', restaurantId) && !readOnly;
   const [team, setTeam] = useState(null);
@@ -57,6 +57,7 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [localInviteLink, setLocalInviteLink] = useState('');
+  const settingsMode = variant === 'settings';
 
   const loadTeam = useCallback(async (nextFilters = filters) => {
     setLoading(true);
@@ -149,7 +150,10 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
 
   const handleTransfer = async (event) => {
     event.preventDefault();
-    if (!transferManager || !window.confirm('Transfer restaurant ownership? You will become a Manager.')) return;
+    const newOwner = managers.find((manager) => String(manager.user_id) === String(transferManager));
+    if (!newOwner || !window.confirm(
+      `Transfer Business Ownership?\n\nCurrent owner: ${user?.name || 'You'}\nNew owner: ${newOwner.name}\n\nYou will become a Manager and lose Owner permissions.`,
+    )) return;
     await withAction(async () => {
       await teamService.transferTeamOwnership(restaurantId, transferManager, transferPassword, user);
       if (config.useMock) {
@@ -253,23 +257,25 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
     <div className="business-team">
       <header className="business-team__heading">
         <div>
-          <p className="business-eyebrow">Restaurant team</p>
-          <h2>Team and hierarchy</h2>
-          <p>Membership changes take effect on the next request.</p>
+          <p className="business-eyebrow">{settingsMode ? 'Business settings' : 'Restaurant team'}</p>
+          <h2>{settingsMode ? 'Staff & permissions' : 'Team'}</h2>
+          <p>{settingsMode ? 'Invite staff and manage access for this restaurant.' : 'People currently appointed to this restaurant.'}</p>
         </div>
       </header>
 
       {error ? <p className="business-error" role="alert">{error}</p> : null}
       {notice ? <p className="business-success" role="status">{notice}</p> : null}
-      {localInviteLink ? (
+      {settingsMode && localInviteLink ? (
         <div className="team-local-invite-link">
           <a href={localInviteLink}>{localInviteLink}</a>
           <Button variant="secondary" size="sm" onClick={copyLocalInviteLink}>Copy invite link</Button>
         </div>
       ) : null}
-      {readOnly ? <p className="business-readonly" role="status">This restaurant is suspended. Team data is read-only.</p> : null}
+      {readOnly ? <p className="business-readonly" role="status">This restaurant is read-only. Team data and access changes are disabled.</p> : null}
 
-      <section className="team-hierarchy" aria-label="Team positions">
+      {settingsMode && !canManage && !readOnly ? <p className="business-readonly" role="status">Only the Owner can invite or change restaurant staff.</p> : null}
+
+      {!settingsMode ? <section className="team-hierarchy" aria-label="Team positions">
         {positions.map((position) => {
           const holders = team?.position_holders?.[position.key] || [];
           return (
@@ -282,9 +288,9 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
             </article>
           );
         })}
-      </section>
+      </section> : null}
 
-      <section className="business-team__card">
+      {!settingsMode ? <section className="business-team__card">
         <div className="business-team__section-heading">
           <div>
             <h3>What can each position do?</h3>
@@ -301,9 +307,9 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
         <ul className="team-permission-list">
           {(preview?.permissions || []).map((permission) => <li key={permission}>{permissionLabels[permission] || permission}</li>)}
         </ul>
-      </section>
+      </section> : null}
 
-      {canManage ? (
+      {settingsMode && canManage ? (
         <section className="business-team__card">
           <h3>Invite a team member</h3>
           <p>Search by exact email only. Existing accounts must accept; new invitees set their own name and password.</p>
@@ -353,7 +359,7 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
         </section>
       ) : null}
 
-      <section className="business-team__card">
+      {!settingsMode ? <section className="business-team__card">
         <div className="business-team__section-heading">
           <div>
             <h3>Members</h3>
@@ -403,9 +409,9 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
             </div>
           </>
         )}
-      </section>
+      </section> : null}
 
-      {team?.invitations?.length ? (
+      {settingsMode && team?.invitations?.length ? (
         <section className="business-team__card">
           <h3>Pending invitations</h3>
           <ul className="team-invitations">
@@ -436,7 +442,7 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
         </section>
       ) : null}
 
-      {canManage && managers.length ? (
+      {settingsMode && canManage && managers.length ? (
         <section className="business-team__card">
           <h3>Transfer ownership</h3>
           <p>Choose an active Manager. You will become a Manager after the transfer.</p>

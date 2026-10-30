@@ -248,8 +248,16 @@
   resize: vertical;
 }
 
-.business-orders__table td[data-label="Actions"] {
-  text-align: right;
+.business-order-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.business-order-row-actions > button {
+  min-height: 2.75rem;
 }
 
 .business-orders .modal {
@@ -334,8 +342,12 @@
     border-bottom: 0;
   }
 
-  .business-orders__table td[data-label="Actions"] {
-    text-align: left;
+  .business-order-row-actions {
+    justify-content: flex-start;
+  }
+
+  .business-order-row-actions > button {
+    flex: 1 1 9rem;
   }
 }
 
