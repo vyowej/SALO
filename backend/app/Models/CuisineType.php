@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class CuisineType extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = ['name', 'is_filipino'];
 
     protected function casts(): array

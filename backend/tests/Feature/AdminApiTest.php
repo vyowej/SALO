@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\RestaurantApplication;
 use App\Repositories\Contracts\AdminRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Stub\AdminFixtures;
@@ -34,6 +35,7 @@ class AdminApiTest extends TestCase
     public function test_admin_capability_can_access_admin_routes(): void
     {
         $this->actingAs($this->user(['customer', 'admin']), 'web')
+            ->withSession(['salo.active_mode' => 'admin'])
             ->getJson('/api/v1/admin/dashboard')->assertOk()->assertJsonStructure(['data' => ['totals', 'orders_per_day']]);
     }
 
@@ -67,11 +69,27 @@ class AdminApiTest extends TestCase
     {
         $this->asAdmin();
         $this->postJson('/api/v1/admin/restaurants', [])->assertUnprocessable();
-        $appId = AdminFixtures::id(301);
+        $applicant = $this->user(['customer']);
+        $application = RestaurantApplication::query()->create([
+            'submitted_by' => $applicant->getKey(),
+            'application_type' => 'initial',
+            'status' => 'under_review',
+            'draft_details' => [
+                'restaurant_name' => 'Sample Business 1',
+                'business_email' => 'business@example.test',
+                'psgc_code' => null,
+                'street' => null,
+                'latitude' => null,
+                'longitude' => null,
+            ],
+            'submitted_at' => now(),
+        ]);
+        $appId = $application->getKey();
         $this->postJson("/api/v1/admin/applications/partner/{$appId}/approve", [])
             ->assertOk()->assertJsonPath('data.status', 'approved');
+        $this->assertDatabaseHas('restaurants', ['name' => 'Sample Business 1', 'status' => 'approved']);
         $this->getJson('/api/v1/admin/restaurants?status=active')->assertOk()
-            ->assertJsonFragment(['name' => 'Sample Business 1', 'status' => 'active']);
+            ->assertJsonFragment(['name' => 'Sample Restaurant 1', 'status' => 'active']);
         $this->postJson('/api/v1/admin/applications/rider/'.AdminFixtures::id(304).'/reject', [])
             ->assertUnprocessable();
     }
@@ -154,7 +172,8 @@ class AdminApiTest extends TestCase
 
     private function asAdmin(): void
     {
-        $this->actingAs($this->user(['customer', 'admin']), 'web');
+        $this->actingAs($this->user(['customer', 'admin']), 'web')
+            ->withSession(['salo.active_mode' => 'admin']);
     }
 
     private function user(array $capabilities): User
@@ -162,7 +181,7 @@ class AdminApiTest extends TestCase
         return app(UserRepository::class)->create([
             'name' => 'Test Admin', 'email' => uniqid('admin-', true).'@example.test',
             'status' => 'active', 'capabilities' => $capabilities, 'memberships' => [],
-            'email_verified_at' => null, 'password' => Hash::make('Password123'),
+            'email_verified_at' => null, 'password_hash' => Hash::make('Password123'),
         ]);
     }
 }

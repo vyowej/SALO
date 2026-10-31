@@ -44,7 +44,7 @@ class DatabaseAuditLogRepository implements AuditLogRepository
         }
 
         return $query->orderByDesc('created_at')
-            ->orderByDesc('log_id')
+            ->orderByDesc('id')
             ->paginate(min(100, max(1, (int) ($filters['per_page'] ?? 15))));
     }
 

@@ -19,14 +19,11 @@ class PlatformSetting extends Model
 
     protected function casts(): array
     {
-        return [
-            'value' => 'array',
-            'updated_at' => 'datetime',
-        ];
+        return ['updated_at' => 'datetime'];
     }
 
     public function updater(): BelongsTo
     {
-        return $this->belongsTo(PlatformAdmin::class, 'updated_by', 'admin_id');
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

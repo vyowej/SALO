@@ -112,7 +112,7 @@ class DatabaseReservationRepository implements ReservationRepository
     {
         return ReservationSetting::query()->updateOrCreate(
             ['restaurant_id' => $restaurant->getKey()],
-            $attributes,
+            [...$attributes, 'updated_at' => now()],
         );
     }
 

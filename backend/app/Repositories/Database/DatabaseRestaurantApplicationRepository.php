@@ -7,6 +7,7 @@ use App\Models\Restaurant;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 
@@ -200,11 +201,17 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             }
 
             $details = $locked->draft_details ?? [];
-            $restaurant = Restaurant::query()->create([
+            $category = trim((string) ($details['category'] ?? ''));
+            if ($category !== '' && ! Schema::hasColumn('restaurants', 'category')) {
+                throw ValidationException::withMessages([
+                    'category' => ['Restaurant categories are not supported by the current database schema.'],
+                ]);
+            }
+
+            $restaurantAttributes = [
                 'owner_user_id' => $locked->submitted_by,
                 'name' => $details['restaurant_name'],
                 'description' => $details['description'] ?? null,
-                'category' => $details['category'] ?? null,
                 'contact_number' => $details['contact_number'] ?? null,
                 'business_email' => $details['business_email'],
                 'business_email_verified_at' => $details['business_email_verified_at'] ?? null,
@@ -217,7 +224,11 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'is_24_7' => (bool) ($details['is_24_7'] ?? false),
                 'status' => 'approved',
                 'is_published' => false,
-            ]);
+            ];
+            if (Schema::hasColumn('restaurants', 'category')) {
+                $restaurantAttributes['category'] = $category ?: null;
+            }
+            $restaurant = Restaurant::query()->create($restaurantAttributes);
             $cuisine = trim((string) ($details['cuisine'] ?? ''));
             if ($cuisine !== '') {
                 $cuisineType = \App\Models\CuisineType::query()->firstOrCreate(['name' => $cuisine]);
@@ -270,7 +281,7 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 ->get()
                 ->flatMap(fn (RestaurantApplication $approved): iterable => $approved->documents
                     ->where('doc_type', 'business_permit')
-                    ->where('verification_state', 'verified')
+                    ->where('verified', true)
                     ->map(fn ($document): array => [
                         'id' => (string) $document->getKey(),
                         'expiry_date' => $document->expiry_date?->toDateString(),
@@ -279,7 +290,7 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 ->all();
             if ($sensitiveDocuments->isNotEmpty()) {
                 $sensitiveDocuments->each(function ($document): void {
-                    $document->forceFill(['verification_state' => 'verified'])->save();
+                    $document->forceFill(['verified' => true])->save();
                 });
                 $before['permit_documents'] = $previousPermitDocuments;
                 $after['permit_documents'] = $sensitiveDocuments->map(fn ($document): array => [

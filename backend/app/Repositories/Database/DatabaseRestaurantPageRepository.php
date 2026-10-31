@@ -121,10 +121,10 @@ class DatabaseRestaurantPageRepository implements RestaurantPageRepository
     {
         $query = $restaurant->closureDates();
         if ($from !== null) {
-            $query->where('closure_date', '>=', $from);
+            $query->whereDate('closure_date', '>=', $from);
         }
         if ($to !== null) {
-            $query->where('closure_date', '<=', $to);
+            $query->whereDate('closure_date', '<=', $to);
         }
 
         return $query->get();

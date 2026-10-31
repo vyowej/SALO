@@ -107,6 +107,7 @@ class DatabaseMenuRepository implements MenuRepository
             ->where('restaurant_applications.application_type', 'initial')
             ->where('restaurant_applications.status', 'approved')
             ->where('application_documents.doc_type', 'halal_certificate')
+            ->where('application_documents.verified', true)
             ->where(function ($query): void {
                 $query->whereNull('application_documents.expiry_date')
                     ->orWhereDate('application_documents.expiry_date', '>=', now('Asia/Manila')->toDateString());

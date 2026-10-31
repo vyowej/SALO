@@ -13,16 +13,19 @@ class EnsurePlatformCapability
     {
         $user = $request->user();
         abort_unless($user instanceof User && in_array($capability, $user->capabilities ?? [], true), 403);
+        $activeMode = $request->hasSession()
+            ? (string) $request->session()->get('salo.active_mode', 'customer')
+            : 'customer';
         $expectedMode = match ($capability) {
             'admin' => 'admin',
             'driver' => 'driver',
             'business' => 'business',
             default => 'customer',
         };
-        abort_unless($user->active_mode === $expectedMode, 403);
+        abort_unless($activeMode === $expectedMode, 403);
         abort_if(
             $request->header('X-SALO-Mode') !== null
-                && $request->header('X-SALO-Mode') !== $user->active_mode,
+                && $request->header('X-SALO-Mode') !== $activeMode,
             403,
         );
 

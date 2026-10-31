@@ -116,7 +116,7 @@ class TeamService
         $this->expireDueInvitations($restaurant);
         $email = mb_strtolower(trim($email));
         $user = $this->team->findUserByEmail($email);
-        $this->record($actor, $restaurant, 'team.email_checked', 'user_lookup', hash('sha256', $email), null, [
+        $this->record($actor, $restaurant, 'team.email_checked', 'user_lookup', null, null, [
             'email_hash' => hash('sha256', $email),
             'account_exists' => $user !== null,
         ]);
@@ -173,7 +173,7 @@ class TeamService
                 [$firstName, $lastName] = $this->pendingName($data['invitee_name'] ?? null);
                 $user = $this->team->createInvitedUser([
                     'email' => $email,
-                    'password' => Hash::make(Str::random(64)),
+                    'password_hash' => Hash::make(Str::random(64)),
                     'first_name' => $firstName,
                     'last_name' => $lastName,
                     'status' => 'invited',
@@ -192,7 +192,6 @@ class TeamService
             }
             $staff->staff_role = $role;
             $staff->status = 'invited';
-            $staff->joined_at = null;
             $staff->save();
 
             $invitation = $this->team->createInvitation([
@@ -321,7 +320,6 @@ class TeamService
             $staff = $this->team->staffByUserIdForUpdate($restaurant, (int) $user->getKey());
             abort_unless($staff !== null && $staff->status === 'invited', 404);
             $staff->status = 'active';
-            $staff->joined_at = now();
             $staff->save();
             $invitation->status = 'accepted';
             $invitation->accepted_at = now();
@@ -365,12 +363,11 @@ class TeamService
             abort_unless($staff !== null && $staff->status === 'invited', 404);
             $user->first_name = trim($data['first_name']);
             $user->last_name = trim($data['last_name']);
-            $user->password = Hash::make($data['password']);
+            $user->password_hash = Hash::make($data['password']);
             $user->status = 'active';
             $user->email_verified_at = now();
             $user->save();
             $staff->status = 'active';
-            $staff->joined_at = now();
             $staff->save();
             $invitation->status = 'accepted';
             $invitation->accepted_at = now();
@@ -415,7 +412,6 @@ class TeamService
             $formerOwnerStaff = $this->team->staffForInvitation($lockedRestaurant, $actor);
             $formerOwnerStaff->staff_role = 'manager';
             $formerOwnerStaff->status = 'active';
-            $formerOwnerStaff->joined_at ??= now();
             $formerOwnerStaff->save();
             $lockedRestaurant->owner_user_id = $newOwner->getKey();
             $this->team->saveRestaurant($lockedRestaurant);
@@ -449,7 +445,6 @@ class TeamService
             $formerOwnerStaff = $this->team->staffForInvitation($lockedRestaurant, $formerOwner);
             $formerOwnerStaff->staff_role = 'manager';
             $formerOwnerStaff->status = 'active';
-            $formerOwnerStaff->joined_at ??= now();
             $formerOwnerStaff->save();
             $lockedRestaurant->owner_user_id = $newOwner->getKey();
             $this->team->saveRestaurant($lockedRestaurant);
@@ -521,7 +516,7 @@ class TeamService
             'position' => $staff->staff_role,
             'position_name' => self::POSITIONS[$staff->staff_role]['name'] ?? $staff->staff_role,
             'status' => $staff->status,
-            'joined_at' => $staff->joined_at?->toISOString(),
+            'joined_at' => $staff->created_at?->toISOString(),
             'last_active_at' => $user?->last_login_at?->toISOString(),
             'permissions' => $staff->status === 'active' ? PermissionMap::forRole($staff->staff_role) : [],
             'can_manage_member' => PermissionMap::allows($viewerRole, 'team.manage')
@@ -562,7 +557,7 @@ class TeamService
             'status' => $invitation->status,
             'expires_at' => $invitation->expires_at?->toISOString(),
         ];
-        if ($token !== null && app()->environment('local')) {
+        if ($token !== null && app()->environment(['local', 'testing'])) {
             $action = $invitation->user?->status === 'invited' ? 'activate' : 'accept';
             $data['invite_path'] = '/team-invitations/'.$token.'/'.$action;
         }
@@ -645,7 +640,7 @@ class TeamService
         Restaurant $restaurant,
         string $action,
         string $entityType,
-        string $entityId,
+        ?string $entityId,
         ?array $before,
         ?array $after,
     ): void {

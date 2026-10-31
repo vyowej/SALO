@@ -9,10 +9,17 @@ use App\Models\Restaurant;
 use App\Models\RestaurantStaff;
 use App\Models\RestaurantTable;
 use App\Models\User;
+use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Support\Carbon;
 
 class BusinessDiscountReportingTest extends \Tests\TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_owner_can_create_and_deactivate_a_restaurant_discount(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
@@ -21,13 +28,16 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
         $response = $request->postJson($this->discountPath($restaurant), $this->discountData())
             ->assertOk()
             ->assertJsonPath('data.type', 'percentage')
-            ->assertJsonPath('data.first_order_only', true)
+            ->assertJsonPath('data.first_order_only', false)
             ->assertJsonPath('data.funded_by', 'restaurant');
         $discountId = $response->json('data.id');
 
+        $unsupported = $request->postJson($this->discountPath($restaurant), $this->discountData(['code' => 'FIRST', 'first_order_only' => true]))
+            ->assertUnprocessable();
+        $unsupported->assertJsonStructure(['error' => ['fields' => ['first_order_only']]]);
         $request->postJson($this->discountPath($restaurant), $this->discountData(['code' => 'save']))
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['code']);
+            ->assertJsonStructure(['error' => ['fields' => ['code']]]);
 
         $request->deleteJson($this->discountPath($restaurant, '/'.$discountId))
             ->assertNoContent();
@@ -38,28 +48,33 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
         ]);
     }
 
-    public function test_discount_management_is_membership_and_permission_checked(): void
+    public function test_discount_management_hides_restaurants_without_membership(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         [, $otherRestaurant] = $this->createOwnerAndRestaurant();
+
+        $this->businessRequest($owner, $otherRestaurant)
+            ->getJson($this->discountPath($otherRestaurant))
+            ->assertNotFound();
+    }
+
+    public function test_discount_management_requires_the_management_permission(): void
+    {
+        [, $restaurant] = $this->createOwnerAndRestaurant();
         $staff = $this->createUser('staff-'.uniqid().'@example.test');
         RestaurantStaff::query()->create([
             'restaurant_id' => $restaurant->getKey(),
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
 
-        $this->businessRequest($owner, $otherRestaurant)
-            ->getJson($this->discountPath($otherRestaurant))
-            ->assertNotFound();
         $this->businessRequest($staff, $restaurant)
             ->getJson($this->discountPath($restaurant))
             ->assertForbidden();
     }
 
-    public function test_reservation_manager_gets_reservation_reports_and_calendar_events_only(): void
+    public function test_reservation_manager_gets_reservation_reports_and_calendar_events(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-10-30 12:00:00', 'Asia/Manila'));
         try {
@@ -74,7 +89,7 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
                 'user_id' => $owner->getKey(),
                 'table_id' => $table->getKey(),
                 'reference_code' => 'RSV-00000001',
-                'start_at' => Carbon::parse('2026-10-30 19:00:00', 'Asia/Manila'),
+                'start_at' => Carbon::parse('2026-10-30 19:00:00', 'Asia/Manila')->utc(),
                 'duration_minutes' => 90,
                 'guest_count' => 2,
                 'reserved_for_name' => 'Guest',
@@ -86,7 +101,7 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
                     'user_id' => $owner->getKey(),
                     'table_id' => $table->getKey(),
                     'reference_code' => $reference,
-                    'start_at' => Carbon::parse('2026-10-30 '.$startAt, 'Asia/Manila'),
+                    'start_at' => Carbon::parse('2026-10-30 '.$startAt, 'Asia/Manila')->utc(),
                     'duration_minutes' => 90,
                     'guest_count' => 2,
                     'reserved_for_name' => 'Guest',
@@ -99,18 +114,18 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
                 'closure_date' => '2026-10-31',
                 'reason' => 'Private event',
             ]);
+            self::assertCount(1, app(RestaurantPageRepository::class)->closures($restaurant, '2026-10-30', '2026-10-31'));
             $reservationManager = $this->createUser('reservation-manager-'.uniqid().'@example.test');
             RestaurantStaff::query()->create([
                 'restaurant_id' => $restaurant->getKey(),
                 'user_id' => $reservationManager->getKey(),
                 'staff_role' => 'reservation_manager',
                 'status' => 'active',
-                'joined_at' => now(),
             ]);
             $request = $this->businessRequest($reservationManager, $restaurant);
 
-            $request->getJson($this->reportPath($restaurant, 'reservations').'?from=2026-10-30&to=2026-10-30')
-                ->assertOk()
+            $reservationReport = $request->getJson($this->reportPath($restaurant, 'reservations').'?from=2026-10-30&to=2026-10-30');
+            $reservationReport->assertOk()
                 ->assertJsonPath('data.summary.reservations', 3);
             $request->getJson($this->reportPath($restaurant, 'no_show_rate').'?from=2026-10-30&to=2026-10-30')
                 ->assertOk()
@@ -123,19 +138,45 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
                 ->assertOk()
                 ->assertJsonFragment(['title' => 'RSV-00000001'])
                 ->assertJsonFragment(['title' => 'Closed · Private event']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
 
+    public function test_staff_calendar_does_not_include_reservation_events(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-30 12:00:00', 'Asia/Manila'));
+        try {
+            [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+            $table = RestaurantTable::query()->create([
+                'restaurant_id' => $restaurant->getKey(),
+                'table_number' => 'A1',
+                'capacity' => 4,
+                'status' => 'active',
+            ]);
+            Reservation::query()->create([
+                'user_id' => $owner->getKey(),
+                'table_id' => $table->getKey(),
+                'reference_code' => 'RSV-00000004',
+                'start_at' => Carbon::parse('2026-10-30 19:00:00', 'Asia/Manila')->utc(),
+                'duration_minutes' => 90,
+                'guest_count' => 2,
+                'reserved_for_name' => 'Guest',
+                'contact_phone' => '09123456789',
+                'status' => 'confirmed',
+            ]);
             $staff = $this->createUser('staff-'.uniqid().'@example.test');
             RestaurantStaff::query()->create([
                 'restaurant_id' => $restaurant->getKey(),
                 'user_id' => $staff->getKey(),
                 'staff_role' => 'staff',
                 'status' => 'active',
-                'joined_at' => now(),
             ]);
+
             $this->businessRequest($staff, $restaurant)
                 ->getJson($this->calendarPath($restaurant).'?start=2026-10-30T00:00:00%2B08:00&end=2026-11-01T00:00:00%2B08:00')
                 ->assertOk()
-                ->assertJsonMissing(['title' => 'RSV-00000001']);
+                ->assertJsonMissing(['title' => 'RSV-00000004']);
         } finally {
             Carbon::setTestNow();
         }
@@ -158,7 +199,6 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
-            'category' => 'Filipino',
             'status' => 'approved',
             'is_24_7' => true,
         ]);
@@ -170,7 +210,7 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Business',
             'last_name' => 'Tester',
             'status' => 'active',
@@ -179,7 +219,9 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
 
     private function businessRequest(User $user, Restaurant $restaurant): self
     {
-        return $this->actingAs($user, 'web')
+        self::assertContains('business', $user->capabilities);
+
+        $request = $this->actingAs($user, 'web')
             ->withSession([
                 'salo.active_mode' => 'business',
                 'salo.selected_restaurant_id' => (string) $restaurant->getKey(),
@@ -188,6 +230,8 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
                 'X-SALO-Mode' => 'business',
                 'X-SALO-Restaurant' => (string) $restaurant->getKey(),
             ]);
+
+        return $request;
     }
 
     private function discountData(array $overrides = []): array
@@ -197,7 +241,7 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
             'name' => 'First order deal',
             'description' => 'Test discount',
             'type' => 'percentage',
-            'first_order_only' => true,
+            'first_order_only' => false,
             'value' => 10,
             'min_order_amount' => 100,
             'max_discount' => 50,

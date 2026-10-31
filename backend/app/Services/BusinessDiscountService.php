@@ -9,6 +9,7 @@ use App\Repositories\Contracts\AuditLogRepository;
 use App\Repositories\Contracts\BusinessDiscountRepository;
 use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class BusinessDiscountService
 {
@@ -94,12 +95,11 @@ class BusinessDiscountService
 
     private function attributes(array $data): array
     {
-        return [
+        $attributes = [
             'code' => strtoupper(trim($data['code'])),
             'name' => trim($data['name']),
             'description' => isset($data['description']) ? trim($data['description']) ?: null : null,
             'type' => $data['type'],
-            'first_order_only' => (bool) $data['first_order_only'],
             'value' => $data['value'],
             'min_order_amount' => $data['min_order_amount'],
             'max_discount' => $data['max_discount'] ?? null,
@@ -109,6 +109,12 @@ class BusinessDiscountService
             'per_customer_limit' => $data['per_customer_limit'],
             'is_active' => (bool) $data['is_active'],
         ];
+
+        if (Schema::hasColumn('discounts', 'first_order_only')) {
+            $attributes['first_order_only'] = (bool) $data['first_order_only'];
+        }
+
+        return $attributes;
     }
 
     private function discountArray(Discount $discount): array

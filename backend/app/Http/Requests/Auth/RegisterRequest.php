@@ -16,8 +16,8 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'string', 'email', 'max:254'],
-            'phone' => ['nullable', 'string', 'max:40'],
+            'email' => ['required', 'string', 'email', 'max:190'],
+            'phone' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'string', 'confirmed', 'min:8', 'regex:/[A-Za-z]/', 'regex:/\d/'],
             'address' => ['sometimes', 'nullable', 'array'],
             'address.psgc_code' => ['nullable', 'string', 'max:12', 'exists:psgc_locations,code'],

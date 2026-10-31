@@ -14,13 +14,7 @@ class RestaurantStaff extends Model
         'user_id',
         'staff_role',
         'status',
-        'joined_at',
     ];
-
-    protected function casts(): array
-    {
-        return ['joined_at' => 'datetime'];
-    }
 
     public function user(): BelongsTo
     {

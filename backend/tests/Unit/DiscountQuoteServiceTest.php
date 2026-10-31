@@ -5,7 +5,7 @@ namespace Tests\Unit;
 use App\Models\Discount;
 use App\Services\DiscountQuoteService;
 use Illuminate\Support\Carbon;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class DiscountQuoteServiceTest extends TestCase
 {

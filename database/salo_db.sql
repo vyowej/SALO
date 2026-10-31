@@ -111,7 +111,7 @@ CREATE TABLE auth_tokens (
 -- BOOLEAN MODE). Plain LIKE 'zamboan%' uses idx_psgc_name.
 -- IMPORT ORDER: parents before children (region, province/district, city,
 -- sub-municipality, barangay), or SET FOREIGN_KEY_CHECKS = 0 during the
--- import and = 1 afterwards. 'district' (NCR) and 'submunicipality'
+-- import and = 1 afterwards. 'district' (NCR) and    'submunicipality'
 -- (Manila) levels exist so those rows import with their real parents.
 -- ---------------------------------------------------------------------
 CREATE TABLE psgc_locations (

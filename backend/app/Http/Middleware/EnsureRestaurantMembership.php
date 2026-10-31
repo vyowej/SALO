@@ -18,7 +18,10 @@ class EnsureRestaurantMembership
         $restaurantId = $request->route('restaurant');
 
         abort_unless($user !== null, 401);
-        abort_unless($user->active_mode === 'business', 403);
+        $activeMode = $request->hasSession()
+            ? (string) $request->session()->get('salo.active_mode', 'customer')
+            : 'customer';
+        abort_unless($activeMode === 'business', 403);
         abort_if(
             $request->header('X-SALO-Mode') !== null
                 && $request->header('X-SALO-Mode') !== 'business',
@@ -28,14 +31,17 @@ class EnsureRestaurantMembership
 
         /** @var Restaurant $restaurant */
         $restaurant = Restaurant::query()->findOrFail($restaurantId);
-        abort_unless((string) $user->selected_restaurant_id === (string) $restaurant->getKey(), 403);
+        $selectedRestaurantId = $request->hasSession()
+            ? $request->session()->get('salo.selected_restaurant_id')
+            : null;
+        abort_unless((string) $selectedRestaurantId === (string) $restaurant->getKey(), 403);
         abort_if(
             $request->header('X-SALO-Restaurant') !== null
                 && (string) $request->header('X-SALO-Restaurant') !== (string) $restaurant->getKey(),
             403,
         );
 
-        $membership = $policy->membership($user, $restaurant);
+        $membership = $this->policy->membership($user, $restaurant);
         if ($membership === null) {
             $knownMembership = $user->restaurantStaff()
                 ->where('restaurant_id', $restaurant->getKey())
@@ -49,12 +55,12 @@ class EnsureRestaurantMembership
                 && $membership['role'] !== 'owner',
             403,
         );
-        abort_unless($policy->allows($user, $restaurant, $permission), 403);
+        abort_unless($this->policy->allows($user, $restaurant, $permission), 403);
         $isOwnerReactivation = $request->routeIs('business.restaurants.reactivate')
             && $membership['role'] === 'owner'
             && $restaurant->status === 'inactive';
         abort_if(
-            ! $policy->mayWrite($restaurant)
+            ! $this->policy->mayWrite($restaurant)
                 && ! $request->isMethod('GET')
                 && ! $request->isMethod('HEAD')
                 && ! $isOwnerReactivation,

@@ -18,8 +18,8 @@ class AdminActionRequest extends FormRequest
         if ($resource === 'users') {
             return [
                 'name' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'string', 'max:120'],
-                'email' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'email', 'max:255'],
-                'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+                'email' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'email', 'max:190'],
+                'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
                 'capabilities' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'array'],
                 'capabilities.*' => ['in:customer,driver,admin'],
                 'password' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'string', 'min:8'],

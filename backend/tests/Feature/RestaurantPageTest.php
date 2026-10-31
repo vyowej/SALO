@@ -8,9 +8,16 @@ use App\Models\RestaurantApplication;
 use App\Models\RestaurantStaff;
 use App\Models\User;
 use App\Models\PlatformAdmin;
+use Tests\TestCase;
 
 class RestaurantPageTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_owner_can_edit_normal_profile_and_the_change_is_audited(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
@@ -148,7 +155,7 @@ class RestaurantPageTest extends TestCase
 
         $request->postJson($this->path($restaurant, '/publish'))
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['orderable_item']);
+            ->assertJsonStructure(['error' => ['fields' => ['orderable_item']]]);
 
         $this->assertFalse((bool) $restaurant->fresh()->is_published);
     }
@@ -196,7 +203,6 @@ class RestaurantPageTest extends TestCase
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
-            'category' => 'Filipino',
             'legal_name' => 'Original Legal Name',
             'status' => 'approved',
             'is_24_7' => true,
@@ -209,7 +215,7 @@ class RestaurantPageTest extends TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Business',
             'last_name' => 'Owner',
             'status' => 'active',

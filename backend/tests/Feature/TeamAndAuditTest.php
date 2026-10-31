@@ -13,11 +13,15 @@ use Tests\TestCase;
 
 class TeamAndAuditTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_new_invitee_sets_name_and_password_and_the_invitation_is_single_use(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
-        $this->app['env'] = 'local';
-
         $response = $this->businessRequest($owner, $restaurant)
             ->postJson($this->path($restaurant, '/team/invitations'), [
                 'email' => 'new.invitee@example.test',
@@ -52,7 +56,7 @@ class TeamAndAuditTest extends TestCase
             'status' => 'invited',
         ]);
 
-        Auth::logout();
+        Auth::guard('web')->logout();
         $this->postJson('/api/v1/team-invitations/'.$token.'/activate', [
             'first_name' => 'Alex',
             'last_name' => 'Rivera',
@@ -83,8 +87,6 @@ class TeamAndAuditTest extends TestCase
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         $invitee = $this->createUser('member@example.test');
-        $this->app['env'] = 'local';
-
         $response = $this->businessRequest($owner, $restaurant)
             ->postJson($this->path($restaurant, '/team/invitations'), [
                 'email' => $invitee->email,
@@ -122,7 +124,6 @@ class TeamAndAuditTest extends TestCase
             'name' => 'Second Team Restaurant',
             'status' => 'approved',
         ]);
-        $this->app['env'] = 'local';
         $email = 'multi.restaurant@example.test';
         $firstInvite = $this->businessRequest($firstOwner, $firstRestaurant)
             ->postJson($this->path($firstRestaurant, '/team/invitations'), ['email' => $email, 'position' => 'staff'])
@@ -133,7 +134,7 @@ class TeamAndAuditTest extends TestCase
         $firstToken = explode('/', (string) $firstInvite->json('data.invite_path'))[2] ?? '';
         $secondToken = explode('/', (string) $secondInvite->json('data.invite_path'))[2] ?? '';
 
-        Auth::logout();
+        Auth::guard('web')->logout();
         $this->postJson('/api/v1/team-invitations/'.$firstToken.'/activate', [
             'first_name' => 'Alex',
             'last_name' => 'Rivera',
@@ -313,7 +314,7 @@ class TeamAndAuditTest extends TestCase
                 'password' => 'WrongPassword123',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['password']);
+            ->assertJsonStructure(['error' => ['fields' => ['password']]]);
         $this->assertSame((int) $owner->getKey(), (int) $restaurant->fresh()->owner_user_id);
 
         $this->businessRequest($owner, $restaurant)
@@ -469,7 +470,7 @@ class TeamAndAuditTest extends TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Team',
             'last_name' => 'Member',
             'status' => 'active',

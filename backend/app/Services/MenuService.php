@@ -301,7 +301,10 @@ class MenuService
                     'restaurant_application',
                     (string) $application->getKey(),
                     ['halal_certificate_available' => $this->menus->hasValidHalalCertificate($locked)],
-                    ['halal_certificate_available' => true, 'expiry_date' => $expiryDate],
+                    [
+                        'halal_certificate_available' => $this->menus->hasValidHalalCertificate($locked),
+                        'expiry_date' => $expiryDate,
+                    ],
                 );
             });
         } catch (\Throwable $exception) {

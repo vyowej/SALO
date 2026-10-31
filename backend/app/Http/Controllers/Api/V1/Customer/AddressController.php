@@ -35,7 +35,6 @@ class AddressController extends Controller
 
     public function update(AddressRequest $request, AddressService $addresses, string $address): AddressResource
     {
-        $this->authorize('update', [UserAddress::class, $address]);
         $updated = $addresses->update(
             (string) $request->user()->getAuthIdentifier(),
             $address,
@@ -49,7 +48,6 @@ class AddressController extends Controller
 
     public function destroy(Request $request, AddressService $addresses, string $address): JsonResponse
     {
-        $this->authorize('delete', [UserAddress::class, $address]);
         $deleted = $addresses->delete((string) $request->user()->getAuthIdentifier(), $address);
         abort_unless($deleted, 404);
 
@@ -58,7 +56,6 @@ class AddressController extends Controller
 
     public function setPrimary(SetPrimaryAddressRequest $request, AddressService $addresses, string $address): AddressResource
     {
-        $this->authorize('setPrimary', [UserAddress::class, $address]);
         $primary = $addresses->setPrimary((string) $request->user()->getAuthIdentifier(), $address);
         abort_if($primary === null, 404);
 

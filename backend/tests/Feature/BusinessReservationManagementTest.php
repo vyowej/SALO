@@ -15,6 +15,12 @@ use Illuminate\Validation\ValidationException;
 
 class BusinessReservationManagementTest extends \Tests\TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_owner_can_manage_tables_and_settings_with_audit_records(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
@@ -33,7 +39,7 @@ class BusinessReservationManagementTest extends \Tests\TestCase
             'table_number' => 'Window 1',
             'capacity' => 2,
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['table_number']);
+            ->assertJsonStructure(['error' => ['fields' => ['table_number']]]);
 
         $request->putJson($this->settingsPath($restaurant), $this->settingsData())
             ->assertOk()
@@ -110,7 +116,7 @@ class BusinessReservationManagementTest extends \Tests\TestCase
                 'status' => 'declined',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['reason']);
+            ->assertJsonStructure(['error' => ['fields' => ['reason']]]);
 
         $this->businessRequest($owner, $restaurant)
             ->patchJson($this->reservationPath($restaurant, '/'.$reservation->getKey().'/status'), [
@@ -200,7 +206,7 @@ class BusinessReservationManagementTest extends \Tests\TestCase
                 'status' => 'no_show',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['status']);
+            ->assertJsonStructure(['error' => ['fields' => ['status']]]);
 
         Carbon::setTestNow(now()->addMinutes(21));
         try {
@@ -221,7 +227,6 @@ class BusinessReservationManagementTest extends \Tests\TestCase
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
-            'category' => 'Filipino',
             'status' => 'approved',
             'is_24_7' => true,
         ]);
@@ -299,7 +304,7 @@ class BusinessReservationManagementTest extends \Tests\TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Reservation',
             'last_name' => 'Tester',
             'status' => 'active',

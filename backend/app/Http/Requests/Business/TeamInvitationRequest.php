@@ -23,7 +23,7 @@ class TeamInvitationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'email:rfc', 'max:254'],
+            'email' => ['required', 'email:rfc', 'max:190'],
             'position' => ['required', Rule::in(['manager', 'reservation_manager', 'staff'])],
             'invitee_name' => ['nullable', 'string', 'max:160'],
         ];

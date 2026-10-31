@@ -1,10 +1,10 @@
 # SALO Schema v3 Gap Report
 
-**Scope:** Read-only comparison of [DATABASE_SCHEMA_V3.sql](./DATABASE_SCHEMA_V3.sql), [SALO_PLAN_v2.md](./SALO_PLAN_v2.md), [CUSTOMER_SIDE.md](./CUSTOMER_SIDE.md), [BUSINESS_SIDE.md](./BUSINESS_SIDE.md), and repository migrations/models. The v3 SQL is treated as the owner's source of truth for this report. This document does not modify that SQL, run migrations, or create/change a database.
+**Scope:** Read-only comparison of [DATABASE_SCHEMA_V3.sql](./DATABASE_SCHEMA_V3.sql), [SALO_PLAN_v2.md](./SALO_PLAN_v2.md), [CUSTOMER_SIDE.md](./CUSTOMER_SIDE.md), [BUSINESS_SIDE.md](./BUSINESS_SIDE.md), repository migrations/models, and live MariaDB metadata. The v3 SQL is treated as the schema blueprint; confirmed runtime differences are called out separately. This document does not modify that SQL, run migrations, or change live data.
 
-**Database state:** There is no database and no migrations have been applied. The Laravel migration files and models are source code only; no table in the inventory below is asserted to exist at runtime. The v3 file is a standalone blueprint, not a Laravel migration.
+**Database state:** Read-only Laravel inspection connected to MariaDB 10.11.16 database `salo`. The Laravel migration-history table was not present. No migrations or DDL were executed; no live schema or records were changed. The inventory below describes the v3 blueprint and is not a declaration that all of its tables or columns match runtime.
 
-**Important execution warning:** The supplied SQL starts with `DROP DATABASE IF EXISTS salo; CREATE DATABASE salo;`. It is destructive if run against an existing database. It was not run. Do not execute it against an environment containing data.
+**Important execution warning:** The supplied SQL starts with `DROP DATABASE IF EXISTS salo; CREATE DATABASE salo;`. It is destructive if run against an existing database. It was not run. Do not execute it against an environment containing data. The current Laravel migrations are also not an approved baseline for the populated database; see [MIGRATION_BASELINE.md](./MIGRATION_BASELINE.md).
 
 ## 1. Table inventory
 

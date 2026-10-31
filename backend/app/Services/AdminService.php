@@ -452,9 +452,8 @@ class AdminService
 
     public function updateSettings(array $data, object $actor): array
     {
-        $adminId = $actor->platformAdmin?->admin_id;
-        abort_unless($adminId !== null, 403);
-        $updated = $this->platformSettings->update($data, (int) $adminId);
+        abort_unless($actor->platformAdmin?->status === 'active', 403);
+        $updated = $this->platformSettings->update($data, (int) $actor->getAuthIdentifier());
         $this->history($actor, 'settings', 'platform', 'updated', ['fields' => array_keys($data)]);
 
         return $updated;

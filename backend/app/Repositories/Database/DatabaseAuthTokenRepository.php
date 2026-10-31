@@ -11,18 +11,19 @@ class DatabaseAuthTokenRepository implements AuthTokenRepository
 {
     public function issue(int $userId, string $purpose, string $tokenHash, ?string $targetEmail, Carbon $expiresAt): AuthToken
     {
+        [$storedPurpose, $storedTargetEmail] = $this->storageKey($purpose, $targetEmail);
         $query = AuthToken::query()
             ->where('user_id', $userId)
-            ->where('purpose', $purpose)
+            ->where('purpose', $storedPurpose)
             ->whereNull('used_at');
 
-        if ($targetEmail === null) {
+        if ($storedTargetEmail === null) {
             $query->whereNull('target_email');
         } else {
-            $query->where('target_email', mb_strtolower(trim($targetEmail)));
+            $query->where('target_email', $storedTargetEmail);
         }
 
-        $token = $query->latest('token_id')->first();
+        $token = $query->latest('id')->first();
         if ($token !== null) {
             $token->forceFill([
                 'token_hash' => $tokenHash,
@@ -36,9 +37,9 @@ class DatabaseAuthTokenRepository implements AuthTokenRepository
 
         return AuthToken::query()->create([
             'user_id' => $userId,
-            'purpose' => $purpose,
+            'purpose' => $storedPurpose,
             'token_hash' => $tokenHash,
-            'target_email' => $targetEmail === null ? null : mb_strtolower(trim($targetEmail)),
+            'target_email' => $storedTargetEmail,
             'expires_at' => $expiresAt,
             'attempts' => 0,
             'created_at' => now(),
@@ -48,7 +49,7 @@ class DatabaseAuthTokenRepository implements AuthTokenRepository
     public function latest(int $userId, string $purpose, ?string $targetEmail = null): ?AuthToken
     {
         return $this->tokenQuery($userId, $purpose, $targetEmail)
-            ->latest('token_id')
+            ->latest('id')
             ->first();
     }
 
@@ -57,7 +58,7 @@ class DatabaseAuthTokenRepository implements AuthTokenRepository
         return $this->tokenQuery($userId, $purpose, $targetEmail)
             ->whereNull('used_at')
             ->where('expires_at', '>', now())
-            ->latest('token_id')
+            ->latest('id')
             ->lockForUpdate()
             ->first();
     }
@@ -74,12 +75,30 @@ class DatabaseAuthTokenRepository implements AuthTokenRepository
 
     private function tokenQuery(int $userId, string $purpose, ?string $targetEmail): Builder
     {
+        [$storedPurpose, $storedTargetEmail] = $this->storageKey($purpose, $targetEmail);
         $query = AuthToken::query()
             ->where('user_id', $userId)
-            ->where('purpose', $purpose);
+            ->where('purpose', $storedPurpose);
 
-        return $targetEmail === null
+        return $storedTargetEmail === null
             ? $query->whereNull('target_email')
-            : $query->where('target_email', mb_strtolower(trim($targetEmail)));
+            : $query->where('target_email', $storedTargetEmail);
+    }
+
+    private function storageKey(string $purpose, ?string $targetEmail): array
+    {
+        if ($purpose !== 'password_reset') {
+            return [
+                $purpose,
+                $targetEmail === null ? null : mb_strtolower(trim($targetEmail)),
+            ];
+        }
+
+        if ($targetEmail === null) {
+            throw new \InvalidArgumentException('Password reset tokens require a target email.');
+        }
+
+        // The live enum has no password_reset value, so isolate reset tokens under email_change.
+        return ['email_change', 'password-reset:'.hash('sha256', mb_strtolower(trim($targetEmail)))];
     }
 }

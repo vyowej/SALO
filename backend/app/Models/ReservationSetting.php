@@ -11,6 +11,8 @@ class ReservationSetting extends Model
 
     public $incrementing = false;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'restaurant_id',
         'accepts_reservations',

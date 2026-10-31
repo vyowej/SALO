@@ -7,14 +7,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
     use Notifiable;
+    use SoftDeletes;
 
     protected $fillable = [
         'email',
-        'password',
+        'password_hash',
         'first_name',
         'middle_name',
         'last_name',
@@ -27,8 +29,7 @@ class User extends Authenticatable
     ];
 
     protected $hidden = [
-        'password',
-        'remember_token',
+        'password_hash',
     ];
 
     protected function casts(): array
@@ -37,8 +38,13 @@ class User extends Authenticatable
             'birthday' => 'date',
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
-            'password' => 'hashed',
+            'password_hash' => 'hashed',
         ];
+    }
+
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
     }
 
     public function setEmailAttribute(string $email): void
@@ -73,7 +79,19 @@ class User extends Authenticatable
 
     public function getDriverStateAttribute(): ?array
     {
-        return null;
+        $profile = $this->riderProfile;
+        if ($profile === null) {
+            return null;
+        }
+
+        return [
+            'approval_status' => $profile->application_status,
+            'availability_status' => match ($profile->availability) {
+                'online' => 'available',
+                'busy' => 'busy',
+                default => 'offline',
+            },
+        ];
     }
 
     public function getCapabilitiesAttribute(): array
@@ -85,6 +103,9 @@ class User extends Authenticatable
         $capabilities = ['customer'];
         if ($this->platformAdmin()->where('status', 'active')->exists()) {
             $capabilities[] = 'admin';
+        }
+        if ($this->riderProfile()->where('application_status', 'approved')->where('status', 'active')->exists()) {
+            $capabilities[] = 'driver';
         }
         if ($this->ownedRestaurants()->exists() || $this->restaurantStaff()->where('status', 'active')->exists()) {
             $capabilities[] = 'business';
@@ -223,6 +244,11 @@ class User extends Authenticatable
     public function platformAdmin(): HasOne
     {
         return $this->hasOne(PlatformAdmin::class);
+    }
+
+    public function riderProfile(): HasOne
+    {
+        return $this->hasOne(RiderProfile::class);
     }
 
     public function ownedRestaurants(): HasMany

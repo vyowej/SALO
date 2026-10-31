@@ -27,7 +27,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $order, BusinessOrderService $service): OrderResource
+    public function show(Request $request, string $restaurantId, string $order, BusinessOrderService $service): OrderResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('viewOrders', $restaurant);
@@ -42,6 +42,7 @@ class OrderController extends Controller
 
     public function updateStatus(
         OrderStatusRequest $request,
+        string $restaurantId,
         string $order,
         BusinessOrderService $service,
     ): OrderResource {

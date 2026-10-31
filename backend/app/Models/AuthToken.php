@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuthToken extends Model
 {
-    protected $primaryKey = 'token_id';
-
     public $timestamps = false;
 
     protected $fillable = [

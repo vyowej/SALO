@@ -21,6 +21,6 @@ class TeamEmailCheckRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['email' => ['required', 'email:rfc', 'max:254']];
+        return ['email' => ['required', 'email:rfc', 'max:190']];
     }
 }

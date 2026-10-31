@@ -1,6 +1,6 @@
 # SALO backend
 
-Laravel API foundation for SALO. Implemented areas include session-based authentication, password reset and email verification, `/me`, customer profile and settings, account deactivation, saved addresses, and the admin API.
+Laravel API for SALO, including authentication, customer accounts, restaurant applications, business workspace, orders, reservations, discounts, team access, and admin operations.
 
 The admin API endpoints, JSON contract, and fixture requirements are defined in [ADMIN_API_CONTRACT.md](./ADMIN_API_CONTRACT.md); this overview does not duplicate their route list.
 
@@ -32,11 +32,9 @@ npm run dev
 
 Open the frontend at `http://localhost:5173`. The API allows credentialed requests from the configured `CORS_ALLOWED_ORIGINS` and `SANCTUM_STATEFUL_DOMAINS` in `backend/.env`.
 
-The backend uses in-memory repository stubs for account and address data. This phase intentionally contains no migrations, seeders, factories, SQL, or database persistence. Stub-backed accounts and addresses are temporary and can be lost when the server restarts or the session ends; this is not production storage.
+The backend uses database-backed repositories and Eloquent models. The configured production schema is an existing MariaDB database; it was inspected read-only during this work. Tests use an isolated in-memory SQLite database.
 
-Admin data follows the same in-memory-only constraint. Admin writes use services and in-memory repositories; no migrations, seeders, factories, SQL, or database persistence are part of the admin implementation.
-
-The business workspace is currently a scaffold with static response payloads; restaurant-scoped authorization, durable membership, and business mutations are not implemented. The approved business requirements and route registry are in [BUSINESS_SIDE.md](./BUSINESS_SIDE.md), and the proposed schema requiring review is in [DATABASE_DESIGN.md](./DATABASE_DESIGN.md). No migration is authorized until that design is approved.
+The Laravel migrations have not been applied to the populated MariaDB database. Its migration-history table is absent, and the repository migrations are not a safe baseline for that database. Do not run `migrate`, `migrate:install`, or the destructive SQL blueprint against it. See [MIGRATION_BASELINE.md](./MIGRATION_BASELINE.md) before any future schema adoption.
 
 ## Admin API
 
@@ -44,7 +42,7 @@ The admin API includes dashboard, user and restaurant management, partner/rider 
 
 Admin fixture records are development-only and do not create login credentials. Requests still require an authenticated account with the existing `admin` capability.
 
-Password reset and email verification tokens are stored as session-scoped hashes through an in-memory repository. The local `.env.example` mailer writes notifications to the Laravel log; configure an approved mail transport before deploying. Token delivery and account storage are development stubs, not production-ready persistence.
+Password reset and email verification tokens are stored as hashes in the database. Configure an approved mail transport before deploying.
 
 ## Tests and checks
 
@@ -54,4 +52,4 @@ vendor/bin/pint --test
 php artisan route:list --path=api/v1
 ```
 
-Do not run database setup or migration commands. Persistent storage requires an approved database design and repository implementation.
+Run tests only against their configured isolated SQLite database. Do not run database setup or migration commands against the populated MariaDB database; schema adoption requires a reviewed baseline and an approved backup/rollback plan.

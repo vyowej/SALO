@@ -8,10 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('restaurants', function (Blueprint $table): void {
-            $table->string('category', 100)->nullable()->after('description');
-        });
-
         Schema::create('cuisine_types', function (Blueprint $table): void {
             $table->id();
             $table->string('name', 100)->unique();
@@ -67,8 +63,5 @@ return new class extends Migration
         Schema::dropIfExists('restaurant_photos');
         Schema::dropIfExists('restaurant_cuisines');
         Schema::dropIfExists('cuisine_types');
-        Schema::table('restaurants', function (Blueprint $table): void {
-            $table->dropColumn('category');
-        });
     }
 };

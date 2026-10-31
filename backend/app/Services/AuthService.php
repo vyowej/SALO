@@ -37,7 +37,7 @@ class AuthService
             'phone' => $data['phone'] ?? null,
             'status' => 'active',
             'email_verified_at' => null,
-            'password' => Hash::make($data['password']),
+            'password_hash' => Hash::make($data['password']),
         ]);
 
         if (! empty($data['address'])) {

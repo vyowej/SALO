@@ -53,7 +53,7 @@ class Order extends Model
 
     public function checkoutGroup(): BelongsTo
     {
-        return $this->belongsTo(CheckoutGroup::class);
+        return $this->belongsTo(CheckoutGroup::class, 'checkout_group_id');
     }
 
     public function restaurant(): BelongsTo

@@ -30,6 +30,7 @@ return new class extends Migration
             $table->string('status', 20)->default('approved')->index();
             $table->boolean('is_published')->default(false)->index();
             $table->timestamps();
+            $table->softDeletes();
             $table->foreign('psgc_code')->references('code')->on('psgc_locations')->restrictOnDelete();
         });
 
@@ -43,7 +44,6 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->string('staff_role', 30);
             $table->string('status', 20)->default('invited')->index();
-            $table->timestamp('joined_at')->nullable();
             $table->timestamps();
             $table->unique(['restaurant_id', 'user_id']);
             $table->index(['restaurant_id', 'status']);
@@ -77,7 +77,7 @@ return new class extends Migration
             $table->string('doc_type', 40);
             $table->string('private_path', 255);
             $table->date('expiry_date')->nullable();
-            $table->string('verification_state', 20)->default('pending');
+            $table->boolean('verified')->default(false);
             $table->timestamps();
             $table->index(['application_id', 'doc_type']);
         });

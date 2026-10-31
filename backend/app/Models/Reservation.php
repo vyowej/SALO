@@ -54,4 +54,14 @@ class Reservation extends Model
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
+
+    public function getResponseReasonAttribute(): ?string
+    {
+        return $this->attributes['cancel_reason'] ?? null;
+    }
+
+    public function setResponseReasonAttribute(?string $reason): void
+    {
+        $this->attributes['cancel_reason'] = $reason;
+    }
 }

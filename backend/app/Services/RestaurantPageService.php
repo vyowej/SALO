@@ -15,6 +15,7 @@ use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -53,6 +54,12 @@ class RestaurantPageService
 
     public function updateProfile(Restaurant $restaurant, User $actor, array $data): array
     {
+        if (array_key_exists('category', $data) && ! Schema::hasColumn('restaurants', 'category')) {
+            throw ValidationException::withMessages([
+                'category' => ['Restaurant categories are not supported by the current database schema.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($restaurant, $actor, $data): array {
             $locked = $this->pages->lockRestaurant((int) $restaurant->getKey());
             $beforeProfile = $this->pages->profile($locked);
@@ -459,7 +466,7 @@ class RestaurantPageService
             ],
             'category' => [
                 'label' => 'Restaurant category is set',
-                'complete' => trim((string) $profile['restaurant']['category']) !== '',
+                'complete' => trim((string) $profile['category']) !== '',
             ],
             'orderable_item' => [
                 'label' => 'At least one published, orderable menu item exists',

@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Http\Authorization\PermissionMap;
+use App\Models\Restaurant;
+use App\Models\RestaurantStaff;
+use App\Models\RiderProfile;
 use App\Models\User;
 use App\Notifications\EmailVerificationNotification;
 use App\Notifications\PasswordResetNotification;
@@ -43,10 +46,15 @@ class AuthAndCustomerAccountTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('data.capabilities', ['customer'])
-            ->assertJsonPath('data.email', 'ava@example.test');
+            ->assertJsonPath('data.email', 'ava@example.test')
+            ->assertJsonMissingPath('data.password')
+            ->assertJsonMissingPath('data.password_hash');
 
         $this->assertCount(1, app(AddressRepository::class)->allForUser($response->json('data.id')));
         $this->assertTrue(app(AddressRepository::class)->allForUser($response->json('data.id'))[0]['is_main']);
+        $storedHash = User::query()->where('email', 'ava@example.test')->value('password_hash');
+        $this->assertNotSame('Password123', $storedHash);
+        $this->assertTrue(Hash::check('Password123', $storedHash));
     }
 
     public function test_login_logout_and_current_account_endpoints_use_the_authenticated_user(): void
@@ -71,21 +79,31 @@ class AuthAndCustomerAccountTest extends TestCase
 
     public function test_current_account_exposes_each_capability_and_effective_membership_permissions(): void
     {
-        $user = $this->createUser('multi-capability@example.test', [
-            'capabilities' => ['customer', 'driver'],
-            'driver_state' => ['approval_status' => 'approved', 'availability_status' => 'available'],
-            'memberships' => [[
-                'restaurant_id' => 'restaurant-1',
-                'role' => 'manager',
-                'status' => 'active',
-            ]],
+        $user = $this->createUser('multi-capability@example.test');
+        $restaurantOwner = $this->createUser('restaurant-owner@example.test');
+        $restaurant = Restaurant::query()->create([
+            'owner_user_id' => $restaurantOwner->getKey(),
+            'name' => 'Membership Restaurant',
+            'status' => 'approved',
+        ]);
+        RestaurantStaff::query()->create([
+            'restaurant_id' => $restaurant->getKey(),
+            'user_id' => $user->getKey(),
+            'staff_role' => 'manager',
+            'status' => 'active',
+        ]);
+        RiderProfile::query()->create([
+            'user_id' => $user->getKey(),
+            'application_status' => 'approved',
+            'status' => 'active',
+            'availability' => 'online',
         ]);
         $this->actingAs($user, 'web');
 
         $this->getJson('/api/v1/auth/me')
             ->assertOk()
-            ->assertJsonPath('data.capabilities', ['customer', 'driver'])
-            ->assertJsonPath('data.memberships.0.restaurant_id', 'restaurant-1')
+            ->assertJsonPath('data.capabilities', ['customer', 'driver', 'business'])
+            ->assertJsonPath('data.memberships.0.restaurant_id', (string) $restaurant->getKey())
             ->assertJsonPath('data.memberships.0.role', 'manager')
             ->assertJsonPath('data.memberships.0.permissions', PermissionMap::forRole('manager'))
             ->assertJsonPath('data.driver_state.availability_status', 'available');
@@ -235,6 +253,9 @@ class AuthAndCustomerAccountTest extends TestCase
             'password_confirmation' => 'NewPassword123',
         ])->assertOk();
 
+        $user->refresh();
+        $this->assertTrue(Hash::check('NewPassword123', $user->password_hash));
+
         $this->postJson('/api/v1/auth/reset-password', [
             'email' => $user->email,
             'token' => $token,
@@ -251,17 +272,17 @@ class AuthAndCustomerAccountTest extends TestCase
 
         $this->postJson('/api/v1/auth/email/verification/send')
             ->assertOk()
-            ->assertJsonPath('data.message', 'If verification is needed, a link will be sent to your email.');
+            ->assertJsonPath('data.message', 'If verification is needed, a code will be sent to your email.');
 
         $token = null;
         Notification::assertSentTo($user, EmailVerificationNotification::class, function (EmailVerificationNotification $notification) use (&$token): bool {
-            $token = $notification->token;
+            $token = $notification->code;
 
             return true;
         });
         $this->assertNotNull($token);
 
-        $verified = $this->postJson('/api/v1/auth/email/verification/verify', ['token' => $token])
+        $verified = $this->postJson('/api/v1/auth/email/verification/verify', ['code' => $token])
             ->assertOk()
             ->assertJsonPath('data.email', $user->email);
         $this->assertNotNull($verified->json('data.email_verified_at'));
@@ -290,7 +311,7 @@ class AuthAndCustomerAccountTest extends TestCase
             'memberships' => [],
             'driver_state' => null,
             'email_verified_at' => null,
-            'password' => Hash::make('Password123'),
+            'password_hash' => Hash::make('Password123'),
         ], $overrides));
     }
 }

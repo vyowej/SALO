@@ -9,6 +9,10 @@ class DatabaseSessionRepository implements SessionRepository
 {
     public function deleteForUser(int $userId): void
     {
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+
         SessionRecord::query()->where('user_id', $userId)->delete();
     }
 }

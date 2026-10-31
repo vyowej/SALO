@@ -8,6 +8,7 @@ use App\Models\Restaurant;
 use App\Models\RestaurantApplication;
 use App\Models\User;
 use Illuminate\Support\Facades\URL;
+use Tests\TestCase;
 
 class RestaurantApplicationIsolationTest extends TestCase
 {
@@ -68,7 +69,6 @@ class RestaurantApplicationIsolationTest extends TestCase
             'status' => 'under_review',
             'draft_details' => [
                 'restaurant_name' => 'Only One Restaurant',
-                'category' => 'Filipino',
                 'description' => 'A test restaurant.',
                 'contact_number' => '09171234567',
                 'business_email' => 'business@example.test',
@@ -97,7 +97,7 @@ class RestaurantApplicationIsolationTest extends TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Test',
             'last_name' => 'User',
             'status' => 'active',

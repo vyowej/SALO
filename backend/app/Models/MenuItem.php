@@ -39,6 +39,6 @@ class MenuItem extends Model
 
     public function dietaryTags(): BelongsToMany
     {
-        return $this->belongsToMany(DietaryTag::class, 'menu_item_dietary_tags');
+        return $this->belongsToMany(DietaryTag::class, 'menu_item_dietary_tags', 'menu_item_id', 'dietary_tag_id');
     }
 }

@@ -12,25 +12,24 @@ return new class extends Migration
             $table->id();
             $table->foreignId('restaurant_id')->nullable()->constrained('restaurants')->restrictOnDelete();
             $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
-            $table->string('funded_by', 20);
-            $table->string('code', 64);
+            $table->enum('funded_by', ['platform', 'restaurant'])->default('restaurant');
+            $table->string('code', 40);
             $table->string('name', 120);
-            $table->text('description')->nullable();
-            $table->string('type', 24);
-            $table->boolean('first_order_only')->default(false);
+            $table->string('description', 255)->nullable();
+            $table->enum('type', ['percentage', 'fixed', 'free_delivery', 'first_order']);
             $table->decimal('value', 10, 2)->default(0);
             $table->decimal('min_order_amount', 10, 2)->default(0);
             $table->decimal('max_discount', 10, 2)->nullable();
-            $table->timestamp('starts_at');
-            $table->timestamp('ends_at');
+            $table->dateTime('starts_at');
+            $table->dateTime('ends_at');
             $table->unsignedInteger('usage_limit')->nullable();
-            $table->unsignedSmallInteger('per_customer_limit')->default(1);
+            $table->unsignedInteger('per_customer_limit')->nullable();
             $table->boolean('is_active')->default(true);
-            $table->unsignedBigInteger('scope_restaurant_id')->storedAs('COALESCE(restaurant_id, 0)');
-            $table->string('normalized_code', 64)->storedAs('LOWER(code)');
-            $table->timestamps();
-            $table->unique(['scope_restaurant_id', 'normalized_code'], 'discounts_scope_code_unique');
-            $table->index(['restaurant_id', 'is_active', 'starts_at', 'ends_at'], 'discounts_restaurant_active_dates_index');
+            $table->unsignedBigInteger('scope_key')->storedAs('COALESCE(restaurant_id, 0)');
+            $table->timestamp('created_at')->nullable()->useCurrent();
+            $table->timestamp('updated_at')->nullable()->useCurrent()->useCurrentOnUpdate();
+            $table->unique(['scope_key', 'code'], 'uq_discount_code');
+            $table->index(['restaurant_id', 'is_active', 'ends_at'], 'idx_disc_rest');
         });
 
         Schema::create('discount_redemptions', function (Blueprint $table): void {

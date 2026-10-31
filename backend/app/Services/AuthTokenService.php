@@ -67,7 +67,7 @@ class AuthTokenService
             }
 
             $this->tokens->consume($record);
-            $this->users->update($user, ['password' => Hash::make($password)]);
+            $this->users->update($user, ['password_hash' => Hash::make($password)]);
             $this->sessions->deleteForUser((int) $user->getAuthIdentifier());
 
             return true;

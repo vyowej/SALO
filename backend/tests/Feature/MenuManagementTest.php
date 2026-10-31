@@ -16,6 +16,12 @@ use Illuminate\Support\Facades\Storage;
 
 class MenuManagementTest extends \Tests\TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_owner_can_manage_categories_and_items_and_price_change_requires_confirmation(): void
     {
         Storage::fake('public');
@@ -40,7 +46,7 @@ class MenuManagementTest extends \Tests\TestCase
         ];
         $request->postJson($this->menuPath($restaurant, '/items'), $itemData)
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['file']);
+            ->assertJsonStructure(['error' => ['fields' => ['file']]]);
         $this->assertSame(0, MenuItem::query()->count());
 
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/rWQAAAAASUVORK5CYII=', true);
@@ -56,7 +62,7 @@ class MenuManagementTest extends \Tests\TestCase
 
         $request->patchJson($this->menuPath($restaurant, '/items/'.$itemId), [
             'price' => '130.00',
-        ])->assertUnprocessable()->assertJsonValidationErrors(['price_change_acknowledged']);
+        ])->assertUnprocessable()->assertJsonStructure(['error' => ['fields' => ['price_change_acknowledged']]]);
 
         $request->patchJson($this->menuPath($restaurant, '/items/'.$itemId), [
             'price' => '130.00',
@@ -225,7 +231,7 @@ class MenuManagementTest extends \Tests\TestCase
         $this->businessRequest($owner, $restaurant)
             ->deleteJson($this->menuPath($restaurant, '/categories/'.$category->getKey()))
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['status']);
+            ->assertJsonStructure(['error' => ['fields' => ['status']]]);
 
         $this->assertSame('active', $category->fresh()->status);
     }
@@ -258,7 +264,7 @@ class MenuManagementTest extends \Tests\TestCase
                 'file' => UploadedFile::fake()->createWithContent('menu.png', $png),
             ], ['Accept' => 'application/json'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['dietary_tag_ids']);
+            ->assertJsonStructure(['error' => ['fields' => ['dietary_tag_ids']]]);
         $this->assertSame([], Storage::disk('public')->allFiles());
 
         $this->businessRequest($owner, $restaurant)
@@ -266,11 +272,12 @@ class MenuManagementTest extends \Tests\TestCase
                 'file' => UploadedFile::fake()->createWithContent('halal.pdf', "%PDF-1.4\nSALO test certificate\n%%EOF"),
             ], ['Accept' => 'application/json'])
             ->assertOk()
-            ->assertJsonPath('data.halal_certificate_available', true);
+            ->assertJsonPath('data.halal_certificate_available', false);
 
         $this->assertDatabaseHas('application_documents', [
             'application_id' => $application->getKey(),
             'doc_type' => 'halal_certificate',
+            'verified' => false,
         ]);
     }
 
@@ -329,15 +336,15 @@ class MenuManagementTest extends \Tests\TestCase
         $this->businessRequest($owner, $restaurant)
             ->post($path, ['file' => UploadedFile::fake()->create('menu.gif', 10, 'image/gif')], ['Accept' => 'application/json'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['file']);
+            ->assertJsonStructure(['error' => ['fields' => ['file']]]);
         $this->businessRequest($owner, $restaurant)
-            ->post($path, ['file' => UploadedFile::fake()->image('large.png')->size(2049)], ['Accept' => 'application/json'])
+            ->post($path, ['file' => UploadedFile::fake()->create('large.png', 2049, 'image/png')], ['Accept' => 'application/json'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['file']);
+            ->assertJsonStructure(['error' => ['fields' => ['file']]]);
         $this->businessRequest($owner, $restaurant)
             ->post($path, ['file' => UploadedFile::fake()->createWithContent('fake.png', 'not an actual PNG')], ['Accept' => 'application/json'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['file']);
+            ->assertJsonStructure(['error' => ['fields' => ['file']]]);
 
         $this->assertSame([], Storage::disk('public')->allFiles());
     }
@@ -385,7 +392,6 @@ class MenuManagementTest extends \Tests\TestCase
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
-            'category' => 'Filipino',
             'status' => 'approved',
             'is_24_7' => true,
         ]);
@@ -397,7 +403,7 @@ class MenuManagementTest extends \Tests\TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Menu',
             'last_name' => 'Tester',
             'status' => 'active',

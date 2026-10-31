@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PlatformAdmin extends Model
 {
-    protected $primaryKey = 'admin_id';
-
     public $timestamps = false;
 
     protected $fillable = ['user_id', 'admin_level', 'status'];

@@ -15,6 +15,12 @@ use Illuminate\Support\Carbon;
 
 class BusinessOrderManagementTest extends \Tests\TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+    }
+
     public function test_owner_can_read_order_snapshots_and_actor_history(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
@@ -92,7 +98,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
                 'status' => 'cancelled',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['reason']);
+            ->assertJsonStructure(['error' => ['fields' => ['reason']]]);
 
         $this->businessRequest($manager, $restaurant)
             ->patchJson($this->orderPath($restaurant, '/'.$order->getKey().'/status'), [
@@ -114,7 +120,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
                 'reason' => 'Duplicate request.',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['status']);
+            ->assertJsonStructure(['error' => ['fields' => ['status']]]);
         $this->assertSame(5, $order->items()->firstOrFail()->menuItem->fresh()->quantity_left);
     }
 
@@ -165,7 +171,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
                 'status' => 'ready',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['status']);
+            ->assertJsonStructure(['error' => ['fields' => ['status']]]);
 
         $this->businessRequest($owner, $restaurant)
             ->patchJson($this->orderPath($restaurant, '/'.$pickupOrder->getKey().'/status'), [
@@ -179,7 +185,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
                 'status' => 'completed',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['status']);
+            ->assertJsonStructure(['error' => ['fields' => ['status']]]);
     }
 
     public function test_unanswered_placed_orders_auto_cancel_after_ten_minutes_with_system_actor(): void
@@ -210,7 +216,6 @@ class BusinessOrderManagementTest extends \Tests\TestCase
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
-            'category' => 'Filipino',
             'status' => 'approved',
             'is_24_7' => true,
         ]);
@@ -287,7 +292,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
     {
         return User::query()->create([
             'email' => $email,
-            'password' => 'Password123',
+            'password_hash' => 'Password123',
             'first_name' => 'Order',
             'last_name' => 'Tester',
             'status' => 'active',

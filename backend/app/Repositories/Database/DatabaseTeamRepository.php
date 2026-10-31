@@ -129,7 +129,7 @@ class DatabaseTeamRepository implements TeamRepository
     {
         return Invitation::query()
             ->where('restaurant_id', $restaurant->getKey())
-            ->where('pending_invited_email', mb_strtolower(trim($email)))
+            ->where('pending_key', $restaurant->getKey().':'.mb_strtolower(trim($email)))
             ->lockForUpdate()
             ->first();
     }

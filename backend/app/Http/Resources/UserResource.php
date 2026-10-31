@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Authorization\PermissionMap;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,8 +34,12 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'capabilities' => $this->capabilities ?? ['customer'],
             'memberships' => $memberships,
-            'active_mode' => $this->active_mode,
-            'selected_restaurant_id' => $this->selected_restaurant_id,
+            'active_mode' => $request->hasSession()
+                ? (string) $request->session()->get('salo.active_mode', 'customer')
+                : 'customer',
+            'selected_restaurant_id' => $request->hasSession()
+                ? $request->session()->get('salo.selected_restaurant_id')
+                : null,
             'email_verified_at' => $this->email_verified_at?->toISOString(),
             'driver_state' => $this->driver_state,
         ];

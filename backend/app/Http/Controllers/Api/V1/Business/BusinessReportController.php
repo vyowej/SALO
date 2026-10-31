@@ -15,24 +15,28 @@ class BusinessReportController extends Controller
 {
     public function show(
         BusinessReportRequest $request,
+        string $restaurant,
         string $report,
         BusinessReportService $service,
     ): JsonResponse {
-        $restaurant = $this->restaurant($request);
-        $this->authorize('viewReport', [$restaurant, $report]);
-        $result = $service->report($restaurant, $report, $request->validated());
+        $restaurantModel = $this->restaurant($request);
+        abort_unless((string) $restaurantModel->getKey() === $restaurant, 404);
+        $this->authorize('viewReport', [$restaurantModel, $report]);
+        $result = $service->report($restaurantModel, $report, $request->validated());
 
         return BusinessReportResource::make($result)->response();
     }
 
     public function export(
         BusinessReportRequest $request,
+        string $restaurant,
         string $report,
         BusinessReportService $service,
     ): StreamedResponse {
-        $restaurant = $this->restaurant($request);
-        $this->authorize('viewReport', [$restaurant, $report]);
-        $result = $service->report($restaurant, $report, $request->validated());
+        $restaurantModel = $this->restaurant($request);
+        abort_unless((string) $restaurantModel->getKey() === $restaurant, 404);
+        $this->authorize('viewReport', [$restaurantModel, $report]);
+        $result = $service->report($restaurantModel, $report, $request->validated());
         $filename = $report.'-'.$request->validated('from').'-'.$request->validated('to').'.csv';
 
         return response()->streamDownload(function () use ($result): void {
