@@ -7,6 +7,7 @@ use App\Http\Requests\Customer\AddressRequest;
 use App\Http\Requests\Customer\SetPrimaryAddressRequest;
 use App\Http\Resources\AddressResource;
 use App\Services\AddressService;
+use App\Models\UserAddress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -16,11 +17,14 @@ class AddressController extends Controller
 {
     public function index(Request $request, AddressService $addresses): AnonymousResourceCollection
     {
+        $this->authorize('viewAny', UserAddress::class);
+
         return AddressResource::collection($addresses->list((string) $request->user()->getAuthIdentifier()));
     }
 
     public function store(AddressRequest $request, AddressService $addresses): JsonResponse
     {
+        $this->authorize('create', UserAddress::class);
         $address = $addresses->create(
             (string) $request->user()->getAuthIdentifier(),
             $request->validated(),
@@ -31,6 +35,7 @@ class AddressController extends Controller
 
     public function update(AddressRequest $request, AddressService $addresses, string $address): AddressResource
     {
+        $this->authorize('update', [UserAddress::class, $address]);
         $updated = $addresses->update(
             (string) $request->user()->getAuthIdentifier(),
             $address,
@@ -44,6 +49,7 @@ class AddressController extends Controller
 
     public function destroy(Request $request, AddressService $addresses, string $address): JsonResponse
     {
+        $this->authorize('delete', [UserAddress::class, $address]);
         $deleted = $addresses->delete((string) $request->user()->getAuthIdentifier(), $address);
         abort_unless($deleted, 404);
 
@@ -52,6 +58,7 @@ class AddressController extends Controller
 
     public function setPrimary(SetPrimaryAddressRequest $request, AddressService $addresses, string $address): AddressResource
     {
+        $this->authorize('setPrimary', [UserAddress::class, $address]);
         $primary = $addresses->setPrimary((string) $request->user()->getAuthIdentifier(), $address);
         abort_if($primary === null, 404);
 

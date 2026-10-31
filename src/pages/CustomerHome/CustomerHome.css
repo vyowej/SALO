@@ -24,6 +24,45 @@
   color: var(--muted);
 }
 
+.customer-next-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+
+.customer-next-action h2 {
+  margin: 0.25rem 0;
+  font-size: 1.05rem;
+}
+
+.customer-next-action p,
+.customer-welcome p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.customer-welcome {
+  display: grid;
+  gap: 1rem;
+}
+
+.customer-welcome h2 {
+  margin: 0;
+}
+
+.customer-welcome__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
 .service-segment {
   display: inline-flex;
   gap: 0.2rem;
@@ -364,6 +403,11 @@
 
   .customer-home__welcome,
   .customer-home__rails {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .customer-next-action {
     align-items: flex-start;
     flex-direction: column;
   }

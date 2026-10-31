@@ -5,6 +5,7 @@ import { config } from '../config';
 import { apiRequest } from './apiClient';
 
 const wait = (ms = config.mockDelay) => new Promise((resolve) => setTimeout(resolve, ms));
+let philippinesBoundsRequest;
 const unsupportedProvider = () => {
   if (config.locationProvider !== 'mock') {
     throw new Error(`The "${config.locationProvider}" location provider is configured but not implemented yet.`);
@@ -18,9 +19,63 @@ const loadPsgcLocations = (level, parentCode) => {
   return apiRequest(`/locations/psgc?${params.toString()}`);
 };
 
+const searchMockLocations = async (query) => {
+  await wait(200);
+  const locations = [
+    ...regions.map((entry) => ({ ...entry, level: 'region' })),
+    ...Object.values(provinces).flat().map((entry) => ({ ...entry, level: 'province' })),
+    ...Object.values(cities).flat().map((entry) => ({ ...entry, level: 'city' })),
+    ...Object.values(barangays).flat().map((entry) => ({ ...entry, level: 'barangay' })),
+  ];
+  const term = query.trim().toLowerCase();
+  return locations
+    .filter((entry) => entry.name.toLowerCase().includes(term))
+    .slice(0, 30)
+    .map((entry) => ({
+      ...entry,
+      full_name: entry.name,
+      region: '',
+      province: '',
+      city_municipality: entry.level === 'city' ? entry.name : '',
+      barangay: entry.level === 'barangay' ? entry.name : '',
+    }));
+};
+
 export const locationService = {
   getDefaultMapCenter() {
     return defaultMockCoordinates;
+  },
+
+  async getPhilippineBounds() {
+    if (!philippinesBoundsRequest) {
+      philippinesBoundsRequest = fetch(`${import.meta.env.BASE_URL}location-bounds.json`, { headers: { Accept: 'application/json' } })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('The Philippines coordinate bounds configuration could not be loaded.');
+          return response.json();
+        })
+        .then((bounds) => {
+          const values = ['min_latitude', 'max_latitude', 'min_longitude', 'max_longitude'];
+          if (!values.every((key) => Number.isFinite(bounds[key]))) {
+            throw new Error('The Philippines coordinate bounds configuration is invalid.');
+          }
+          return bounds;
+        })
+        .catch((error) => {
+          philippinesBoundsRequest = undefined;
+          throw error;
+        });
+    }
+    return philippinesBoundsRequest;
+  },
+
+  async isWithinPhilippines({ latitude, longitude }) {
+    const bounds = await this.getPhilippineBounds();
+    return Number.isFinite(Number(latitude))
+      && Number.isFinite(Number(longitude))
+      && Number(latitude) >= bounds.min_latitude
+      && Number(latitude) <= bounds.max_latitude
+      && Number(longitude) >= bounds.min_longitude
+      && Number(longitude) <= bounds.max_longitude;
   },
 
   async getRegions() {
@@ -52,10 +107,33 @@ export const locationService = {
   },
 
   async searchPlaces(query) {
-    await wait(200);
-    unsupportedProvider();
     if (!query.trim()) return [];
-    return mockPlaceSearchResults.filter((place) => `${place.detail} ${place.label}`.toLowerCase().includes(query.toLowerCase()));
+    if (config.useMock) {
+      await wait(200);
+      return mockPlaceSearchResults.filter((place) => `${place.detail} ${place.label}`.toLowerCase().includes(query.toLowerCase()));
+    }
+
+    return (await this.searchPsgcLocations(query)).map((location) => ({
+      ...location,
+      psgc_code: location.code,
+      label: location.name,
+      detail: location.full_name,
+      street: '',
+      house_no: '',
+      latitude: null,
+      longitude: null,
+      is_main: false,
+      rider_note: '',
+    }));
+  },
+
+  async searchPsgcLocations(query) {
+    if (!query.trim()) return [];
+    if (!config.useMock) {
+      const params = new URLSearchParams({ query: query.trim() });
+      return apiRequest(`/locations/psgc/search?${params.toString()}`);
+    }
+    return searchMockLocations(query);
   },
 
   async reverseGeocode(latitude, longitude) {
@@ -68,7 +146,10 @@ export const locationService = {
     if (!navigator.geolocation) return { state: 'unavailable', position: null };
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        ({ coords }) => resolve({ state: 'granted', position: { latitude: coords.latitude, longitude: coords.longitude } }),
+        ({ coords }) => resolve({
+          state: 'granted',
+          position: { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy },
+        }),
         (error) => {
           const state = error.code === error.PERMISSION_DENIED
             ? 'denied'

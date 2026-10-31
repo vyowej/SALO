@@ -58,7 +58,7 @@ class PsgcImportService
         return count($rows);
     }
 
-    private function validate(array $rows): void
+    private function validate(array &$rows): void
     {
         if ($rows === []) {
             throw new \InvalidArgumentException('The PSGC CSV contains no location rows.');
@@ -104,5 +104,35 @@ class PsgcImportService
                 ]);
             }
         }
+
+        $fullNames = [];
+        foreach (array_keys($byCode) as $code) {
+            $fullNames[$code] = $this->fullNameFor($code, $byCode, $fullNames);
+        }
+        foreach ($rows as $index => $row) {
+            $rows[$index]['full_name'] = $fullNames[$row['code']];
+            if (mb_strlen($rows[$index]['full_name']) > 300) {
+                throw ValidationException::withMessages([
+                    'file' => ['The PSGC hierarchy at row '.($index + 2).' exceeds the supported full-name length.'],
+                ]);
+            }
+        }
+    }
+
+    private function fullNameFor(string $code, array $locations, array &$fullNames): string
+    {
+        if (isset($fullNames[$code])) {
+            return $fullNames[$code];
+        }
+
+        $location = $locations[$code];
+        $parentCode = $location['parent_code'];
+        $fullNames[$code] = $location['name'];
+
+        if ($parentCode !== '') {
+            $fullNames[$code] .= ', '.$this->fullNameFor($parentCode, $locations, $fullNames);
+        }
+
+        return $fullNames[$code];
     }
 }

@@ -44,9 +44,10 @@
 - Keep driver location ephemeral: retain only the last point in a short-lived cache value, overwrite on each accepted ping, and delete/expire after completion or cancellation. Never persist location history.
 - Collect location only for an active assigned job and only at an approved interval; stop collection when no longer needed. Explain the purpose and request device permission only when required.
 - Check authorization on every polling request. Do not rely on obscurity of job IDs. Apply freshness thresholds and avoid returning stale coordinates as current.
-- Do not forward personal/confidential address details to public geocoding services. Use server-side provider configuration and protect provider keys.
-- Public Nominatim service forbids autocomplete and limits use to at most one request per second per application. The attachment's debounced place-search behavior conflicts with this rule; do not implement per-keystroke requests against public Nominatim. Use explicit user submission, a permitted provider, or self-hosting after product approval.
-- [VERIFY] OSM tile-service terms/capacity and visible attribution; [VERIFY] OpenRouteService key handling, plan quotas, commercial-use terms, route profile/ETA behavior, attribution, and fallback; [VERIFY] PSGC upstream availability/terms and operational caching. Provider choices and deployment must be checked before release.
+- Address/coordinate fields may be sent to a third-party location provider. Disclose this transfer, send only the minimum fields required, and never send SALO user IDs. Keep all provider calls behind the backend and keys in `backend/.env`; never expose or hard-code them.
+- Evaluate Geoapify first for PH-limited street/landmark autocomplete, with Photon and LocationIQ as alternatives. For each, verify free-tier limits, terms/attribution, geographic coverage, retention/processing location, and privacy impact [VERIFY]. Do not use any provider for type-ahead unless its terms allow it.
+- Nominatim is permitted only for a single reverse-geocoding lookup, never autocomplete. Verify terms/attribution/privacy [VERIFY]; use a custom User-Agent, at most one request per second per application, caching, and timeout.
+- [VERIFY] OSM tile-service terms/capacity and visible attribution; [VERIFY] OpenRouteService key handling, plan quotas, commercial-use terms, route profile/ETA behavior, attribution, and fallback; [VERIFY] PSGC upstream availability/terms and operational caching. Re-check provider choices and deployment before release.
 
 ## Privacy governance and retention
 

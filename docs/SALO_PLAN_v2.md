@@ -266,12 +266,13 @@ An admin defines **Zones** (name, center point, radius) and **Shifts** (for exam
 
 Location must actually work:
 
-- **Use my current location:** the browser reads the position (needs HTTPS or localhost), the system reverse-geocodes it to an address, and shows a draggable pin so the user can correct it.
-- **Manual search, not dropdowns:** typing "Zamboanga" instantly suggests Zamboanga City, Zamboanga del Norte, Zamboanga del Sur, and Zamboanga Sibugay. Suggestions come from the official **PSGC** list of regions, provinces, cities, and barangays stored in the database (instant, no per-search limit), shown with their hierarchy, for example "Pasonanca, Zamboanga City, Zamboanga Peninsula". Independent cities sit directly under their region.
-- **Streets and landmarks:** an autocomplete provider limited to the Philippines (for example Geoapify) \[VERIFY free limits\]. Nominatim's public service forbids type-ahead use, so it is used only for single lookups.
+- The owner confirmed the address fields and intended schema columns on 2026-10-31. The address-field order for saved addresses, checkout, restaurant locations, and rider home locations is **Country, Province, City or Municipality, Barangay, Street, House number**. Country is shown first, prefilled with Philippines, locked while only the Philippines is supported, and stored as `country_code="PH"`. Country, province unless exempt, city/municipality, barangay, and street are required; house number, delivery note, and label are optional. The owner will edit v3 before C1.
+- **Use my current location:** the browser reads the position (needs HTTPS or localhost), and a backend reverse-geocoding provider fills editable address fields. Show a draggable pin; moving it refreshes fields. Show and store the final formatted address on one line. Manual street text and the draggable pin remain usable if an autocomplete provider is unavailable.
+- **PSGC type-ahead, not dropdowns:** province, city, and barangay suggestions come only from the local PSGC table, constrained by selected parents and shown with hierarchy. Typing "Zamboanga" offers Zamboanga City, Zamboanga del Norte, Zamboanga del Sur, and Zamboanga Sibugay. If a city is typed first, offer qualified entries such as "Zamboanga City, Zamboanga Peninsula"; selection fills the parent context. Every selection clears and reloads lower fields. The v3 PSGC levels are region, province, city, and barangay; municipalities use the `city` level. Ordinary cities/municipalities are children of a province. NCR cities/municipalities are children of the NCR region and have no province row: display "Metro Manila (NCR)" and skip province selection. An independent city outside NCR, such as Zamboanga City, is a `city` row directly under its region: display "None (independent city)" and skip province selection. These display values are not PSGC province records. Persist one barangay leaf code and derive ancestors locally.
+- Backend validation checks that each selected PSGC row exists at the expected level and belongs to the selected parent; a barangay must belong to the selected city/municipality. Street and house number are editable free text; optional street suggestions use a provider through the backend, restricted to the Philippines. Evaluate Geoapify first for street/landmark autocomplete, with Photon and LocationIQ as alternatives; verify each provider's free-tier limits, terms/attribution, and privacy impact \[VERIFY\]. Nominatim is for a single reverse-geocoding lookup only, not autocomplete; verify its terms/attribution and privacy impact, and enforce custom User-Agent, one request per second per application, caching, and timeout \[VERIFY\].
 - **Map:** Leaflet with OpenStreetMap tiles \[VERIFY usage policy\]. **Routes, distance, and ETA:** OpenRouteService through the Laravel backend \[VERIFY limits\]. Keys stay in the backend `.env`.
-- Coordinates must be inside the Philippines. Only coordinates and formatted text are stored; orders snapshot the address text.
-- Addresses are personal data sent to third parties, so the privacy section says so \[VERIFY under the Data Privacy Act\].
+- Coordinates retain the agreed coarse Philippine bounds rule in one shared config value, with clear errors and a test. Exact Philippine boundary validation remains deferred \[VERIFY\]; the coarse box is not a polygon. Store the pin and final formatted address; delivery orders snapshot `country_code`, address text, and coordinates.
+- Address and coordinate data may be sent to a third-party provider. Disclose the transfer, send only the minimum required address/coordinate data, and never send SALO user IDs. Assess provider retention/processing and legal/privacy impact before production \[VERIFY under the Data Privacy Act\]. All calls are backend-only; keys remain in `backend/.env`.
 
 ## 9. Information requirements
 
@@ -296,7 +297,7 @@ Business rules are the policies the database and backend must enforce. Numbers m
 - **U4** A user reads and edits only their own private information. Others see only what a transaction requires (a rider sees the customer's name, address, and phone for the active delivery only).
 - **U5** Suspended, Deactivated, and Invited accounts cannot log in.
 - **U6** Unverified emails can browse but cannot place orders or reservations.
-- **U7** A user may save several addresses using v3 `address_type`, `label`, and `custom_label`; encode School as `address_type=other` and `label=School`. Exactly one address is default when the user has addresses; enforce this in a transaction because v3's index is non-unique.
+- **U7** A user may save several addresses in the agreed order Country, Province, City/Municipality, Barangay, Street, House number. Country, province unless exempt, city/municipality, barangay, and street are required; house number, delivery note, and label are optional. Labels are Home, Work, School, Church, or Other with custom text. Confirmed mapping: Home/Work/Church match `address_type`; School is `other` plus `label=School`; Other is `other` plus `label=Other` and custom text. Country is shown as locked Philippines and stored as `country_code="PH"`. Persist one barangay leaf code and derive ancestors. Exactly one address is default when the user has addresses; enforce this in a transaction because v3's index is non-unique. The owner confirmed intended changes, but v3 still needs the owner's edit before C1.
 - **U8** Birthday is optional; age is derived. Riders must be 18 or older.
 - **U9** Mobile numbers use a Philippine format.
 - **U10** Account removal is deactivation, with anonymization after a retention period. Orders and reservations are never hard-deleted.
@@ -420,8 +421,8 @@ Business rules are the policies the database and backend must enforce. Numbers m
 - **W2** A restaurant may reply; admin may hide abusive content.
 - **W3** Staff and owners cannot review their own restaurant.
 - **W4** Help requests create a support ticket visible to admins.
-- **G1** Coordinates must be inside the Philippines.
-- **G2** Addresses use the PSGC hierarchy plus a map pin; GPS readings show a draggable pin for correction.
+- **G1** Coordinates must pass the agreed coarse Philippine bounds check, held in one config value with a clear error and test. Exact Philippine boundary validation is deferred \[VERIFY\].
+- **G2** All address surfaces use the revised ordered fields, local PSGC type-ahead, strict parent validation repeated by the backend, a draggable pin with reverse-geocoded editable fields, and a stored one-line formatted address. Optional street autocomplete is called through the backend and restricted to the Philippines; the provider must allow type-ahead.
 - **A1** Every admin action is audited. **A2** Orders, payments, and reviews are never hard-deleted. V3 provides no soft-delete column for these records; use only existing status/moderation fields where applicable, and preserve payment/order history. **A3** Admins never see passwords and do not place orders.
 - **X1** Retention \[PROPOSED\]: audit log 90 days; rejected-application documents 30 days; delivery proof photos 30 days; notifications 60 days; orders, payments, and reviews kept.
 - **X2** Uploads: JPG, PNG, WebP (and PDF for documents), at most 2 MB, validated by real file type, never by the client's name.
@@ -718,7 +719,7 @@ Legacy note: the preceding Plan v2 entity rows were designed around a single `ow
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived (not stored) |
 | --- | --- | --- | --- | --- | --- |
 | User | 0 | user\_id |  | email (unique), password\_hash, first\_name, middle\_name, last\_name, suffix, mobile, birthday (optional), status, email\_verified\_at, created\_at, last\_login\_at | full name, age |
-| UserAddress | 3 | address\_id | user\_id, psgc\_code | label, custom\_label, street, house\_no, latitude, longitude, delivery\_note, is\_default | formatted address |
+| UserAddress | 3 | address\_id | user\_id, barangay-leaf `psgc\_code` | country\_code (`PH`), street, house\_no, label, custom\_label, delivery\_note, latitude, longitude, is\_default, formatted\_address | province, city/municipality, region labels derived through PSGC |
 | PlatformAdmin | 0 | admin\_id | user\_id (unique) | admin\_level, status, created\_at |  |
 | AuthToken | 0 | token\_id | user\_id | purpose, token\_hash, expires\_at, used\_at, attempts, created\_at | is\_expired |
 | Invitation | 2 | invitation\_id | invited\_by, restaurant\_id | invited\_email, staff\_role, token\_hash, expires\_at, accepted\_at, status |  |
@@ -729,7 +730,7 @@ Legacy note: the preceding Plan v2 entity rows were designed around a single `ow
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
-| Restaurant | 2 | restaurant\_id | owner\_user\_id, psgc\_code | name, branch\_label, description, contact\_number, business\_email, email\_verified\_at, street, latitude, longitude, logo\_path, cover\_path, delivery\_radius\_km, prep\_minutes, is\_24\_7, status, is\_published, created\_at, updated\_at | average rating, pork-free badge, open now |
+| Restaurant | 2 | restaurant\_id | owner\_user\_id, barangay-leaf `psgc\_code` | name, branch\_label, description, contact\_number, business\_email, email\_verified\_at, country\_code, street, house\_no, formatted\_address, latitude, longitude, logo\_path, cover\_path, delivery\_radius\_km, prep\_minutes, is\_24\_7, status, is\_published, created\_at, updated\_at | province/city/region labels; average rating, pork-free badge, open now |
 | RestaurantPhoto | 2 | photo\_id | restaurant\_id | path, alt\_text, sort\_order, is\_primary (maximum 10) |  |
 | RestaurantApplication | 2 | application\_id | restaurant\_id, submitted\_by, reviewed\_by | declared\_bir\_2303, status, submitted\_at, reviewed\_at, review\_notes |  |
 | ApplicationDocument | 2 | document\_id | application\_id | doc\_type, private\_path, expiry\_date, verified | is\_expired |
@@ -756,7 +757,7 @@ Legacy note: the preceding Plan v2 entity rows were designed around a single `ow
 | Cart | 3 | cart\_id | user\_id, restaurant\_id (unique pair) | updated\_at, expires\_at | totals |
 | CartItem | 3 | cart\_item\_id | cart\_id, item\_id (unique pair) | quantity, note | line total |
 | CheckoutGroup | 3 | checkout\_id | user\_id | reference\_code, idempotency\_key, placed\_at | grand total |
-| Order | 3 | order\_id | checkout\_id, restaurant\_id, delivery\_address\_id (optional) | reference\_code, order\_type (Delivery or Pick-up), scheduled\_for, status, recipient\_name, recipient\_phone, delivery\_address\_text, delivery\_lat, delivery\_lng, subtotal, delivery\_fee, service\_fee, discount\_amount, total\_amount (snapshots), cancelled\_by, cancel\_reason, placed\_at, completed\_at, customer\_confirmed\_at, confirmation\_method | estimated time; customer (via group) |
+| Order | 3 | order\_id | checkout\_id, restaurant\_id, delivery\_address\_id (optional) | reference\_code, order\_type (Delivery or Pick-up), scheduled\_for, status, recipient\_name, recipient\_phone, delivery `country\_code`, delivery\_address\_text (formatted snapshot), delivery\_lat, delivery\_lng, subtotal, delivery\_fee, service\_fee, discount\_amount, total\_amount (snapshots), cancelled\_by, cancel\_reason, placed\_at, completed\_at, customer\_confirmed\_at, confirmation\_method | estimated time; customer (via group) |
 | OrderItem | 3 | order\_item\_id | order\_id, item\_id | item\_name\_snapshot, unit\_price\_snapshot, quantity, note | line total |
 | OrderStatusHistory | 3 | history\_id | order\_id, changed\_by | from\_status, to\_status, reason, changed\_at |  |
 | Payment | 3 | payment\_id | order\_id | method, status, amount, provider, provider\_reference, paid\_at |  |
@@ -765,7 +766,7 @@ Legacy note: the preceding Plan v2 entity rows were designed around a single `ow
 
 | Entity | Phase | PK | Foreign keys | Main attributes | Derived |
 | --- | --- | --- | --- | --- | --- |
-| RiderProfile | 4 | rider\_id | user\_id (unique), approved\_by | vehicle\_type, plate\_number, home\_lat, home\_lng, ewallet\_account\_name, status, availability, approved\_at, resigned\_at | total earned, deliveries done |
+| RiderProfile | 4 | rider\_id | user\_id (unique), approved\_by, barangay-leaf `psgc\_code` | country\_code, street, house\_no, formatted\_address, home\_lat, home\_lng, vehicle\_type, plate\_number, ewallet\_account\_name, status, availability, approved\_at, resigned\_at | province, city/municipality, region labels; total earned, deliveries done |
 | RiderDocument | 4 | document\_id | rider\_id | doc\_type, private\_path, verified |  |
 | Zone | 1 | zone\_id | psgc\_code (optional) | name, center\_lat, center\_lng, radius\_km, is\_active | riders assigned |
 | Shift | 1 | shift\_id |  | name, start\_time, end\_time |  |
@@ -972,6 +973,6 @@ Failures of external services (email, maps, routing) never leave partial records
 - Rider share 80%, commission 15%, retention periods, and the other numbers in Section 16 are starting values.
 - Staff may be Staff at one restaurant and Manager at another.
 
-**\[VERIFY\] list:** Laravel approval by the instructor; Data Privacy Act obligations for storing IDs, addresses, and photos; current business and rider requirements of delivery platforms; OpenStreetMap tile and Nominatim usage policies; Geoapify and OpenRouteService free limits; PSGC API endpoints and the data import; Gmail SMTP or another mail service; PayMongo test mode; license and permission for any photo used on the site; MySQL version available at school.
+**\[VERIFY\] list:** Laravel approval by the instructor; Data Privacy Act obligations for storing IDs, addresses, and photos; current business and rider requirements of delivery platforms; OpenStreetMap tile and Nominatim usage policies; Geoapify, Photon, LocationIQ, and OpenRouteService free-tier limits, terms, attribution, and privacy impact; PSGC API endpoints and data import; Gmail SMTP or another mail service; PayMongo test mode; license and permission for any photo used on the site; MySQL version available at school; exact Philippine boundary checking.
 
-Additional schema-dependent items: Owner membership/add-owner invitation in v3; rules for removing/deactivating an Owner without leaving a restaurant ownerless; Admin ownership changes; address `School` encoding and service-enforced default invariant; customer reschedule requests; account/document retention; and nullable v3 fields required by delivery/order flows.
+Additional schema-dependent items: Owner membership/add-owner invitation in v3; rules for removing/deactivating an Owner without leaving a restaurant ownerless; Admin ownership changes; owner-approved address columns (`country_code`, barangay-leaf `psgc_code`, formatted address, required street, and restaurant/rider-home fields); the delivery snapshot `country_code`; customer reschedule requests; account/document retention; and nullable v3 fields required by delivery/order flows. The owner edits v3 before C1.

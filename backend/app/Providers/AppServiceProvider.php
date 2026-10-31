@@ -3,7 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Restaurant;
+use App\Models\UserAddress;
+use App\Models\PsgcLocation;
+use App\Policies\PsgcLocationPolicy;
 use App\Policies\RestaurantPagePolicy;
+use App\Policies\UserAddressPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,7 +30,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(PsgcLocation::class, PsgcLocationPolicy::class);
         Gate::policy(Restaurant::class, RestaurantPagePolicy::class);
+        Gate::policy(UserAddress::class, UserAddressPolicy::class);
 
         RateLimiter::for('auth-login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));

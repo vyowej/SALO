@@ -8,6 +8,7 @@ use App\Notifications\EmailVerificationNotification;
 use App\Notifications\PasswordResetNotification;
 use App\Repositories\Contracts\AddressRepository;
 use App\Repositories\Contracts\UserRepository;
+use App\Repositories\Stub\InMemoryAddressRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -22,6 +23,7 @@ class AuthAndCustomerAccountTest extends TestCase
             'Origin' => 'http://localhost:5173',
             'Referer' => 'http://localhost:5173',
         ]);
+        $this->app->bind(AddressRepository::class, InMemoryAddressRepository::class);
     }
 
     public function test_registration_grants_only_customer_capability_and_creates_primary_address(): void
@@ -32,11 +34,9 @@ class AuthAndCustomerAccountTest extends TestCase
             'password' => 'Password123',
             'password_confirmation' => 'Password123',
             'address' => [
+                'psgc_code' => null,
                 'label' => 'Home',
-                'region' => 'Region',
-                'province' => 'Province',
-                'city_municipality' => 'City',
-                'barangay' => 'Barangay',
+                'address_type' => 'home',
                 'street' => 'Main Road',
             ],
         ]);
@@ -111,11 +111,9 @@ class AuthAndCustomerAccountTest extends TestCase
             ->assertJsonPath('data.soundAlerts', true);
 
         $address = [
+            'psgc_code' => null,
             'label' => 'Home',
-            'region' => 'Region',
-            'province' => 'Province',
-            'city_municipality' => 'City',
-            'barangay' => 'Barangay',
+            'address_type' => 'home',
             'street' => 'Main Road',
         ];
         $created = $this->postJson('/api/v1/customer/addresses', $address)
@@ -147,11 +145,9 @@ class AuthAndCustomerAccountTest extends TestCase
         $address = app(AddressRepository::class)->create(
             (string) $owner->getAuthIdentifier(),
             [
+                'psgc_code' => null,
                 'label' => 'Home',
-                'region' => 'Region',
-                'province' => 'Province',
-                'city_municipality' => 'City',
-                'barangay' => 'Barangay',
+                'address_type' => 'home',
                 'street' => 'Main Road',
             ],
         );

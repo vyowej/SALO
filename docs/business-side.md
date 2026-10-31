@@ -40,10 +40,10 @@ c. Business dashboard with a "Set up your restaurant" checklist for first-time o
 d. If the admin approval screen is missing, add a minimal approve, reject, or request-revision action so the flow can be tested.
 
 PHASE B2 - RESTAURANT PAGE EDITOR + PHOTOS + HOURS (STOP after)
-- Profile editor (Owner and Manager): name, description, cuisine and category, contact, address and pin, delivery radius, default prep time, Open 24/7 toggle, with live preview and an unsaved-changes warning. A "View as customer" button shows the public page exactly as customers see it.
+- Profile editor (Owner and Manager): name, description, cuisine and category, contact, address and pin, delivery radius, default prep time, Open 24/7 toggle, with live preview and an unsaved-changes warning. The restaurant address uses Country, Province, City or Municipality, Barangay, Street, House number in that order; Country is locked to Philippines but stored as `country_code="PH"`, one barangay leaf PSGC code is persisted, ancestors are derived, and the final one-line formatted address is stored. House number is optional free text. The owner confirmed requiredness and intended columns; owner-edited v3 and database readiness remain prerequisites. A "View as customer" button shows the public page exactly as customers see it.
 - Photos: logo (square), cover (16:9), gallery up to 10 (add, delete, reorder, alt text, set primary). Validate type and size in the browser, compress, upload with progress, handle errors.
 - Hours: per weekday with shifts and the overnight flag; Open 24/7; closure dates with a calendar. Show "open now" derived in Asia/Manila time.
-- Sensitive fields (legal name, address, permits): editable by Owner only, submitted for admin re-approval; the old value stays live until approved.
+- Sensitive fields (legal name, address, permits): editable by Owner only, submitted for admin re-approval; the old value stays live until approved. Address location uses the same ordered fields and approved design; do not implement against v3 until the owner updates the schema.
 - Publish checklist (Owner only): Approved, address with pin, hours or 24/7, at least one category, at least one published and orderable item. Publish, unpublish, and Closed controls with confirmation. Dietary label rules (Halal needs a certificate).
 
 PHASE B3 - TEAM AND HIERARCHY (the core of this prompt; STOP after)

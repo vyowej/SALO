@@ -21,9 +21,12 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
   const [savedLoading, setSavedLoading] = useState(true);
   const [error, setError] = useState('');
   const [locationState, setLocationState] = useState('');
+  const [locationAccuracy, setLocationAccuracy] = useState(null);
   const [manualMode, setManualMode] = useState(false);
   const [manualAddress, setManualAddress] = useState({
     label: 'Home',
+    custom_label: '',
+    address_type: 'home',
     region: '',
     province: '',
     city_municipality: '',
@@ -34,6 +37,8 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
     longitude: null,
     is_main: false,
     rider_note: '',
+    psgc_code: '',
+    psgc_full_name: '',
   });
   const searchRef = useRef(null);
   const dialogRef = useRef(null);
@@ -86,7 +91,7 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !search.trim()) return undefined;
+    if (!open || search.trim().length < 2) return undefined;
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
@@ -109,24 +114,55 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
 
   const useCurrentLocation = async () => {
     setLocationState('asking');
+    setLocationAccuracy(null);
     setError('');
-    const result = await locationService.getCurrentPosition();
+    let result;
+    try {
+      result = await locationService.getCurrentPosition();
+    } catch (locationError) {
+      console.error('Unable to access the current location.', locationError);
+      setLocationState('unavailable');
+      setError('We couldn’t access your location. Choose an address or enter it manually.');
+      return;
+    }
     if (result.state !== 'granted') {
       setLocationState(result.state);
       return;
     }
     try {
-      const place = await locationService.reverseGeocode(result.position.latitude, result.position.longitude);
-      setPendingAddress({ ...place, label: 'Current location', detail: `${place.street}, ${place.city_municipality}` });
+      if (!await locationService.isWithinPhilippines(result.position)) {
+        setLocationState('outside');
+        return;
+      }
+      setManualAddress((current) => ({
+        ...current,
+        latitude: result.position.latitude,
+        longitude: result.position.longitude,
+      }));
+      setLocationAccuracy(result.position.accuracy);
+      setManualMode(true);
       setLocationState('granted');
     } catch (locationError) {
-      console.error('Unable to resolve current location.', locationError);
-      setError('We couldn’t identify this location. Choose an address or search manually.');
+      console.error('Unable to use the current location.', locationError);
+      setError('We couldn’t use this location. Choose an address or enter it manually.');
       setLocationState('unavailable');
     }
   };
 
   const chooseAddress = (address) => {
+    if (address.psgc_code && !address.street) {
+      setManualAddress((current) => ({
+        ...current,
+        ...address,
+        label: current.label || 'Home',
+        is_main: !savedAddresses.length,
+      }));
+      setManualMode(true);
+      setPendingAddress(null);
+      setSearch('');
+      setSuggestions([]);
+      return;
+    }
     setPendingAddress(address);
     setSearch('');
     setSuggestions([]);
@@ -146,8 +182,8 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
   };
 
   const saveManualAddress = async () => {
-    if (!manualAddress.region || !manualAddress.province || !manualAddress.city_municipality || !manualAddress.barangay || !manualAddress.street.trim()) {
-      setError('Complete the address fields before saving.');
+    if (!manualAddress.psgc_code && !manualAddress.street.trim()) {
+      setError('Choose a Philippine location or enter a street address before saving.');
       return;
     }
     try {
@@ -168,6 +204,8 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
       ? 'Finding your location took too long. Try again or choose a saved address.'
       : locationState === 'unavailable'
         ? 'Location services are unavailable. Search or choose a saved address instead.'
+        : locationState === 'outside'
+          ? 'Your current location is outside the configured Philippines bounds. Choose or enter a Philippine address.'
         : '';
 
   return (
@@ -175,25 +213,28 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
       <section className="modal location-picker" role="dialog" aria-modal="true" aria-labelledby="location-picker-title" ref={dialogRef} onTouchStart={(event) => { touchStartY.current = event.touches[0].clientY; }} onTouchEnd={(event) => { if (event.changedTouches[0].clientY - touchStartY.current > 100) onCloseRef.current(); }}>
         <div className="location-picker__handle" aria-hidden="true" />
         <header className="modal__header">
-          <div><h2 id="location-picker-title">Choose delivery address</h2><p>We’ll show what can be delivered to you.</p></div>
+          <div><h2 id="location-picker-title">Choose delivery address</h2><p>Search Philippine locations, then add your street or unit manually.</p></div>
           <button type="button" className="icon-button" aria-label="Close address picker" onClick={closePicker}>×</button>
         </header>
         <div className="modal__body location-picker__body">
-          <label className="location-picker__search"><Search size={17} /><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search street, city, or barangay" aria-label="Search delivery address" /></label>
+          <label className="location-picker__search"><Search size={17} /><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search city, province, or barangay" aria-label="Search Philippine locations" /></label>
           <button type="button" className="location-picker__current" onClick={useCurrentLocation} disabled={locationState === 'asking'}><LocateFixed size={17} />{locationState === 'asking' ? 'Finding your location…' : 'Use current location'}</button>
           {deniedMessage ? <p className="location-picker__message" role="status">{deniedMessage}</p> : null}
+          {locationAccuracy !== null ? <p className="location-picker__message" role="status">GPS accuracy: about {Math.round(locationAccuracy)} m. Adjust the pin if needed.</p> : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {manualMode ? (
             <section className="location-picker__manual">
               <div className="location-picker__manual-heading"><strong>Add an address</strong><button type="button" className="text-link" onClick={() => setManualMode(false)}>Back to saved</button></div>
               <AddressForm value={manualAddress} onChange={setManualAddress} showLocationActions={false} />
-              <button type="button" className="btn btn--secondary btn--full" onClick={saveManualAddress}>Save address</button>
+              <button type="button" className="btn btn--primary btn--full" onClick={saveManualAddress}>Save address</button>
             </section>
-          ) : search ? (
+          ) : search.trim().length >= 2 ? (
             <div className="location-picker__results" aria-live="polite">
               <strong>Search results</strong>
               {loading ? <div className="skeleton location-picker__skeleton" /> : suggestions.length ? suggestions.map((place, index) => <button key={`${place.detail}-${index}`} type="button" onClick={() => chooseAddress(place)}><MapPin size={16} /><span><strong>{place.label}</strong><small>{formatAddress(place)}</small></span></button>) : <p>No matching places found.</p>}
             </div>
+          ) : search ? (
+            <p className="location-picker__message" role="status">Type at least 2 characters to search.</p>
           ) : (
             <div className="location-picker__saved">
               <strong>Saved addresses</strong>
@@ -201,8 +242,12 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
               <button type="button" className="location-picker__add-address" onClick={() => { setManualMode(true); setError(''); }}>+ Add address manually</button>
             </div>
           )}
-          {activeAddress ? <MapView center={activeAddress} pin={activeAddress} /> : null}
-          <button type="button" className="btn btn--primary btn--full" disabled={!activeAddress} onClick={confirmAddress}>Deliver to this address</button>
+          {!manualMode ? (
+            <>
+              {activeAddress ? <MapView center={activeAddress} pin={activeAddress} /> : null}
+              <button type="button" className="btn btn--primary btn--full" disabled={!activeAddress} onClick={confirmAddress}>Deliver to this address</button>
+            </>
+          ) : null}
         </div>
       </section>
     </div>

@@ -235,6 +235,11 @@ class User extends Authenticatable
         return $this->hasMany(RestaurantStaff::class);
     }
 
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
     public function applications(): HasMany
     {
         return $this->hasMany(RestaurantApplication::class, 'submitted_by');

@@ -91,15 +91,17 @@ Registration grants `customer` only. Login is rate-limited and rejects deactivat
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
 | `GET /locations/regions` | Optional `q` | PSGC-compatible `Location[]` | Guest, customer, owner, rider, admin |
-| `GET /locations/regions/{region}/provinces` | Optional `q` | `Location[]` | Guest, customer, owner, rider, admin |
-| `GET /locations/provinces/{province}/cities-municipalities` | Optional `q` | `Location[]` | Guest, customer, owner, rider, admin |
-| `GET /locations/cities-municipalities/{city}/barangays` | Optional `q` | `Location[]` | Guest, customer, owner, rider, admin |
-| `GET /locations/places/search` | Required explicit `q`; optional bounded `limit` | Normalized `Place[]` | Guest, customer, owner, rider, admin |
-| `GET /locations/places/reverse` | Required numeric `lat`, `lon` | Normalized `Place` | Guest, customer, owner, rider, admin |
+| `GET /locations/regions/{region}/provinces` | Optional `q` | Type-ahead `Location[]` | Guest, customer, owner, rider, admin |
+| `GET /locations/provinces/{province}/cities-municipalities` | Optional `q` | Type-ahead `Location[]` | Guest, customer, owner, rider, admin |
+| `GET /locations/cities-municipalities/{city}/barangays` | Optional `q` | Type-ahead `Location[]` | Guest, customer, owner, rider, admin |
+| `GET /locations/psgc` | Required `level`; optional `parent_code`, `search` | PSGC records `{code,parent_code,name,level,full_name}` | Guest, customer, owner, rider, admin |
+| `GET /locations/psgc/search` | Required `q`; optional expected `level` and `parent_code` | Hierarchical suggestions `{code,parent_code,name,level,full_name}` | Guest, customer, owner, rider, admin |
+| `GET /locations/places/search` | Required type-ahead `q`; optional bounded `limit`; country fixed to `PH` | Normalized street suggestions from a provider called by the backend | Guest, customer, owner, rider, admin |
+| `POST /locations/places/reverse` | `{latitude,longitude}` | `{country_code:"PH",province_code?,province_display,city,barangay,street?,house_no?,formatted_address,latitude,longitude}` | Guest, customer, owner, rider, admin |
 
-Location responses normalize to `code`/`id`, `name`, hierarchical codes where available, and optional coordinates/address components. Provider errors return `LOCATION_PROVIDER_UNAVAILABLE` with a safe fallback message, not raw upstream bodies.
+Location responses normalize to `code`/`id`, `name`, `parent_code`, `level`, hierarchy, and optional coordinates/address components. Search is type-ahead, never a dropdown; each selection clears lower fields and reloads them under the selected parent. The backend validates every PSGC code and its level/parent, including barangay-to-city. If a city is entered first, suggestions include the hierarchy and selecting one fills the province/region context. Provider errors return `LOCATION_PROVIDER_UNAVAILABLE` with a safe fallback message, not raw upstream bodies. No provider key is sent to the browser.
 
-PSGC proxy resource paths verified for this proposal: `/regions/`, `/regions/{regionCode}/provinces/`, `/provinces/{provinceCode}/cities-municipalities/`, and `/cities-municipalities/{cityCode}/barangays/` at [PSGC API](https://psgc.gitlab.io/api/). Nominatim uses `/search` for explicit searches and `/reverse` for coordinate lookups; use `format=jsonv2`, `countrycodes=ph`, bounded results, an identifying `User-Agent`, cache, timeouts, and visible OpenStreetMap attribution. The public Nominatim service forbids autocomplete and requires a maximum of one request per second per application. Do not send personal/confidential address content upstream. These restrictions apply to the public OSMF service; changing provider requires configuration, not a client release. See the [Nominatim Search API](https://nominatim.org/release-docs/latest/api/Search/), [Reverse API](https://nominatim.org/release-docs/latest/api/Reverse/), and [Usage Policy](https://operations.osmfoundation.org/policies/nominatim/).
+PSGC proxy resource paths: `/regions/`, `/regions/{regionCode}/provinces/`, `/provinces/{provinceCode}/cities-municipalities/`, and `/cities-municipalities/{cityCode}/barangays/` at [PSGC API](https://psgc.gitlab.io/api/). Province, city, and barangay values come only from the local PSGC table. PSGC v3 has region/province/city/barangay levels; a municipality is a `city` row. NCR city/municipality rows are children of the NCR region, without province rows; independent cities such as Zamboanga City are city rows whose parent is their region. Display `Metro Manila (NCR)` or `None (independent city)` in the skipped province position, respectively. Evaluate Geoapify first for PH-limited street/landmark autocomplete, with Photon and LocationIQ as alternatives; verify each provider's free-tier limits, terms, coverage, attribution, and privacy impact [VERIFY]. Nominatim is for a single reverse-geocoding lookup only, never autocomplete; custom User-Agent, one request per second per application, caching, timeout, terms, and attribution apply [VERIFY]. All calls are backend-only; keys remain in `backend/.env`. Send only the minimum address/coordinate data and never SALO user IDs; disclose third-party transfers.
 
 ### Restaurant discovery and menu (authenticated)
 
@@ -119,8 +121,8 @@ No public restaurant search, detail, menu, availability, category, or owner list
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
 | `GET /customer/addresses` | — | Current user's `Address[]` | customer |
-| `POST /customer/addresses` | Address components, coordinates if selected, `label`, optional `rider_note` | Created `Address` | customer |
-| `PATCH /customer/addresses/{address}` | Editable address fields | Updated `Address` | customer |
+| `POST /customer/addresses` | In order: `{country_code:"PH",province_code?,city_code,barangay_code,street,house_no?,formatted_address,address_type?,label?,custom_label?,delivery_note?,latitude?,longitude?,is_default?}`. Send hierarchy codes for backend validation; persist only the barangay code as `psgc_code`. | Created `Address` with the same ordered components and formatted line; ancestor labels are derived from local PSGC | customer |
+| `PATCH /customer/addresses/{address}` | Editable revised address fields; changing a parent clears/requires valid child codes | Updated `Address` | customer |
 | `DELETE /customer/addresses/{address}` | — | `{ "deleted": true }` | customer |
 | `PATCH /customer/addresses/{address}/primary` | — | Updated primary `Address` | customer |
 | `POST /customer/delivery-quotes` | `restaurant_id`, `address_id`, `service_mode`; no trusted client distance/fee | Server quote with distance/fee source and expiry | customer |
@@ -129,6 +131,10 @@ No public restaurant search, detail, menu, availability, category, or owner list
 | `DELETE /customer/carts/{restaurant}` | — | `{ "deleted": true }` | customer |
 
 Cart writes re-check restaurant state, service mode, menu-item activity and availability. Carts expire according to configured policy; exact TTL is an implementation configuration and must be set before launch.
+
+The same address field order applies to checkout delivery address, restaurant location, and rider home location: Country, Province, City or Municipality, Barangay, Street, House number. Country is prefilled and locked to Philippines for now, displayed as Philippines, and stored as `country_code:"PH"`. Confirmed required fields are country, province unless the location is exempt, city/municipality, barangay, and street; house number, delivery note, and label are optional. The owner approved `country_code` on address-bearing records/snapshots and one stored barangay PSGC code with ancestors derived locally. The owner edits v3 before C1. NCR and independent-city handling follows the PSGC parent hierarchy described above. The backend repeats all PSGC existence, level, and parent checks.
+
+Address label values are Home, Work, School, Church, or Other; Other accepts custom text. Confirmed mapping: Home/Work/Church match `address_type`; School is `address_type=other,label=School`; Other is `address_type=other,label=Other,custom_label=<text>`. Add and persist the final formatted one-line text with saved, restaurant, and rider-home addresses. Orders retain `country_code` plus their immutable formatted-text and coordinate snapshot; separate components, PSGC codes, and delivery note are not snapshotted.
 
 ### Customer checkout, discounts, and orders
 

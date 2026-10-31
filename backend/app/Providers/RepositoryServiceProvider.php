@@ -20,6 +20,7 @@ use App\Repositories\Contracts\OrderRepository;
 use App\Repositories\Contracts\ReservationRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Database\DatabaseAuthTokenRepository;
+use App\Repositories\Database\DatabaseAddressRepository;
 use App\Repositories\Database\DatabaseBusinessDiscountRepository;
 use App\Repositories\Database\DatabaseBusinessReportRepository;
 use App\Repositories\Database\DatabaseApplicationDocumentRepository;
@@ -34,7 +35,6 @@ use App\Repositories\Database\DatabaseMenuRepository;
 use App\Repositories\Database\DatabaseOrderRepository;
 use App\Repositories\Database\DatabaseReservationRepository;
 use App\Repositories\Database\DatabaseUserRepository;
-use App\Repositories\Stub\InMemoryAddressRepository;
 use App\Repositories\Stub\InMemoryAdminRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -44,7 +44,7 @@ class RepositoryServiceProvider extends ServiceProvider
     {
         $this->app->singleton(UserRepository::class, DatabaseUserRepository::class);
         $this->app->singleton(AdminRepository::class, InMemoryAdminRepository::class);
-        $this->app->singleton(AddressRepository::class, InMemoryAddressRepository::class);
+        $this->app->singleton(AddressRepository::class, DatabaseAddressRepository::class);
         $this->app->singleton(AuthTokenRepository::class, DatabaseAuthTokenRepository::class);
         $this->app->singleton(ApplicationDocumentRepository::class, DatabaseApplicationDocumentRepository::class);
         $this->app->singleton(AuditLogRepository::class, DatabaseAuditLogRepository::class);

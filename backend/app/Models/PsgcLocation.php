@@ -16,7 +16,7 @@ class PsgcLocation extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['code', 'parent_code', 'name', 'level'];
+    protected $fillable = ['code', 'parent_code', 'name', 'level', 'full_name'];
 
     public function parent(): BelongsTo
     {

@@ -6,12 +6,107 @@ import RestaurantCard from '../../components/restaurant/RestaurantCard';
 import { formatPeso } from '../../utils/formatPeso';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { useAuth } from '../../context/AuthContext';
+import { useLocationContext } from '../../context/LocationContext';
 import { config } from '../../config';
 import { getGreeting } from '../../constants/voice';
+import LocationPicker from '../../components/location/LocationPicker';
 import './CustomerHome.css';
+
+const welcomeSteps = [
+  {
+    title: 'Set a delivery location',
+    detail: 'Choose a saved address, search a Philippine location, or enter your address manually.',
+    action: 'Set delivery location',
+  },
+  {
+    title: 'Explore popular restaurants',
+    detail: 'See popular neighborhood restaurants and find something you would like to try.',
+    action: 'Explore restaurants',
+  },
+  {
+    title: 'Try a reservation',
+    detail: 'Make a plan with your people and reserve a table when you are ready.',
+    action: 'Find a table',
+  },
+];
+
+function CustomerWelcome({ userId }) {
+  const { selectedAddress, selectAddress } = useLocationContext();
+  const [step, setStep] = useState(() => {
+    if (!userId) return null;
+    try {
+      const savedState = window.localStorage.getItem(`salo-customer-welcome-v1-${userId}`);
+      if (savedState === 'complete') return null;
+      const savedStep = Number(savedState?.replace('step-', ''));
+      return Number.isInteger(savedStep) && savedStep >= 0 && savedStep < welcomeSteps.length ? savedStep : 0;
+    } catch (error) {
+      console.error('Unable to read first-use welcome state.', error);
+      return 0;
+    }
+  });
+  const [addressOpen, setAddressOpen] = useState(false);
+
+  const complete = () => {
+    try {
+      window.localStorage.setItem(`salo-customer-welcome-v1-${userId}`, 'complete');
+    } catch (error) {
+      console.error('Unable to save first-use welcome state.', error);
+    }
+    setStep(null);
+  };
+
+  const advance = (nextStep) => {
+    try {
+      window.localStorage.setItem(`salo-customer-welcome-v1-${userId}`, `step-${nextStep}`);
+    } catch (error) {
+      console.error('Unable to save first-use welcome progress.', error);
+    }
+    setStep(nextStep);
+  };
+
+  const saveWelcomeAddress = async (address) => {
+    await selectAddress(address);
+    setAddressOpen(false);
+    advance(1);
+  };
+
+  if (step === null) return null;
+
+  return (
+    <>
+      <div className="modal-backdrop" role="presentation">
+        <section className="modal customer-welcome" role="dialog" aria-modal="true" aria-labelledby="customer-welcome-title">
+          <span className="eyebrow">Welcome to SALO · Step {step + 1} of 3</span>
+          <h2 id="customer-welcome-title">{welcomeSteps[step].title}</h2>
+          <p>{welcomeSteps[step].detail}</p>
+          {step === 0 ? (
+            <button type="button" className="btn btn--secondary btn--md" onClick={() => setAddressOpen(true)}>{welcomeSteps[step].action}</button>
+          ) : step === 1 ? (
+            <Link className="btn btn--secondary btn--md" to="/restaurants">{welcomeSteps[step].action}</Link>
+          ) : (
+            <Link className="btn btn--secondary btn--md" to="/reserve">{welcomeSteps[step].action}</Link>
+          )}
+          <div className="customer-welcome__actions">
+            <button type="button" className="text-link" onClick={complete}>Skip welcome</button>
+            <button type="button" className="btn btn--primary btn--md" onClick={() => step === 2 ? complete() : advance(step + 1)}>
+              {step === 2 ? 'Finish' : 'Next'}
+            </button>
+          </div>
+        </section>
+      </div>
+      <LocationPicker
+        open={addressOpen}
+        onClose={() => setAddressOpen(false)}
+        selectedAddress={selectedAddress}
+        onSelect={saveWelcomeAddress}
+      />
+    </>
+  );
+}
 
 export default function CustomerHomePage() {
   const { user, emailVerified, verifyEmail, sendVerificationEmail } = useAuth();
+  const { selectedAddress, selectAddress } = useLocationContext();
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -26,6 +121,7 @@ export default function CustomerHomePage() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
+  const [homeAddressOpen, setHomeAddressOpen] = useState(false);
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(`salo-verify-banner-dismissed-${user?.id}`) === 'true';
@@ -143,6 +239,17 @@ export default function CustomerHomePage() {
     }
   };
 
+  const selectHomeAddress = async (address) => {
+    await selectAddress(address);
+    setHomeAddressOpen(false);
+  };
+
+  const nextAction = !selectedAddress
+    ? { title: 'Set your delivery location', detail: 'Find restaurants that can reach you.', onClick: () => setHomeAddressOpen(true) }
+    : activeOrder
+      ? { title: 'Follow your active order', detail: `${activeOrder.restaurant} · ${activeOrder.status}`, to: `/orders/${activeOrder.id}` }
+      : { title: 'Explore nearby restaurants', detail: 'Browse places serving your neighborhood.', to: '/restaurants' };
+
   return (
     <div className="customer-home section-shell">
       <section className="customer-home__welcome">
@@ -167,6 +274,13 @@ export default function CustomerHomePage() {
           <button type="button" className="verify-email-banner__dismiss" onClick={dismissVerifyBanner} aria-label="Dismiss email verification reminder"><X size={16} /></button>
         </aside>
       ) : null}
+
+      <section className="customer-next-action" aria-labelledby="customer-next-action-title">
+        <div><span className="eyebrow">Your next step</span><h2 id="customer-next-action-title">{nextAction.title}</h2><p>{nextAction.detail}</p></div>
+        {nextAction.to
+          ? <Link className="btn btn--secondary btn--md" to={nextAction.to}>Continue</Link>
+          : <button className="btn btn--secondary btn--md" type="button" onClick={nextAction.onClick}>Set location</button>}
+      </section>
 
       {activeOrder ? (
         <section className="active-order-card">
@@ -254,6 +368,14 @@ export default function CustomerHomePage() {
           </section>
         </div>
       ) : null}
+
+      <CustomerWelcome key={user?.id} userId={user?.id} />
+      <LocationPicker
+        open={homeAddressOpen}
+        onClose={() => setHomeAddressOpen(false)}
+        selectedAddress={selectedAddress}
+        onSelect={selectHomeAddress}
+      />
     </div>
   );
 }

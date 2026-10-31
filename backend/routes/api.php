@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('force.json')->group(function (): void {
     Route::get('/locations/psgc', [PsgcLocationController::class, 'index']);
+    Route::get('/locations/psgc/search', [PsgcLocationController::class, 'search']);
 
     Route::middleware('guest:web')->group(function (): void {
         Route::post('/auth/register', [RegisteredUserController::class, 'store']);

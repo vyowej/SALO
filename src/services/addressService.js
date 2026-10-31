@@ -16,17 +16,23 @@ const normalizeAddress = (address, index = 0) => ({
     address.city_municipality,
     address.province,
   ].filter(Boolean).join(', '),
-  region: address.region || defaultMockAddress.region,
-  province: address.province || defaultMockAddress.province,
-  city_municipality: address.city_municipality || defaultMockAddress.city_municipality,
-  barangay: address.barangay || defaultMockAddress.barangay,
+  region: address.region || (config.useMock ? defaultMockAddress.region : ''),
+  province: address.province || (config.useMock ? defaultMockAddress.province : ''),
+  city_municipality: address.city_municipality || (config.useMock ? defaultMockAddress.city_municipality : ''),
+  barangay: address.barangay || (config.useMock ? defaultMockAddress.barangay : ''),
+  psgc_code: address.psgc_code || '',
+  psgc_full_name: address.psgc_full_name || '',
+  address_type: address.address_type || 'home',
+  custom_label: address.custom_label || '',
   street: address.street || '',
   house_no: address.house_no || '',
-  latitude: Number(address.latitude) || defaultMockAddress.latitude,
-  longitude: Number(address.longitude) || defaultMockAddress.longitude,
-  is_main: address.is_main ?? Boolean(address.primary),
-  primary: address.is_main ?? Boolean(address.primary),
-  rider_note: address.rider_note || '',
+  latitude: address.latitude === null || address.latitude === undefined ? null : Number(address.latitude),
+  longitude: address.longitude === null || address.longitude === undefined ? null : Number(address.longitude),
+  is_main: address.is_default ?? address.is_main ?? Boolean(address.primary),
+  is_default: address.is_default ?? address.is_main ?? Boolean(address.primary),
+  primary: address.is_default ?? address.is_main ?? Boolean(address.primary),
+  delivery_note: address.delivery_note || address.rider_note || '',
+  rider_note: address.delivery_note || address.rider_note || '',
 });
 
 const readAddresses = () => {
@@ -45,16 +51,21 @@ const saveAddresses = (addresses) => {
 };
 
 const toApiAddress = (address) => ({
-  label: address.label,
-  region: address.region,
-  province: address.province,
-  city_municipality: address.city_municipality,
-  barangay: address.barangay,
-  street: address.street,
+  psgc_code: address.psgc_code || null,
+  label: address.label || 'Home',
+  address_type: ({
+    Home: 'home',
+    Office: 'work',
+    School: 'other',
+    Other: 'other',
+  }[address.label] || address.address_type || 'home'),
+  custom_label: address.custom_label || null,
+  street: address.street || null,
   house_no: address.house_no || null,
-  latitude: address.latitude,
-  longitude: address.longitude,
-  rider_note: address.rider_note || null,
+  latitude: address.latitude ?? null,
+  longitude: address.longitude ?? null,
+  delivery_note: address.delivery_note || address.rider_note || null,
+  is_default: Boolean(address.is_default ?? address.is_main),
 });
 
 export const addressService = {
@@ -74,7 +85,7 @@ export const addressService = {
       console.error('Unable to read the selected address.', error);
       throw new Error('The selected address is unavailable. Check browser storage and try again.', { cause: error });
     }
-    const addresses = readAddresses();
+    const addresses = await this.getSavedAddresses();
     return addresses.find((address) => address.id === selectedId)
       || addresses.find((address) => address.is_main)
       || addresses[0]
@@ -90,12 +101,6 @@ export const addressService = {
         method: address.id ? 'PATCH' : 'POST',
         body: toApiAddress(address),
       });
-      if (address.is_main) {
-        saved = await apiRequest(`/customer/addresses/${encodeURIComponent(saved.id)}/primary`, {
-          method: 'PATCH',
-          body: {},
-        });
-      }
       const normalizedSaved = normalizeAddress(saved);
       if (normalizedSaved.is_main) await this.setSelectedAddress(normalizedSaved);
       return normalizedSaved;

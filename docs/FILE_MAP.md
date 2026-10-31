@@ -262,7 +262,7 @@ Controllers only translate validated input to a service/action call and return a
 | Discounts | Inactive/out-of-window/below-minimum/limit-reached; percentage/fixed/cap; funding source; no usage consumed on failed group |
 | Reservations | Capacity/maintenance/hours/24-7; overlap conflict; table lock-before-overlap repository operation; two-hour cancellation boundary; status transitions |
 | Deactivation | Soft-delete behavior, session invalidation, new activity block, retained history |
-| Location | PSGC path mapping, Nominatim normalization/country restriction, caching, timeout/fallback, attribution and no-autocomplete design |
+| Location | Country-first address fields, PSGC type-ahead and parent validation, backend-only Philippines-limited autocomplete/reverse geocoding, caching, timeout/fallback, provider attribution and no public-Nominatim autocomplete |
 | Team and privacy | Single-use invitation lifecycle; matching-email acceptance; permission revocation; no role escalation; private application uploads |
 | Delivery/tracking | Atomic first-claim-wins; no PII on job board; assigned-only details; milestone transition guards; short-TTL last location; no location history |
 | Schedulers | Expiry idempotency, timezone/date boundaries, daily quantity reset, historical record preservation |
