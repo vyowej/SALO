@@ -26,7 +26,13 @@ function statusLabel(status) {
 }
 
 function orderTypeLabel(type) {
-  return type === 'pick_up' ? 'Pick-up' : 'Delivery';
+  return type === 'pickup' ? 'Pick-up' : 'Delivery';
+}
+
+function paymentMethodLabel(method) {
+  if (method === 'cod') return 'Cash on delivery';
+  if (method === 'pay_at_pickup') return 'Pay at pick-up';
+  return String(method || 'Payment').replaceAll('_', ' ');
 }
 
 function money(value) {
@@ -153,7 +159,7 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
     if (order.status === 'preparing') {
       return <>{nextAction('ready', 'Mark as ready')}{cancelAction('cancelled', 'Cancel order')}</>;
     }
-    if (order.status === 'ready' && order.order_type === 'pick_up') {
+    if (order.status === 'ready' && order.order_type === 'pickup') {
       return (
         <>
           <Button disabled={saving} onClick={() => setConfirmTarget(order)}>{pending ? 'Updating…' : 'Mark as picked up'}</Button>
@@ -304,7 +310,7 @@ export default function BusinessOrdersPage({ restaurantId, restaurantName = 'you
             </section>
             <section className="business-order-detail__totals">
               <h3>Payment and total</h3>
-              <p>{selectedOrder.payment ? `${selectedOrder.payment.method.replaceAll('_', ' ')} · ${selectedOrder.payment.status}` : 'Payment details unavailable'}</p>
+              <p>{selectedOrder.payment ? `${paymentMethodLabel(selectedOrder.payment.method)} · ${selectedOrder.payment.status}` : 'Payment details unavailable'}</p>
               <p>Subtotal <strong>{money(selectedOrder.totals.subtotal)}</strong></p>
               {selectedOrder.order_type === 'delivery' ? <p>Delivery <strong>{money(selectedOrder.totals.delivery_fee)}</strong></p> : null}
               <p>Service fee <strong>{money(selectedOrder.totals.service_fee)}</strong></p>

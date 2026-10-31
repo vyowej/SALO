@@ -5,15 +5,18 @@ namespace App\Repositories\Database;
 use App\Models\PsgcLocation;
 use App\Models\UserAddress;
 use App\Repositories\Contracts\AddressRepository;
+use App\Services\AddressFormatter;
 use Illuminate\Support\Facades\DB;
 
 class DatabaseAddressRepository implements AddressRepository
 {
+    public function __construct(private readonly AddressFormatter $addressFormatter) {}
+
     public function allForUser(string $userId): array
     {
         return UserAddress::query()
             ->where('user_id', $userId)
-            ->with('location.parent.parent.parent')
+            ->with('location.parent.parent.parent.parent')
             ->orderByDesc('is_default')
             ->orderBy('id')
             ->get()
@@ -26,7 +29,7 @@ class DatabaseAddressRepository implements AddressRepository
         $address = UserAddress::query()
             ->where('user_id', $userId)
             ->whereKey($addressId)
-            ->with('location.parent.parent.parent')
+            ->with('location.parent.parent.parent.parent')
             ->first();
 
         return $address === null ? null : $this->toArray($address);
@@ -72,7 +75,7 @@ class DatabaseAddressRepository implements AddressRepository
             }
 
             $wasDefault = (bool) $address->is_default;
-            $address->fill($this->attributesFor($userId, $attributes));
+            $address->fill($this->attributesFor($userId, $attributes, null, $address));
             $address->save();
 
             if ($wasDefault && array_key_exists('is_default', $attributes) && ! $wantsDefault) {
@@ -158,7 +161,12 @@ class DatabaseAddressRepository implements AddressRepository
         DB::table('users')->where('id', $userId)->lockForUpdate()->first();
     }
 
-    private function attributesFor(string $userId, array $attributes, ?bool $isDefault = null): array
+    private function attributesFor(
+        string $userId,
+        array $attributes,
+        ?bool $isDefault = null,
+        ?UserAddress $current = null,
+    ): array
     {
         $values = array_intersect_key($attributes, array_flip([
             'psgc_code',
@@ -172,6 +180,21 @@ class DatabaseAddressRepository implements AddressRepository
             'delivery_note',
         ]));
         $values['user_id'] = $userId;
+        $values['country_code'] = 'PH';
+
+        $psgcCode = $values['psgc_code'] ?? $current?->psgc_code;
+        $street = $values['street'] ?? $current?->street;
+        if (is_string($psgcCode) && $psgcCode !== '' && is_string($street) && trim($street) !== '') {
+            $location = PsgcLocation::query()
+                ->with('parent.parent.parent.parent')
+                ->findOrFail($psgcCode);
+            $houseNumber = $values['house_no'] ?? $current?->house_no;
+            $values['formatted_address'] = $this->addressFormatter->format(
+                $location,
+                $street,
+                is_string($houseNumber) ? $houseNumber : null,
+            );
+        }
 
         if ($isDefault !== null) {
             $values['is_default'] = $isDefault;
@@ -195,7 +218,9 @@ class DatabaseAddressRepository implements AddressRepository
         return [
             'id' => (string) $address->getKey(),
             'user_id' => (string) $address->user_id,
+            'country_code' => $address->country_code,
             'psgc_code' => $address->psgc_code,
+            'formatted_address' => $address->formatted_address,
             'psgc_full_name' => $address->location?->full_name,
             'label' => $address->label,
             'address_type' => $address->address_type,

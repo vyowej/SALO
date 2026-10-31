@@ -192,7 +192,7 @@ export function ProfileSection({ restaurantId, user, readOnly, onSaved }) {
         {canEdit && !readOnly ? (
           <form className="business-form-grid" onSubmit={submit}>
             <Input label="Display name" value={form.name ?? profile.name ?? ''} onChange={(event) => setField('name', event.target.value)} required maxLength={160} />
-            <Input label="Category" value={form.category ?? profile.category ?? ''} onChange={(event) => setField('category', event.target.value)} required maxLength={100} />
+            <Input label="Category" value={form.category ?? profile.category ?? ''} onChange={(event) => setField('category', event.target.value)} required maxLength={60} />
             <Input label="Cuisine" value={form.cuisine ?? profile.cuisine ?? ''} onChange={(event) => setField('cuisine', event.target.value)} maxLength={100} />
             <Input label="Contact number" value={form.contact_number ?? profile.contact_number ?? ''} onChange={(event) => setField('contact_number', event.target.value)} maxLength={40} />
             <Textarea className="business-form-wide" label="Description" value={form.description ?? profile.description ?? ''} onChange={(event) => setField('description', event.target.value)} maxLength={2000} rows={5} />

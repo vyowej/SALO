@@ -90,21 +90,21 @@ function seedBusinessOrders(restaurantId) {
       delivery: { address: 'Demo address, Quezon City', latitude: 14.676, longitude: 121.0437 },
       items: [{ name: 'Chicken adobo', unit_price: '185.00', quantity: 2, note: 'Demo order', line_total: '370.00' }],
       totals: { subtotal: '370.00', delivery_fee: '35.00', service_fee: '18.50', discount_amount: '0.00', total: '423.50' },
-      payment: { method: 'cash_on_delivery', status: 'unpaid' },
+      payment: { method: 'cod', status: 'unpaid' },
       cancel_reason: null,
       status_history: [{ from_status: null, to_status: 'placed', reason: null, changed_at: placedAt(2), actor: null }],
     },
     {
       id: `demo-${restaurantId}-1047`,
       reference_code: 'SALO-DEMO-1047',
-      order_type: 'pick_up',
+      order_type: 'pickup',
       status: 'confirmed',
       placed_at: placedAt(12),
       recipient: { name: 'Demo Pickup', phone: '09XX XXX 1047' },
       delivery: null,
       items: [{ name: 'Pancit bihon', unit_price: '160.00', quantity: 1, note: null, line_total: '160.00' }],
       totals: { subtotal: '160.00', delivery_fee: '0.00', service_fee: '8.00', discount_amount: '0.00', total: '168.00' },
-      payment: { method: 'pay_at_pick_up', status: 'unpaid' },
+      payment: { method: 'pay_at_pickup', status: 'unpaid' },
       cancel_reason: null,
       status_history: [
         { from_status: null, to_status: 'placed', reason: null, changed_at: placedAt(12), actor: null },
@@ -121,7 +121,7 @@ function seedBusinessOrders(restaurantId) {
       delivery: { address: 'Demo address, Quezon City', latitude: 14.676, longitude: 121.0437 },
       items: [{ name: 'Vegetable curry', unit_price: '125.00', quantity: 1, note: null, line_total: '125.00' }],
       totals: { subtotal: '125.00', delivery_fee: '35.00', service_fee: '6.25', discount_amount: '0.00', total: '166.25' },
-      payment: { method: 'cash_on_delivery', status: 'unpaid' },
+      payment: { method: 'cod', status: 'unpaid' },
       cancel_reason: null,
       status_history: [
         { from_status: null, to_status: 'placed', reason: null, changed_at: placedAt(25), actor: null },
@@ -132,14 +132,14 @@ function seedBusinessOrders(restaurantId) {
     {
       id: `demo-${restaurantId}-1045`,
       reference_code: 'SALO-DEMO-1045',
-      order_type: 'pick_up',
+      order_type: 'pickup',
       status: 'ready',
       placed_at: placedAt(40),
       recipient: { name: 'Demo Collector', phone: '09XX XXX 1045' },
       delivery: null,
       items: [{ name: 'Turon (4 pcs)', unit_price: '80.00', quantity: 2, note: null, line_total: '160.00' }],
       totals: { subtotal: '160.00', delivery_fee: '0.00', service_fee: '8.00', discount_amount: '0.00', total: '168.00' },
-      payment: { method: 'pay_at_pick_up', status: 'unpaid' },
+      payment: { method: 'pay_at_pickup', status: 'unpaid' },
       cancel_reason: null,
       status_history: [
         { from_status: null, to_status: 'placed', reason: null, changed_at: placedAt(40), actor: null },
@@ -969,7 +969,7 @@ export async function updateBusinessOrderStatus(restaurantId, orderId, status, r
   if (!allowedTransitions[order.status]?.includes(status)) {
     throw new Error('This order cannot move from its current status to the requested status.');
   }
-  if (status === 'completed' && order.order_type !== 'pick_up') {
+  if (status === 'completed' && order.order_type !== 'pickup') {
     throw new Error('Only a Pick-up order can be completed by the restaurant.');
   }
   if (['rejected', 'cancelled'].includes(status) && !reason?.trim()) {

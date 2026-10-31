@@ -46,4 +46,14 @@ class RiderProfile extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(PsgcLocation::class, 'psgc_code', 'code');
+    }
 }

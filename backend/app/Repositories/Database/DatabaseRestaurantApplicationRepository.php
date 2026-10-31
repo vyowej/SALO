@@ -4,15 +4,19 @@ namespace App\Repositories\Database;
 
 use App\Models\RestaurantApplication;
 use App\Models\Restaurant;
+use App\Models\CuisineType;
+use App\Models\PsgcLocation;
 use App\Repositories\Contracts\RestaurantApplicationRepository;
+use App\Services\AddressFormatter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 
 class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRepository
 {
+    public function __construct(private readonly AddressFormatter $addressFormatter) {}
+
     public function paginate(array $filters): array
     {
         $query = RestaurantApplication::query()->with(['applicant', 'documents']);
@@ -201,12 +205,16 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             }
 
             $details = $locked->draft_details ?? [];
-            $category = trim((string) ($details['category'] ?? ''));
-            if ($category !== '' && ! Schema::hasColumn('restaurants', 'category')) {
+            $street = trim((string) ($details['street'] ?? ''));
+            $location = PsgcLocation::query()
+                ->with('parent.parent.parent.parent')
+                ->find($details['psgc_code'] ?? null);
+            if ($location === null || $street === '') {
                 throw ValidationException::withMessages([
-                    'category' => ['Restaurant categories are not supported by the current database schema.'],
+                    'draft_details.psgc_code' => ['Choose a valid PSGC location and street address before approval.'],
                 ]);
             }
+            $houseNumber = trim((string) ($details['house_no'] ?? ''));
 
             $restaurantAttributes = [
                 'owner_user_id' => $locked->submitted_by,
@@ -215,8 +223,15 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'contact_number' => $details['contact_number'] ?? null,
                 'business_email' => $details['business_email'],
                 'business_email_verified_at' => $details['business_email_verified_at'] ?? null,
+                'country_code' => 'PH',
                 'psgc_code' => $details['psgc_code'],
-                'street' => $details['street'],
+                'street' => $street,
+                'house_no' => $houseNumber !== '' ? $houseNumber : null,
+                'formatted_address' => $this->addressFormatter->format(
+                    $location,
+                    $street,
+                    $houseNumber !== '' ? $houseNumber : null,
+                ),
                 'latitude' => $details['latitude'],
                 'longitude' => $details['longitude'],
                 'logo_path' => $details['logo_path'] ?? null,
@@ -225,15 +240,11 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'status' => 'approved',
                 'is_published' => false,
             ];
-            if (Schema::hasColumn('restaurants', 'category')) {
-                $restaurantAttributes['category'] = $category ?: null;
-            }
             $restaurant = Restaurant::query()->create($restaurantAttributes);
-            $cuisine = trim((string) ($details['cuisine'] ?? ''));
-            if ($cuisine !== '') {
-                $cuisineType = \App\Models\CuisineType::query()->firstOrCreate(['name' => $cuisine]);
-                $restaurant->cuisines()->sync([$cuisineType->getKey()]);
-            }
+            $this->syncCuisineTypes($restaurant, [
+                (string) ($details['category'] ?? ''),
+                (string) ($details['cuisine'] ?? ''),
+            ]);
 
             $locked->forceFill([
                 'restaurant_id' => $restaurant->getKey(),
@@ -259,8 +270,27 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
             }
 
             $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($locked->restaurant_id);
-            $allowed = ['legal_name', 'psgc_code', 'street', 'latitude', 'longitude'];
+            $allowed = ['legal_name', 'psgc_code', 'street', 'house_no', 'latitude', 'longitude'];
             $changes = array_intersect_key($locked->proposed_changes ?? [], array_flip($allowed));
+            if (array_intersect(['psgc_code', 'street', 'house_no'], array_keys($changes)) !== []) {
+                $psgcCode = $changes['psgc_code'] ?? $restaurant->psgc_code;
+                $street = trim((string) ($changes['street'] ?? $restaurant->street));
+                $location = PsgcLocation::query()
+                    ->with('parent.parent.parent.parent')
+                    ->find($psgcCode);
+                if ($location === null || $street === '') {
+                    throw ValidationException::withMessages([
+                        'proposed_changes.psgc_code' => ['Choose a valid PSGC location and street address before approval.'],
+                    ]);
+                }
+                $houseNumber = trim((string) ($changes['house_no'] ?? $restaurant->house_no));
+                $changes['country_code'] = 'PH';
+                $changes['formatted_address'] = $this->addressFormatter->format(
+                    $location,
+                    $street,
+                    $houseNumber !== '' ? $houseNumber : null,
+                );
+            }
             $sensitiveDocuments = $locked->documents()->where('doc_type', 'business_permit')->get();
             if ($changes === [] && $sensitiveDocuments->isEmpty()) {
                 throw ValidationException::withMessages([
@@ -347,5 +377,24 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'expiry_date' => $document->expiry_date?->toDateString(),
             ])->all(),
         ];
+    }
+
+    private function syncCuisineTypes(Restaurant $restaurant, array $names): void
+    {
+        $ids = [];
+
+        foreach (array_values(array_unique(array_filter(array_map(
+            static fn (string $name): string => trim($name),
+            $names,
+        ), static fn (string $name): bool => $name !== ''))) as $name) {
+            if (mb_strlen($name) > 60) {
+                throw ValidationException::withMessages([
+                    'draft_details.category' => ['Cuisine names must not exceed 60 characters.'],
+                ]);
+            }
+            $ids[] = CuisineType::query()->firstOrCreate(['name' => $name])->getKey();
+        }
+
+        $restaurant->cuisines()->sync($ids);
     }
 }

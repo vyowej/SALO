@@ -15,7 +15,7 @@ class RestaurantProfileRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:160'],
-            'category' => ['sometimes', 'required', 'string', 'max:100'],
+            'category' => ['sometimes', 'required', 'string', 'max:60'],
             'cuisine' => ['sometimes', 'nullable', 'string', 'max:100'],
             'description' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'contact_number' => ['sometimes', 'nullable', 'string', 'max:40'],

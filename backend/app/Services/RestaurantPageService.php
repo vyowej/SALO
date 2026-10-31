@@ -15,7 +15,6 @@ use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -54,39 +53,39 @@ class RestaurantPageService
 
     public function updateProfile(Restaurant $restaurant, User $actor, array $data): array
     {
-        if (array_key_exists('category', $data) && ! Schema::hasColumn('restaurants', 'category')) {
-            throw ValidationException::withMessages([
-                'category' => ['Restaurant categories are not supported by the current database schema.'],
-            ]);
-        }
-
         return DB::transaction(function () use ($restaurant, $actor, $data): array {
             $locked = $this->pages->lockRestaurant((int) $restaurant->getKey());
             $beforeProfile = $this->pages->profile($locked);
             $attributes = array_intersect_key($data, array_flip([
                 'name',
-                'category',
                 'description',
                 'contact_number',
                 'delivery_radius_km',
                 'prep_minutes',
             ]));
             $before = array_intersect_key($beforeProfile, $attributes);
-            if (array_key_exists('cuisine', $data)) {
-                $this->pages->syncCuisine($locked, $data['cuisine']);
+            $before['category'] = $beforeProfile['category'];
+            $before['cuisine'] = $beforeProfile['cuisine'];
+
+            if (array_key_exists('category', $data) || array_key_exists('cuisine', $data)) {
+                $currentCuisines = $this->pages->cuisineNames($locked);
+                $category = array_key_exists('category', $data)
+                    ? trim((string) $data['category'])
+                    : ($currentCuisines[0] ?? '');
+                $cuisineNames = array_key_exists('cuisine', $data)
+                    ? $this->parseCuisineNames((string) $data['cuisine'])
+                    : array_slice($currentCuisines, 1);
+                $this->pages->syncCuisines($locked, array_merge([$category], $cuisineNames));
             }
             if ($attributes !== []) {
                 $locked = $this->pages->updateRestaurant($locked, $attributes);
             }
             $afterProfile = $this->pages->profile($locked);
-            $after = array_intersect_key($afterProfile, array_flip(array_keys($before)));
-            $cuisineChanged = array_key_exists('cuisine', $data)
-                && ($beforeProfile['cuisine'] ?? '') !== $afterProfile['cuisine'];
-            if ($before !== $after || $cuisineChanged) {
-                if ($cuisineChanged) {
-                    $before['cuisine'] = $beforeProfile['cuisine'];
-                    $after['cuisine'] = $afterProfile['cuisine'];
-                }
+            $after = [];
+            foreach ($before as $field => $value) {
+                $after[$field] = $afterProfile[$field];
+            }
+            if ($before !== $after) {
                 $this->record($actor, $locked, 'profile.updated', 'restaurant', (string) $locked->getKey(), $before, $after);
             }
 
@@ -102,7 +101,7 @@ class RestaurantPageService
         ?string $permitExpiryDate,
     ): array {
         abort_unless((int) $restaurant->owner_user_id === (int) $actor->getKey(), 403);
-        $allowed = ['legal_name', 'psgc_code', 'street', 'latitude', 'longitude'];
+        $allowed = ['legal_name', 'psgc_code', 'street', 'house_no', 'latitude', 'longitude'];
         $changes = array_intersect_key($changes, array_flip($allowed));
         if (array_key_exists('latitude', $changes) !== array_key_exists('longitude', $changes)) {
             throw ValidationException::withMessages([
@@ -746,6 +745,14 @@ class RestaurantPageService
         }
 
         return ['id' => (string) $photo->getKey(), 'path' => $photo->path];
+    }
+
+    private function parseCuisineNames(string $cuisines): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map('trim', explode(',', $cuisines)),
+            static fn (string $name): bool => $name !== '',
+        )));
     }
 
     private function closureArray(ClosureDate $closure): array

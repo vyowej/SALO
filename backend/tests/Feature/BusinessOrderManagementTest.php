@@ -8,6 +8,7 @@ use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
+use App\Models\PsgcLocation;
 use App\Models\Restaurant;
 use App\Models\RestaurantStaff;
 use App\Models\User;
@@ -15,6 +16,8 @@ use Illuminate\Support\Carbon;
 
 class BusinessOrderManagementTest extends \Tests\TestCase
 {
+    private static int $locationSequence = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,7 +30,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
         $order = $this->createOrder($owner, $restaurant);
         OrderStatusHistory::query()->create([
             'order_id' => $order->getKey(),
-            'actor_user_id' => $owner->getKey(),
+            'changed_by' => $owner->getKey(),
             'from_status' => 'placed',
             'to_status' => 'confirmed',
             'reason' => null,
@@ -53,7 +56,6 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $order = $this->createOrder($owner, $restaurant);
 
@@ -89,7 +91,6 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             'user_id' => $manager->getKey(),
             'staff_role' => 'manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $order = $this->createOrder($owner, $restaurant, 'confirmed', 3);
 
@@ -109,6 +110,11 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             ->assertJsonPath('data.status', 'cancelled');
 
         $this->assertSame(5, $order->items()->firstOrFail()->menuItem->fresh()->quantity_left);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->getKey(),
+            'cancelled_by_type' => 'restaurant',
+            'cancelled_by_user_id' => $manager->getKey(),
+        ]);
         $this->assertDatabaseHas('audit_logs', [
             'restaurant_id' => $restaurant->getKey(),
             'action' => 'order.status.changed',
@@ -164,7 +170,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();
         $deliveryOrder = $this->createOrder($owner, $restaurant);
-        $pickupOrder = $this->createOrder($owner, $restaurant, 'ready', 3, 'pick_up');
+        $pickupOrder = $this->createOrder($owner, $restaurant, 'ready', 3, 'pickup');
 
         $this->businessRequest($owner, $restaurant)
             ->patchJson($this->orderPath($restaurant, '/'.$deliveryOrder->getKey().'/status'), [
@@ -206,16 +212,26 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             'order_id' => $order->getKey(),
             'from_status' => 'placed',
             'to_status' => 'cancelled',
-            'actor_user_id' => null,
+            'changed_by' => null,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->getKey(),
+            'cancelled_by_type' => 'system',
+            'cancelled_by_user_id' => null,
         ]);
     }
 
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner-'.uniqid().'@example.test');
+        $location = $this->createBarangayLocation();
         $restaurant = Restaurant::query()->create([
             'owner_user_id' => $owner->getKey(),
             'name' => 'Test Restaurant',
+            'country_code' => 'PH',
+            'psgc_code' => $location->getKey(),
+            'street' => 'Test Street',
+            'formatted_address' => 'Philippines, Test Region, Test Province, Test City, Test Barangay, Test Street',
             'status' => 'approved',
             'is_24_7' => true,
         ]);
@@ -247,19 +263,20 @@ class BusinessOrderManagementTest extends \Tests\TestCase
         ]);
         $group = CheckoutGroup::query()->create([
             'user_id' => $owner->getKey(),
-            'reference_code' => 'GROUP-'.uniqid(),
-            'idempotency_key' => null,
+            'reference_code' => 'G'.str_pad((string) $reference, 11, '0', STR_PAD_LEFT),
+            'idempotency_key' => 'order-test-'.uniqid(),
             'placed_at' => now(),
         ]);
         $order = Order::query()->create([
-            'checkout_group_id' => $group->getKey(),
+            'checkout_id' => $group->getKey(),
             'restaurant_id' => $restaurant->getKey(),
-            'reference_code' => 'ORDER-'.str_pad((string) $reference++, 8, '0', STR_PAD_LEFT),
+            'reference_code' => 'O'.str_pad((string) $reference++, 11, '0', STR_PAD_LEFT),
             'order_type' => $orderType,
             'status' => $status,
             'recipient_name' => 'Test Recipient',
             'recipient_phone' => '09123456789',
             'delivery_address_text' => $orderType === 'delivery' ? 'Test address' : null,
+            'delivery_country_code' => $orderType === 'delivery' ? 'PH' : null,
             'delivery_lat' => $orderType === 'delivery' ? 14.6 : null,
             'delivery_lng' => $orderType === 'delivery' ? 121.0 : null,
             'subtotal' => '40.00',
@@ -278,7 +295,7 @@ class BusinessOrderManagementTest extends \Tests\TestCase
         ]);
         OrderStatusHistory::query()->create([
             'order_id' => $order->getKey(),
-            'actor_user_id' => null,
+            'changed_by' => null,
             'from_status' => null,
             'to_status' => $status,
             'reason' => null,
@@ -286,6 +303,43 @@ class BusinessOrderManagementTest extends \Tests\TestCase
         ]);
 
         return $order;
+    }
+
+    private function createBarangayLocation(): PsgcLocation
+    {
+        $sequence = ++self::$locationSequence;
+        $regionCode = 'R'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT);
+        $provinceCode = 'P'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT);
+        $cityCode = 'C'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT);
+        $barangayCode = 'B'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT);
+        $region = PsgcLocation::query()->create([
+            'code' => $regionCode,
+            'name' => 'Test Region',
+            'level' => 'region',
+            'full_name' => 'Test Region',
+        ]);
+        $province = PsgcLocation::query()->create([
+            'code' => $provinceCode,
+            'parent_code' => $region->getKey(),
+            'name' => 'Test Province',
+            'level' => 'province',
+            'full_name' => 'Test Province, Test Region',
+        ]);
+        $city = PsgcLocation::query()->create([
+            'code' => $cityCode,
+            'parent_code' => $province->getKey(),
+            'name' => 'Test City',
+            'level' => 'city',
+            'full_name' => 'Test City, Test Province, Test Region',
+        ]);
+
+        return PsgcLocation::query()->create([
+            'code' => $barangayCode,
+            'parent_code' => $city->getKey(),
+            'name' => 'Test Barangay',
+            'level' => 'barangay',
+            'full_name' => 'Test Barangay, Test City, Test Province, Test Region',
+        ]);
     }
 
     private function createUser(string $email): User

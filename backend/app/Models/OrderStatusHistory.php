@@ -11,7 +11,7 @@ class OrderStatusHistory extends Model
 
     protected $fillable = [
         'order_id',
-        'actor_user_id',
+        'changed_by',
         'from_status',
         'to_status',
         'reason',
@@ -30,6 +30,6 @@ class OrderStatusHistory extends Model
 
     public function actor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'actor_user_id');
+        return $this->belongsTo(User::class, 'changed_by');
     }
 }

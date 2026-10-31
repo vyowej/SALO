@@ -69,7 +69,7 @@ class BusinessOrderService
                     'status' => ['This order cannot move from its current status to the requested status.'],
                 ]);
             }
-            if ($toStatus === 'completed' && $order->order_type !== 'pick_up') {
+            if ($toStatus === 'completed' && $order->order_type !== 'pickup') {
                 throw ValidationException::withMessages([
                     'status' => ['Only a Pick-up order can be completed by the restaurant.'],
                 ]);
@@ -87,7 +87,8 @@ class BusinessOrderService
             $fromStatus = $order->status;
             $attributes = ['status' => $toStatus];
             if (in_array($toStatus, ['rejected', 'cancelled'], true)) {
-                $attributes['cancelled_by'] = $actor->getKey();
+                $attributes['cancelled_by_type'] = 'restaurant';
+                $attributes['cancelled_by_user_id'] = $actor->getKey();
                 $attributes['cancel_reason'] = $normalizedReason;
             }
             if ($toStatus === 'completed') {
@@ -138,6 +139,7 @@ class BusinessOrderService
                 $this->orders->restoreStock($lockedOrder);
                 $lockedOrder->forceFill([
                     'status' => 'cancelled',
+                    'cancelled_by_type' => 'system',
                     'cancel_reason' => 'Automatically cancelled after no restaurant response within 10 minutes.',
                 ])->save();
                 $this->orders->recordStatus(
@@ -158,6 +160,8 @@ class BusinessOrderService
 
     private function orderArray(Order $order, bool $includeActors): array
     {
+        $payment = $order->payments->last();
+
         return [
             'id' => (string) $order->getKey(),
             'reference_code' => $order->reference_code,
@@ -171,6 +175,7 @@ class BusinessOrderService
             ],
             'delivery' => $order->order_type === 'delivery' ? [
                 'address' => $order->delivery_address_text,
+                'country_code' => $order->delivery_country_code,
                 'latitude' => $order->delivery_lat,
                 'longitude' => $order->delivery_lng,
             ] : null,
@@ -188,9 +193,9 @@ class BusinessOrderService
                 'discount_amount' => $order->discount_amount,
                 'total' => $order->total_amount,
             ],
-            'payment' => $order->payment ? [
-                'method' => $order->payment->method,
-                'status' => $order->payment->status,
+            'payment' => $payment ? [
+                'method' => $payment->method,
+                'status' => $payment->status,
             ] : null,
             'cancel_reason' => $order->cancel_reason,
             'status_history' => $order->statusHistory->map(fn ($entry): array => [

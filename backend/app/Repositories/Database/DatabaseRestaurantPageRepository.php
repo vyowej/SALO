@@ -10,6 +10,7 @@ use App\Models\RestaurantPhoto;
 use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class DatabaseRestaurantPageRepository implements RestaurantPageRepository
 {
@@ -25,35 +26,52 @@ class DatabaseRestaurantPageRepository implements RestaurantPageRepository
         return $restaurant->refresh();
     }
 
-    public function syncCuisine(Restaurant $restaurant, ?string $cuisine): void
+    public function cuisineNames(Restaurant $restaurant): array
     {
-        $name = trim((string) $cuisine);
-        if ($name === '') {
-            $restaurant->cuisines()->detach();
+        return $restaurant->cuisines()->orderBy('cuisine_types.id')->pluck('cuisine_types.name')->all();
+    }
 
-            return;
+    public function syncCuisines(Restaurant $restaurant, array $names): void
+    {
+        $names = array_values(array_unique(array_filter(array_map(
+            static fn (string $name): string => trim($name),
+            $names,
+        ), static fn (string $name): bool => $name !== '')));
+        $ids = [];
+
+        foreach ($names as $name) {
+            if (mb_strlen($name) > 60) {
+                throw ValidationException::withMessages([
+                    'cuisine' => ['Cuisine names must not exceed 60 characters.'],
+                ]);
+            }
+            $type = CuisineType::query()->firstOrCreate(['name' => $name]);
+            $ids[] = $type->getKey();
         }
 
-        $type = CuisineType::query()->firstOrCreate(['name' => $name]);
-        $restaurant->cuisines()->sync([$type->getKey()]);
+        $restaurant->cuisines()->sync($ids);
         $restaurant->unsetRelation('cuisines');
     }
 
     public function profile(Restaurant $restaurant): array
     {
-        $restaurant->loadMissing(['cuisines', 'photos']);
+        $restaurant->loadMissing('photos');
+        $cuisineNames = collect($this->cuisineNames($restaurant));
 
         return [
             'id' => (string) $restaurant->getKey(),
             'name' => $restaurant->name,
-            'category' => $restaurant->category,
+            'category' => $cuisineNames->first() ?? '',
             'description' => $restaurant->description,
-            'cuisine' => $restaurant->cuisines->pluck('name')->implode(', '),
+            'cuisine' => $cuisineNames->slice(1)->implode(', '),
             'contact_number' => $restaurant->contact_number,
             'business_email' => $restaurant->business_email,
             'legal_name' => $restaurant->legal_name,
+            'country_code' => $restaurant->country_code,
             'psgc_code' => $restaurant->psgc_code,
             'street' => $restaurant->street,
+            'house_no' => $restaurant->house_no,
+            'formatted_address' => $restaurant->formatted_address,
             'latitude' => $restaurant->latitude,
             'longitude' => $restaurant->longitude,
             'delivery_radius_km' => $restaurant->delivery_radius_km,

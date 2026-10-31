@@ -37,6 +37,24 @@ class RestaurantPageTest extends TestCase
         ]);
     }
 
+    public function test_profile_category_and_cuisine_are_stored_through_cuisine_types(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+
+        $this->businessRequest($owner, $restaurant)
+            ->patchJson($this->path($restaurant, '/profile'), [
+                'category' => 'Filipino',
+                'cuisine' => 'Bicol',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.restaurant.category', 'Filipino')
+            ->assertJsonPath('data.restaurant.cuisine', 'Bicol');
+
+        $this->assertDatabaseHas('cuisine_types', ['name' => 'Filipino']);
+        $this->assertDatabaseHas('cuisine_types', ['name' => 'Bicol']);
+        $this->assertSame(2, $restaurant->cuisines()->count());
+    }
+
     public function test_sensitive_profile_changes_are_proposed_without_changing_live_values(): void
     {
         [$owner, $restaurant] = $this->createOwnerAndRestaurant();

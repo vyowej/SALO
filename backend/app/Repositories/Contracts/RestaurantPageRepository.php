@@ -13,7 +13,9 @@ interface RestaurantPageRepository
 
     public function updateRestaurant(Restaurant $restaurant, array $attributes): Restaurant;
 
-    public function syncCuisine(Restaurant $restaurant, ?string $cuisine): void;
+    public function cuisineNames(Restaurant $restaurant): array;
+
+    public function syncCuisines(Restaurant $restaurant, array $names): void;
 
     public function profile(Restaurant $restaurant): array;
 

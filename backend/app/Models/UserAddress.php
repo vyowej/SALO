@@ -12,12 +12,14 @@ class UserAddress extends Model
 
     protected $fillable = [
         'user_id',
+        'country_code',
         'psgc_code',
         'label',
         'address_type',
         'custom_label',
         'street',
         'house_no',
+        'formatted_address',
         'latitude',
         'longitude',
         'delivery_note',

@@ -17,7 +17,7 @@ class DatabaseOrderRepository implements OrderRepository
     {
         return Order::query()
             ->where('restaurant_id', $restaurant->getKey())
-            ->with(['items', 'payment', 'statusHistory.actor'])
+            ->with(['items', 'payments', 'statusHistory.actor'])
             ->when(isset($filters['status']), fn (Builder $query) => $query->where('status', $filters['status']))
             ->when(isset($filters['from']), fn (Builder $query) => $query->whereDate('placed_at', '>=', $filters['from']))
             ->when(isset($filters['to']), fn (Builder $query) => $query->whereDate('placed_at', '<=', $filters['to']))
@@ -38,7 +38,7 @@ class DatabaseOrderRepository implements OrderRepository
         $query = Order::query()
             ->where('restaurant_id', $restaurant->getKey())
             ->whereKey($orderId)
-            ->with(['items', 'payment', 'statusHistory.actor']);
+            ->with(['items', 'payments', 'statusHistory.actor']);
 
         if ($lock) {
             $query->lockForUpdate();
@@ -55,7 +55,7 @@ class DatabaseOrderRepository implements OrderRepository
         ?string $reason,
     ): void {
         $order->statusHistory()->create([
-            'actor_user_id' => $actorUserId,
+            'changed_by' => $actorUserId,
             'from_status' => $fromStatus,
             'to_status' => $toStatus,
             'reason' => $reason,

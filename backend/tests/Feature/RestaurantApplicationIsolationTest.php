@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ApplicationDocument;
 use App\Models\PlatformAdmin;
+use App\Models\PsgcLocation;
 use App\Models\Restaurant;
 use App\Models\RestaurantApplication;
 use App\Models\User;
@@ -12,6 +13,8 @@ use Tests\TestCase;
 
 class RestaurantApplicationIsolationTest extends TestCase
 {
+    private static int $locationSequence = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -58,6 +61,7 @@ class RestaurantApplicationIsolationTest extends TestCase
     {
         $applicant = $this->createUser('owner@example.test');
         $admin = $this->createUser('admin@example.test');
+        $location = $this->createBarangayLocation();
         PlatformAdmin::query()->create([
             'user_id' => $admin->getKey(),
             'admin_level' => 'super',
@@ -73,8 +77,9 @@ class RestaurantApplicationIsolationTest extends TestCase
                 'contact_number' => '09171234567',
                 'business_email' => 'business@example.test',
                 'business_email_verified_at' => now()->toISOString(),
-                'psgc_code' => null,
+                'psgc_code' => $location->getKey(),
                 'street' => '1 Test Street',
+                'house_no' => '1',
                 'latitude' => 14.5995,
                 'longitude' => 120.9842,
                 'is_24_7' => false,
@@ -101,6 +106,39 @@ class RestaurantApplicationIsolationTest extends TestCase
             'first_name' => 'Test',
             'last_name' => 'User',
             'status' => 'active',
+        ]);
+    }
+
+    private function createBarangayLocation(): PsgcLocation
+    {
+        $sequence = ++self::$locationSequence;
+        $region = PsgcLocation::query()->create([
+            'code' => 'R'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT),
+            'name' => 'Test Region',
+            'level' => 'region',
+            'full_name' => 'Test Region',
+        ]);
+        $province = PsgcLocation::query()->create([
+            'code' => 'P'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT),
+            'parent_code' => $region->getKey(),
+            'name' => 'Test Province',
+            'level' => 'province',
+            'full_name' => 'Test Province, Test Region',
+        ]);
+        $city = PsgcLocation::query()->create([
+            'code' => 'C'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT),
+            'parent_code' => $province->getKey(),
+            'name' => 'Test City',
+            'level' => 'city',
+            'full_name' => 'Test City, Test Province, Test Region',
+        ]);
+
+        return PsgcLocation::query()->create([
+            'code' => 'B'.str_pad((string) $sequence, 11, '0', STR_PAD_LEFT),
+            'parent_code' => $city->getKey(),
+            'name' => 'Test Barangay',
+            'level' => 'barangay',
+            'full_name' => 'Test Barangay, Test City, Test Province, Test Region',
         ]);
     }
 }

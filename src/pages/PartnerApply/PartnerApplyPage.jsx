@@ -504,7 +504,7 @@ export default function PartnerApplyPage() {
                   <input id="application-name" value={draft.restaurant_name || ''} maxLength="160" onChange={(event) => updateDraft('restaurant_name', event.target.value)} />
                 </Field>
                 <Field label="Category" htmlFor="application-category" error={fieldErrors.category}>
-                  <input id="application-category" value={draft.category || ''} placeholder="e.g. Café, Bakery, Filipino" maxLength="100" onChange={(event) => updateDraft('category', event.target.value)} />
+                  <input id="application-category" value={draft.category || ''} placeholder="e.g. Café, Bakery, Filipino" maxLength="60" onChange={(event) => updateDraft('category', event.target.value)} />
                 </Field>
                 <Field label="Cuisine" htmlFor="application-cuisine">
                   <input id="application-cuisine" value={draft.cuisine || ''} maxLength="100" onChange={(event) => updateDraft('cuisine', event.target.value)} />

@@ -18,13 +18,15 @@ class Restaurant extends Model
         'name',
         'branch_label',
         'description',
-        'category',
         'legal_name',
         'contact_number',
         'business_email',
         'business_email_verified_at',
+        'country_code',
         'psgc_code',
         'street',
+        'house_no',
+        'formatted_address',
         'latitude',
         'longitude',
         'logo_path',
@@ -40,8 +42,8 @@ class Restaurant extends Model
     {
         return [
             'business_email_verified_at' => 'datetime',
-            'latitude' => 'decimal:7',
-            'longitude' => 'decimal:7',
+            'latitude' => 'decimal:6',
+            'longitude' => 'decimal:6',
             'delivery_radius_km' => 'decimal:2',
             'is_24_7' => 'boolean',
             'is_published' => 'boolean',
@@ -51,6 +53,11 @@ class Restaurant extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(PsgcLocation::class, 'psgc_code', 'code');
     }
 
     public function staff(): HasMany

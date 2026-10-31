@@ -29,6 +29,6 @@ class CheckoutGroup extends Model
 
     public function orders(): HasMany
     {
-        return $this->hasMany(Order::class, 'checkout_group_id');
+        return $this->hasMany(Order::class, 'checkout_id');
     }
 }
