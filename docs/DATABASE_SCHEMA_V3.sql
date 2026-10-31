@@ -925,6 +925,225 @@ CREATE TABLE rider_reviews (
   CONSTRAINT fk_rreview_user     FOREIGN KEY (user_id) REFERENCES users (id)
 ) ENGINE=InnoDB;
 
+-- ---------------------------------------------------------------------
+-- 1. psgc_locations   [ADDRESS] self-referencing foreign key on the parent
+--    IMPORT ORDER: insert parents before children (regions, provinces,
+--    cities, then barangays), or run SET FOREIGN_KEY_CHECKS = 0 during the
+--    import and SET FOREIGN_KEY_CHECKS = 1 afterwards.
+--    Note: PSGC also has NCR districts and Manila sub-municipalities, which
+--    this table's level list does not include. The importer must re-parent
+--    those barangays to an existing row (see the notes in the chat).
+-- ---------------------------------------------------------------------
+CREATE TABLE psgc_locations (
+  code        VARCHAR(12)  NOT NULL,
+  parent_code VARCHAR(12)  NULL,
+  name        VARCHAR(150) NOT NULL,
+  level       ENUM('region','province','city','barangay') NOT NULL,
+  full_name   VARCHAR(300) NOT NULL,
+  PRIMARY KEY (code),
+  KEY idx_psgc_parent (parent_code),
+  KEY idx_psgc_name (name),                                -- fast LIKE 'zamboan%'
+  FULLTEXT KEY ft_psgc (name, full_name),
+  CONSTRAINT fk_psgc_parent FOREIGN KEY (parent_code)      -- [ADDRESS]
+    REFERENCES psgc_locations (code)
+) ENGINE=InnoDB;
+ 
+ 
+-- ---------------------------------------------------------------------
+-- 2. restaurants   [ADDRESS] country_code, required barangay code and
+--    street, house_no, formatted_address
+--    (restaurants only exist after approval, so required is safe)
+-- ---------------------------------------------------------------------
+CREATE TABLE restaurants (
+  id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_user_id              BIGINT UNSIGNED NOT NULL,
+  name                       VARCHAR(120) NOT NULL,
+  branch_label               VARCHAR(80)  NULL,
+  description                TEXT NULL,
+  legal_name                 VARCHAR(160) NULL,            -- sensitive: changes need admin approval
+  contact_number             VARCHAR(20)  NULL,
+  business_email             VARCHAR(190) NULL,
+  business_email_verified_at DATETIME NULL,
+  country_code               CHAR(2)      NOT NULL DEFAULT 'PH',   -- [ADDRESS]
+  psgc_code                  VARCHAR(12)  NOT NULL,                -- [ADDRESS] barangay level
+  street                     VARCHAR(190) NOT NULL,                -- [ADDRESS] required
+  house_no                   VARCHAR(40)  NULL,                    -- [ADDRESS]
+  formatted_address          VARCHAR(300) NOT NULL,                -- [ADDRESS]
+  latitude                   DECIMAL(9,6) NULL,
+  longitude                  DECIMAL(9,6) NULL,
+  logo_path                  VARCHAR(255) NULL,            -- public disk
+  cover_path                 VARCHAR(255) NULL,
+  delivery_radius_km         DECIMAL(5,2) NOT NULL DEFAULT 5.00,
+  prep_minutes               SMALLINT UNSIGNED NOT NULL DEFAULT 20,
+  is_24_7                    TINYINT(1) NOT NULL DEFAULT 0,
+  status                     ENUM('approved','suspended','inactive','closed') NOT NULL DEFAULT 'approved',
+  is_published               TINYINT(1) NOT NULL DEFAULT 0,
+  deleted_at                 TIMESTAMP NULL,
+  created_at                 TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at                 TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_rest_owner (owner_user_id),
+  KEY idx_rest_status (status, is_published),
+  CONSTRAINT chk_rest_radius CHECK (delivery_radius_km > 0),
+  CONSTRAINT chk_rest_country CHECK (country_code = 'PH'),         -- [ADDRESS]
+  CONSTRAINT fk_rest_owner FOREIGN KEY (owner_user_id) REFERENCES users (id),
+  CONSTRAINT fk_rest_psgc  FOREIGN KEY (psgc_code) REFERENCES psgc_locations (code)
+) ENGINE=InnoDB;
+ 
+ 
+-- ---------------------------------------------------------------------
+-- 3. user_addresses   [ADDRESS] country_code, required barangay code and
+--    street, formatted_address. School/Other mapping stays as approved:
+--    Home/Work/Church = address_type; School = other + label 'School';
+--    Other = other + label 'Other' + custom_label.
+-- ---------------------------------------------------------------------
+CREATE TABLE user_addresses (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id       BIGINT UNSIGNED NOT NULL,
+  country_code  CHAR(2)      NOT NULL DEFAULT 'PH',        -- [ADDRESS]
+  psgc_code     VARCHAR(12)  NOT NULL,                     -- [ADDRESS] barangay level
+  label         VARCHAR(40)  NOT NULL DEFAULT 'Home',
+  address_type  ENUM('home','work','church','other') NOT NULL DEFAULT 'home',
+  custom_label  VARCHAR(60)  NULL,
+  street        VARCHAR(190) NOT NULL,                     -- [ADDRESS] required
+  house_no      VARCHAR(40)  NULL,
+  formatted_address VARCHAR(300) NOT NULL,                 -- [ADDRESS]
+  latitude      DECIMAL(9,6) NULL,
+  longitude     DECIMAL(9,6) NULL,
+  delivery_note VARCHAR(255) NULL,
+  is_default    TINYINT(1) NOT NULL DEFAULT 0,
+  deleted_at    TIMESTAMP NULL,
+  created_at    TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  -- OPTIONAL [ADDRESS]: lets the database refuse a second default address
+  -- per user. Uncomment BOTH this column and the UNIQUE KEY below (and keep
+  -- the comma after the column). The app must still keep exactly one default.
+  -- default_owner_id BIGINT UNSIGNED GENERATED ALWAYS AS
+  --   (IF(is_default = 1 AND deleted_at IS NULL, user_id, NULL)) STORED,
+  PRIMARY KEY (id),
+  KEY idx_addr_user (user_id, is_default),
+  -- UNIQUE KEY uq_addr_one_default (default_owner_id),
+  CONSTRAINT chk_addr_country CHECK (country_code = 'PH'),  -- [ADDRESS]
+  CONSTRAINT fk_addr_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT fk_addr_psgc FOREIGN KEY (psgc_code) REFERENCES psgc_locations (code)
+) ENGINE=InnoDB;
+ 
+ 
+-- ---------------------------------------------------------------------
+-- 4. orders   [ADDRESS] only a delivery country code is added.
+--    delivery_address_text + coordinates are the immutable snapshot.
+--    NULL for pick-up orders.
+-- ---------------------------------------------------------------------
+CREATE TABLE orders (
+  id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  checkout_id           BIGINT UNSIGNED NOT NULL,
+  restaurant_id         BIGINT UNSIGNED NOT NULL,
+  delivery_address_id   BIGINT UNSIGNED NULL,
+  reference_code        CHAR(12) NOT NULL,
+  order_type            ENUM('delivery','pickup') NOT NULL,
+  scheduled_for         DATETIME NULL,
+  status                ENUM('placed','confirmed','preparing','ready','out_for_delivery',
+                             'delivered','completed','rejected','cancelled','delivery_failed')
+                        NOT NULL DEFAULT 'placed',
+  recipient_name        VARCHAR(120) NOT NULL,
+  recipient_phone       VARCHAR(20)  NOT NULL,
+  delivery_address_text VARCHAR(300) NULL,
+  delivery_country_code CHAR(2)      NULL,                 -- [ADDRESS]
+  delivery_lat          DECIMAL(9,6) NULL,
+  delivery_lng          DECIMAL(9,6) NULL,
+  subtotal              DECIMAL(10,2) NOT NULL,
+  delivery_fee          DECIMAL(10,2) NOT NULL DEFAULT 0,
+  service_fee           DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount_amount       DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_amount          DECIMAL(10,2) NOT NULL,
+  cancelled_by_type     ENUM('customer','restaurant','admin','system') NULL,
+  cancelled_by_user_id  BIGINT UNSIGNED NULL,
+  cancel_reason         VARCHAR(255) NULL,
+  placed_at             DATETIME NOT NULL,
+  completed_at          DATETIME NULL,
+  customer_confirmed_at DATETIME NULL,
+  confirmation_method   ENUM('customer','auto') NULL,
+  created_at            TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at            TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_order_ref (reference_code),
+  KEY idx_order_rest (restaurant_id, status, placed_at),
+  KEY idx_order_group (checkout_id),
+  CONSTRAINT chk_order_money CHECK (subtotal >= 0 AND delivery_fee >= 0 AND service_fee >= 0
+                                    AND discount_amount >= 0 AND total_amount >= 0),
+  CONSTRAINT chk_order_country CHECK (delivery_country_code IS NULL OR delivery_country_code = 'PH'),  -- [ADDRESS]
+  CONSTRAINT fk_order_group FOREIGN KEY (checkout_id) REFERENCES checkout_groups (id),
+  CONSTRAINT fk_order_rest  FOREIGN KEY (restaurant_id) REFERENCES restaurants (id),
+  CONSTRAINT fk_order_addr  FOREIGN KEY (delivery_address_id) REFERENCES user_addresses (id),
+  CONSTRAINT fk_order_cancel_user FOREIGN KEY (cancelled_by_user_id) REFERENCES users (id)
+) ENGINE=InnoDB;
+ 
+ 
+-- ---------------------------------------------------------------------
+-- 5. rider_profiles   [ADDRESS] home address fields.
+--    The address columns are NULLABLE on purpose: this row is created when
+--    the rider STARTS the application (status 'draft'), before the address
+--    is filled in. The CHECK below makes the address required as soon as
+--    the application is no longer a draft.
+-- ---------------------------------------------------------------------
+CREATE TABLE rider_profiles (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id             BIGINT UNSIGNED NOT NULL,
+  approved_by         BIGINT UNSIGNED NULL,
+  application_status  ENUM('draft','submitted','under_review','needs_revision','approved','rejected')
+                      NOT NULL DEFAULT 'draft',
+  status              ENUM('pending_activation','active','suspended','resigned') NULL,
+  availability        ENUM('offline','online','busy') NOT NULL DEFAULT 'offline',
+  vehicle_type        ENUM('motorcycle','bicycle','e_scooter','walker') NULL,
+  plate_number        VARCHAR(20) NULL,
+  country_code        CHAR(2)      NOT NULL DEFAULT 'PH',  -- [ADDRESS]
+  psgc_code           VARCHAR(12)  NULL,                   -- [ADDRESS] barangay level
+  street              VARCHAR(190) NULL,                   -- [ADDRESS]
+  house_no            VARCHAR(40)  NULL,                   -- [ADDRESS]
+  formatted_address   VARCHAR(300) NULL,                   -- [ADDRESS]
+  home_lat            DECIMAL(9,6) NULL,
+  home_lng            DECIMAL(9,6) NULL,
+  ewallet_account_name VARCHAR(120) NULL,
+  declared_clearance_tin TINYINT(1) NOT NULL DEFAULT 0,
+  submitted_at        DATETIME NULL,
+  approved_at         DATETIME NULL,
+  resigned_at         DATETIME NULL,
+  review_notes        TEXT NULL,
+  created_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_rider_user (user_id),
+  KEY idx_rider_dispatch (status, availability),
+  CONSTRAINT chk_rider_country CHECK (country_code = 'PH'),   -- [ADDRESS]
+  CONSTRAINT chk_rider_address_when_submitted                 -- [ADDRESS]
+    CHECK (application_status = 'draft'
+           OR (psgc_code IS NOT NULL AND street IS NOT NULL AND formatted_address IS NOT NULL)),
+  CONSTRAINT fk_rider_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT fk_rider_approver FOREIGN KEY (approved_by) REFERENCES users (id),
+  CONSTRAINT fk_rider_psgc FOREIGN KEY (psgc_code) REFERENCES psgc_locations (code)  -- [ADDRESS]
+) ENGINE=InnoDB;
+ 
+
+-- =====================================================================
+-- OPTIONAL (not an address change): starter settings the plan mentions but
+-- your v3 does not seed yet. Add to the INSERT INTO platform_settings list,
+-- or run after the schema. All are admin-adjustable [PROPOSED] values.
+-- =====================================================================
+-- INSERT INTO platform_settings (setting_key, value) VALUES
+--   ('delivery_base_fee',          '35'),
+--   ('delivery_free_km',           '2'),
+--   ('delivery_fee_per_km',        '10'),
+--   ('service_fee_percent',        '5'),
+--   ('max_delivery_radius_km',     '10'),
+--   ('default_prep_minutes',       '20'),
+--   ('handoff_buffer_minutes',     '3'),
+--   ('avg_speed_kmh',              '20'),
+--   ('detour_factor',              '1.3'),
+--   ('cart_expiry_days',           '7'),
+--   ('max_zone_distance_km',       '10'),
+--   ('delivery_proof_retention_days', '30'),
+--   ('audit_retention_days',       '90');
+
 -- =====================================================================
 -- STARTER SETTINGS (plan values; all admin-adjustable)
 -- =====================================================================
