@@ -91,7 +91,7 @@ CREATE TABLE platform_admins (
 CREATE TABLE auth_tokens (
   id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id      BIGINT UNSIGNED NOT NULL,
-  purpose      ENUM('email_verification','business_email','rider_activation','email_change') NOT NULL,
+  purpose      ENUM('email_verification','business_email','rider_activation','email_change','password_reset') NOT NULL,
   token_hash   CHAR(64) NOT NULL,                          -- never the raw code
   target_email VARCHAR(190) NULL,
   attempts     TINYINT UNSIGNED NOT NULL DEFAULT 0,
@@ -316,7 +316,7 @@ CREATE TABLE restaurant_staff (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   restaurant_id BIGINT UNSIGNED NOT NULL,
   user_id       BIGINT UNSIGNED NOT NULL,
-  staff_role    ENUM('manager','reservation_manager','staff') NOT NULL DEFAULT 'staff',
+  staff_role    ENUM('owner','manager','reservation_manager','staff') NOT NULL DEFAULT 'staff',
   status        ENUM('invited','active','suspended','removed') NOT NULL DEFAULT 'invited',
   created_at    TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -338,7 +338,7 @@ CREATE TABLE invitations (
   user_id       BIGINT UNSIGNED NOT NULL,
   invited_by    BIGINT UNSIGNED NOT NULL,
   invited_email VARCHAR(190) NOT NULL,                     -- normalized
-  staff_role    ENUM('manager','reservation_manager','staff') NOT NULL,
+  staff_role    ENUM('owner','manager','reservation_manager','staff') NOT NULL,
   token_hash    CHAR(64) NOT NULL,
   status        ENUM('pending','accepted','cancelled','expired') NOT NULL DEFAULT 'pending',
   expires_at    DATETIME NOT NULL,
@@ -994,6 +994,48 @@ CREATE TABLE rider_reviews (
   CONSTRAINT fk_rreview_delivery FOREIGN KEY (delivery_id) REFERENCES deliveries (id),
   CONSTRAINT fk_rreview_user     FOREIGN KEY (user_id) REFERENCES users (id)
 ) ENGINE=InnoDB;
+
+-- =====================================================================
+-- PART A: EDITS TO database/salo_db.sql
+-- =====================================================================
+ 
+-- A1. In CREATE TABLE restaurant_staff, change the staff_role line to:
+--   staff_role    ENUM('owner','manager','reservation_manager','staff') NOT NULL DEFAULT 'staff',
+--
+-- A2. In CREATE TABLE invitations, change the staff_role line to:
+--   staff_role    ENUM('owner','manager','reservation_manager','staff') NOT NULL,
+--
+-- A3. Add this new table to the file AFTER restaurant_staff and
+--     invitations (it needs restaurants and users to exist first):
+ 
+CREATE TABLE co_owner_requests (
+  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  restaurant_id          BIGINT UNSIGNED NOT NULL,
+  requested_by_user_id   BIGINT UNSIGNED NOT NULL,
+  target_user_id         BIGINT UNSIGNED NOT NULL,
+  reviewed_by_user_id    BIGINT UNSIGNED NULL,
+  status                 ENUM('pending','approved','rejected','cancelled','expired')
+                         NOT NULL DEFAULT 'pending',
+  review_reason          VARCHAR(255) NULL,
+  expires_at             DATETIME NOT NULL,               -- created_at + 7 days
+  reviewed_at            DATETIME NULL,
+  -- one open request per target member per restaurant (NULLs do not collide)
+  pending_target_user_id BIGINT UNSIGNED GENERATED ALWAYS AS
+                         (IF(status = 'pending', target_user_id, NULL)) STORED,
+  created_at             TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_one_pending_coowner (restaurant_id, pending_target_user_id),
+  KEY idx_coowner_queue (restaurant_id, status, expires_at),
+  KEY idx_coowner_target (target_user_id),
+  CONSTRAINT chk_coowner_reviewer_not_requester
+    CHECK (reviewed_by_user_id IS NULL OR reviewed_by_user_id <> requested_by_user_id),
+  CONSTRAINT fk_coowner_rest      FOREIGN KEY (restaurant_id)        REFERENCES restaurants (id),
+  CONSTRAINT fk_coowner_requester FOREIGN KEY (requested_by_user_id) REFERENCES users (id),
+  CONSTRAINT fk_coowner_target    FOREIGN KEY (target_user_id)       REFERENCES users (id),
+  CONSTRAINT fk_coowner_reviewer  FOREIGN KEY (reviewed_by_user_id)  REFERENCES users (id)
+) ENGINE=InnoDB;
+ 
 
 -- =====================================================================
 -- STARTER SETTINGS (plan values; all admin-adjustable)
