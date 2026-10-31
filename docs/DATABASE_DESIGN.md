@@ -48,7 +48,7 @@ Because `restaurants` is introduced after Phase 0, `audit_logs.restaurant_id` is
 
 | Table | Proposed columns and constraints |
 |---|---|
-| `restaurants` | The root schema has `id`, required `owner_user_id`, restaurant fields, `country_code`, required barangay `psgc_code`, `street`, optional `house_no`, `formatted_address`, coordinates, logo/cover paths, delivery settings, status, and publication flag. `category` is not in the root schema; do not persist the proposal without an owner decision on mapping to `cuisine_types`. One user may own multiple restaurants. Restaurant is created only on application approval; application lifecycle is stored separately. |
+| `restaurants` | The root schema has `id`, required `owner_user_id`, restaurant fields, `country_code`, required barangay `psgc_code`, `street`, optional `house_no`, `formatted_address`, coordinates, logo/cover paths, delivery settings, status, and publication flag. `category` is not a restaurant column; the approved F3 application-level mapping to `cuisine_types` is documented in Section 9. One user may own multiple restaurants. Restaurant is created only on application approval; application lifecycle is stored separately. |
 | `restaurant_applications` | `id`; nullable `restaurant_id` FK (null for an initial application until approval; required for a sensitive update); `submitted_by` and nullable `reviewed_by` user FKs; `application_type` (`initial`, `sensitive_update`); `status` (`draft`, `submitted`, `under_review`, `needs_revision`, `approved`, `rejected`); nullable `draft_details` JSON for resumable initial wizard fields; nullable `proposed_changes` JSON for sensitive updates; BIR self-declaration; submission/review timestamps; review notes; timestamps. Sensitive-update rows leave live restaurant fields unchanged until approval. Initial approval creates the Restaurant and assigns its Owner, then links the application. |
 | `application_documents` | `id`; `application_id` FK; document type (`business_permit`, `dti_sec_registration`, `owner_valid_id`, optional `halal_certificate`); private path; optional expiry date; verification state; timestamps. |
 | `restaurant_photos` | `id`; `restaurant_id` FK; generated public path; alt text; sort order; `is_primary`; timestamps. This table is for gallery photos (maximum 10); logo and cover paths live on `restaurants.logo_path` and `restaurants.cover_path`. Enforce the gallery limit in service logic. |
@@ -174,3 +174,30 @@ When a table changes to Maintenance, create a Notification for the restaurant. D
 The authoritative root schema includes the approved address fields on `rider_profiles`: `country_code`, nullable barangay-leaf `psgc_code`, `street`, nullable `house_no`, `formatted_address`, and home coordinates. It also includes delivery `country_code` on order snapshots. Zones remain geofences with optional `psgc_code`, center, and radius; do not turn them into postal addresses. The root SQL remains owner-controlled and must not be edited or executed by this work.
 
 Reuse `checkout_groups`, `orders`, `order_items`, `order_status_histories`, `payments`, `discounts`, `discount_redemptions`, `reservations`, `restaurant_tables`, `reservation_settings`, `restaurants`, `menu_items`, `psgc_locations`, `platform_settings`, and `notifications` from the existing migration proposals. Do not create a second Customer order, reservation, discount, or notification table. Live rider coordinates belong in short-lived cache, not a location-history table.
+
+## 9. F3 schema-alignment implementation note
+
+F3 aligns the existing Laravel application with the authoritative `database/salo_db.sql`; it does not define or introduce schema. The following mapping and code paths describe application behavior only.
+
+### Restaurant category and cuisines
+
+The authoritative schema uses `cuisine_types` and the `restaurant_cuisines` many-to-many relation. It has no dedicated primary-category marker. For F3 compatibility, the application derives the restaurant API/profile `category` from the first associated cuisine returned in the existing relationship, ordered deterministically by `cuisine_types.id`; the remaining associated cuisines are exposed as secondary cuisines. This is an application-level compatibility mapping, not a new database schema concept, and no schema change was made to support it.
+
+The behavior is implemented in:
+
+- `backend/app/Repositories/Database/DatabaseRestaurantPageRepository.php`: `cuisineNames()` orders associated cuisine names by `cuisine_types.id`; `profile()` maps the first name to `category` and the remainder to `cuisine`.
+- `backend/app/Services/RestaurantPageService.php`: `updateProfile()` synchronizes the category and secondary cuisine names through the existing relation.
+- `backend/app/Repositories/Database/DatabaseRestaurantApplicationRepository.php`: `approveInitial()` maps the initial application's category and cuisine values into the existing cuisine relation.
+- `backend/app/Models/Restaurant.php`: `cuisines()` defines the existing `restaurant_cuisines` relation.
+
+Because the schema does not identify a primary cuisine, the derived category is not an explicitly designated primary cuisine. Changing this behavior or adding a primary marker would require a separate approved design decision.
+
+### Other F3 changes
+
+- **Address alignment and formatted address persistence:** `UserAddress`, `Restaurant`, and `RiderProfile` models align their address attributes and PSGC relations with the authoritative columns. `AddressFormatter` and the database address and restaurant-application repositories persist `country_code` as `PH` and build/store `formatted_address` from the PSGC hierarchy, street, and optional house number.
+- **Order alignment:** `Order` and `CheckoutGroup` use `checkout_id`; order cancellation uses `cancelled_by_type` and `cancelled_by_user_id`; `OrderStatusHistory` and its repository use `changed_by`.
+- **Payment relationship alignment:** `Order::payments()` is a `HasMany` relation, matching the schema's allowance for multiple payment rows per order. The existing Business API response continues to select one payment for its current response shape.
+- **Coordinate precision alignment:** the Restaurant and Order coordinate model casts use six decimal places, matching the authoritative `DECIMAL(9,6)` columns; RiderProfile address coordinate casts are also six decimal places.
+- **Dependent application alignment:** related requests, resources, repositories, services, feature-test fixtures, API/design documentation, and Business order/setup and Partner application UI/service mappings were updated to use the aligned fields and category/cuisine compatibility behavior.
+
+The isolated model-contract test, PHP syntax checks, and frontend build do not establish that feature tests passed against the authoritative schema. The feature suite's current PHPUnit configuration still uses the legacy SQLite migration schema.
