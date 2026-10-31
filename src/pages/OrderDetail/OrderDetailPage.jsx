@@ -8,6 +8,7 @@ import { Stepper } from '../../components/ui/Stepper';
 import { Button } from '../../components/ui/Button';
 import '../Page.css';
 import './OrderDetail.css';
+import StarRating from '../../components/ui/StarRating';
 
 const orderSteps = ['Placed', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'Completed'];
 const currentStep = (status) => {
@@ -21,7 +22,7 @@ export default function OrderDetailPage() {
   const [searchParams] = useSearchParams();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
-  const [reviewSent, setReviewSent] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState('');
@@ -129,6 +130,12 @@ export default function OrderDetailPage() {
   }
 
   const completed = ['Completed', 'Delivered'].includes(order.status);
+  const rawAddress = typeof order.address === 'string' ? order.address : order.address?.detail || '';
+  const countryCode = String(order.delivery_country_code || 'PH').toUpperCase();
+  const countryName = countryCode === 'PH' ? 'Philippines' : countryCode;
+  const deliveryAddress = rawAddress && !rawAddress.toLocaleLowerCase().includes(countryName.toLocaleLowerCase())
+    ? `${rawAddress}, ${countryName}`
+    : rawAddress;
 
   return (
     <div className="section-shell order-shell order-detail-page">
@@ -143,10 +150,22 @@ export default function OrderDetailPage() {
           <Stepper steps={orderSteps} currentStep={currentStep(order.status)} />
           {order.status === 'Cancelled' ? <p className="order-cancelled-copy">This order was cancelled{order.cancelReason ? `: ${order.cancelReason}` : '.'}</p> : null}
           {order.rider ? <article className="order-rider-card"><div className="order-rider-card__avatar"><Bike size={21} /></div><div><strong>{order.rider.name}</strong><small>{order.rider.vehicle}</small></div>{order.rider.phone ? <a href={`tel:${order.rider.phone}`} className="text-link">Call rider</a> : null}</article> : null}
-          <div className="order-delivery-detail"><MapPin size={16} /><span>{order.deliveryMode || 'Delivery'}{order.address ? ` · ${order.address}` : ''}{order.riderNote ? ` · ${order.riderNote}` : ''}</span></div>
+          <div className="order-delivery-detail"><MapPin size={16} /><span>{order.deliveryMode || 'Delivery'}{deliveryAddress ? ` · ${deliveryAddress}` : ''}{order.riderNote ? ` · ${order.riderNote}` : ''}</span></div>
           <section className="order-items-summary"><h2>Items</h2>{order.cartItems?.length ? order.cartItems.map((item, index) => <div key={`${item.id}-${index}`}><span>{item.quantity} × {item.name}{item.optionLabels?.length ? <small>{item.optionLabels.join(', ')}</small> : null}</span><strong>{formatPeso(item.unitPrice * item.quantity)}</strong></div>) : <p>{order.items}</p>}</section>
           {order.status === 'Placed' ? <Button variant="ghost" onClick={() => setCancelOpen(true)}>Cancel order</Button> : null}
-          {completed ? <div className="review-prompt"><h2>How was your order?</h2>{reviewSent ? <p>Thanks for sharing your feedback.</p> : <><div className="rating-choice" aria-label="Rate your order">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" aria-label={`${rating} stars`} onClick={() => setReviewSent(true)}>★</button>)}</div><p>Leave a quick rating for {order.restaurant}.</p></>}</div> : null}
+          {completed ? (
+            <div className="review-prompt">
+              <h2>How was your order?</h2>
+              {reviewRating ? (
+                <p>Thanks for sharing your feedback.</p>
+              ) : (
+                <>
+                  <StarRating value={reviewRating} onChange={setReviewRating} label="Rate your order" />
+                  <p>Leave a quick rating for {order.restaurant}.</p>
+                </>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <aside className="summary-card order-receipt-card">

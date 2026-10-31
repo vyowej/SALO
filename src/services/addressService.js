@@ -5,17 +5,27 @@ import { apiRequest } from './apiClient';
 
 const ADDRESSES_KEY = 'salo-saved-addresses-v1';
 const SELECTED_ADDRESS_KEY = 'salo-selected-address-v1';
+const COUNTRY_NAMES = { PH: 'Philippines' };
 
-const normalizeAddress = (address, index = 0) => ({
-  id: address.id || `saved-${index + 1}`,
-  label: address.label || 'Home',
-  detail: address.detail || [
+const normalizeAddress = (address, index = 0) => {
+  const countryCode = String(address.country_code || 'PH').toUpperCase();
+  const countryName = COUNTRY_NAMES[countryCode] || countryCode;
+  const streetAddress = [
     address.house_no,
     address.street,
     address.barangay,
     address.city_municipality,
     address.province,
-  ].filter(Boolean).join(', '),
+    address.region,
+  ].filter(Boolean).join(', ');
+  const detail = address.detail || streetAddress;
+  return ({
+  id: address.id || `saved-${index + 1}`,
+  label: address.label || 'Home',
+  detail: detail && !detail.toLocaleLowerCase().includes(countryName.toLocaleLowerCase())
+    ? `${detail}, ${countryName}`
+    : detail,
+  country_code: countryCode,
   region: address.region || (config.useMock ? defaultMockAddress.region : ''),
   province: address.province || (config.useMock ? defaultMockAddress.province : ''),
   city_municipality: address.city_municipality || (config.useMock ? defaultMockAddress.city_municipality : ''),
@@ -33,7 +43,8 @@ const normalizeAddress = (address, index = 0) => ({
   primary: address.is_default ?? address.is_main ?? Boolean(address.primary),
   delivery_note: address.delivery_note || address.rider_note || '',
   rider_note: address.delivery_note || address.rider_note || '',
-});
+  });
+};
 
 const readAddresses = () => {
   try {
@@ -51,6 +62,7 @@ const saveAddresses = (addresses) => {
 };
 
 const toApiAddress = (address) => ({
+  country_code: String(address.country_code || 'PH').toUpperCase(),
   psgc_code: address.psgc_code || null,
   label: address.label || 'Home',
   address_type: ({

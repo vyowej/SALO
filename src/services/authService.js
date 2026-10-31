@@ -26,6 +26,7 @@ const normalizeApiUser = (user) => {
 };
 
 const formatApiAddress = (address) => ({
+  country_code: String(address.country_code || 'PH').toUpperCase(),
   label: address.label,
   region: address.region,
   province: address.province,

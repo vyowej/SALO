@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Button } from '../../components/ui/Button';
+import ImageWithFallback from '../../components/ui/ImageWithFallback';
 import { useAuth } from '../../context/AuthContext';
 import { useCan } from '../../hooks/useCan';
 import config from '../../config';
@@ -328,7 +329,7 @@ export default function BusinessTeamPage({ restaurantId, user, readOnly, onAcces
                 {emailCheck.exists ? (
                   <div className="team-invite-identity">
                     {emailCheck.identity.avatar_url ? (
-                      <img src={emailCheck.identity.avatar_url} alt="" />
+                      <ImageWithFallback src={emailCheck.identity.avatar_url} alt="" fallbackSrc="/brand/icon-192.png" />
                     ) : (
                       <span aria-hidden="true">{emailCheck.identity.first_name?.[0] || '?'}</span>
                     )}

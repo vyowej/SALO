@@ -78,7 +78,7 @@ export default function ProfilePage() {
   const saveMainAddress = async () => {
     setSaveError('');
     setSavedMessage('');
-    if (!addressDraft.region || !addressDraft.province || !addressDraft.city_municipality || !addressDraft.barangay || !addressDraft.street.trim()) {
+    if (!addressDraft.region || !addressDraft.city_municipality || !addressDraft.barangay || !addressDraft.street.trim()) {
       setSaveError('Complete the address fields before saving.');
       return;
     }

@@ -98,8 +98,8 @@ export default function RegisterPage() {
       }
     }
     if (step === 1) {
-      if (!address.region || !address.province || !address.city_municipality || !address.barangay || !address.street.trim()) {
-        return 'Complete your region, province, city, barangay, and street.';
+      if (!address.region || !address.city_municipality || !address.barangay || !address.street.trim()) {
+        return 'Complete your region, city, barangay, and street.';
       }
     }
     if (step === 2) {

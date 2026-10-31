@@ -7,6 +7,25 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AddressRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $label = $this->input('label');
+        if (! is_string($label)) {
+            return;
+        }
+
+        $normalized = match (strtolower(trim($label))) {
+            'home' => 'Home',
+            'work', 'office' => 'Work',
+            'church' => 'Church',
+            'school' => 'School',
+            'other' => 'Other',
+            default => $label,
+        };
+
+        $this->merge(['label' => $normalized]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -14,9 +33,15 @@ class AddressRequest extends FormRequest
 
     public function rules(): array
     {
+        $legacyLeafOnly = $this->exists('psgc_code') && ! $this->exists('barangay_code');
+
         return [
-            'psgc_code' => [$this->isMethod('post') ? 'required' : 'sometimes', 'string', 'max:12', 'exists:psgc_locations,code'],
-            'label' => ['sometimes', 'string', 'max:40'],
+            'country_code' => ['sometimes', 'in:PH'],
+            'province_code' => ['sometimes', 'nullable', 'string', 'max:12'],
+            'city_code' => [$legacyLeafOnly ? 'sometimes' : 'required_with:barangay_code', 'nullable', 'string', 'max:12'],
+            'barangay_code' => [$this->isMethod('post') && ! $legacyLeafOnly ? 'required' : 'sometimes', 'string', 'max:12'],
+            'psgc_code' => [$this->isMethod('post') && $legacyLeafOnly ? 'required' : 'sometimes', 'string', 'max:12'],
+            'label' => ['sometimes', 'string', 'in:Home,Work,Church,School,Other'],
             'address_type' => ['sometimes', 'in:home,work,church,other'],
             'custom_label' => ['sometimes', 'nullable', 'string', 'max:60'],
             'street' => [$this->isMethod('post') ? 'required' : 'sometimes', 'string', 'max:190'],

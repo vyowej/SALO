@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { ADMIN_COPY } from '../../constants/admin';
 import { resolvePhoto } from '../../mock/admin/photoStore';
+import ImageWithFallback from '../ui/ImageWithFallback';
 
 export function PhotoViewer({ photoRef, onClose }) {
   const isDirectUrl = typeof photoRef === 'string' && (/^https?:\/\//i.test(photoRef) || photoRef.startsWith('/'));
@@ -38,7 +39,7 @@ export function PhotoViewer({ photoRef, onClose }) {
         <button type="button" className="admin-icon-button admin-photo-viewer__close" onClick={onClose} aria-label={ADMIN_COPY.close}>
           <X aria-hidden="true" />
         </button>
-        {src ? <img src={src} alt={ADMIN_COPY.photoAlt} /> : <p role="status">{ADMIN_COPY.photoMissing}</p>}
+        {src ? <ImageWithFallback src={src} alt={ADMIN_COPY.photoAlt} fallbackSrc="/brand/icon-192.png" /> : <p role="status">{ADMIN_COPY.photoMissing}</p>}
       </section>
     </div>
   );

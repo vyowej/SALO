@@ -88,6 +88,8 @@ class DatabaseAddressRepository implements AddressRepository
 
                 if ($next !== null) {
                     $next->forceFill(['is_default' => true])->save();
+                } else {
+                    $address->forceFill(['is_default' => true])->save();
                 }
             }
 
@@ -188,7 +190,9 @@ class DatabaseAddressRepository implements AddressRepository
             $location = PsgcLocation::query()
                 ->with('parent.parent.parent.parent')
                 ->findOrFail($psgcCode);
-            $houseNumber = $values['house_no'] ?? $current?->house_no;
+            $houseNumber = array_key_exists('house_no', $values)
+                ? $values['house_no']
+                : $current?->house_no;
             $values['formatted_address'] = $this->addressFormatter->format(
                 $location,
                 $street,
@@ -208,10 +212,12 @@ class DatabaseAddressRepository implements AddressRepository
     private function toArray(UserAddress $address): array
     {
         $levels = [];
+        $codes = [];
         $location = $address->location;
 
         while ($location !== null) {
             $levels[$location->level] = $location->name;
+            $codes[$location->level] = (string) $location->code;
             $location = $location->parent;
         }
 
@@ -220,6 +226,9 @@ class DatabaseAddressRepository implements AddressRepository
             'user_id' => (string) $address->user_id,
             'country_code' => $address->country_code,
             'psgc_code' => $address->psgc_code,
+            'province_code' => $codes['province'] ?? null,
+            'city_code' => $codes['city'] ?? null,
+            'barangay_code' => $codes['barangay'] ?? null,
             'formatted_address' => $address->formatted_address,
             'psgc_full_name' => $address->location?->full_name,
             'label' => $address->label,

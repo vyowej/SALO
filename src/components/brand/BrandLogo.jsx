@@ -6,6 +6,7 @@ import darkLogo2x from '../../assets/brand/salo-logo-dark@2x.png';
 import icon from '../../assets/brand/salo-icon.png';
 import icon2x from '../../assets/brand/salo-icon@2x.png';
 import { useTheme } from '../../context/ThemeContext';
+import ImageWithFallback from '../ui/ImageWithFallback';
 
 export function BrandLogo({ to = '/', variant = 'full', className = '', onClick }) {
   const { isDarkMode } = useTheme();
@@ -18,20 +19,22 @@ export function BrandLogo({ to = '/', variant = 'full', className = '', onClick 
   return (
     <Link to={to} className={classes} aria-label="SALO" onClick={onClick}>
       {variant !== 'icon' ? (
-        <img
+        <ImageWithFallback
           className="brand-logo-link__full"
           src={logoSrc}
           srcSet={logoSrcSet}
+          fallbackSrc={icon}
           width="140"
           height="52"
           alt="SALO"
         />
       ) : null}
       {variant !== 'full' ? (
-        <img
+        <ImageWithFallback
           className="brand-logo-link__icon"
           src={icon}
           srcSet={`${icon} 1x, ${icon2x} 2x`}
+          fallbackSrc={icon}
           width="32"
           height="38"
           alt="SALO"

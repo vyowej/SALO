@@ -8,5 +8,9 @@ interface PsgcLocationRepository
 
     public function search(string $query): array;
 
+    public function hierarchyForCode(string $code): ?array;
+
     public function upsert(array $locations): void;
+
+    public function verificationReport(): array;
 }

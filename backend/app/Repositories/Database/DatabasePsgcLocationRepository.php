@@ -64,21 +64,118 @@ class DatabasePsgcLocationRepository implements PsgcLocationRepository
         ])->all();
     }
 
+    public function hierarchyForCode(string $code): ?array
+    {
+        $location = PsgcLocation::query()
+            ->with('parent.parent.parent.parent')
+            ->find($code);
+        if ($location === null) {
+            return null;
+        }
+
+        $hierarchy = [];
+        $current = $location;
+        while ($current !== null) {
+            $hierarchy[] = [
+                'code' => (string) $current->code,
+                'parent_code' => $current->parent_code === null ? null : (string) $current->parent_code,
+                'name' => $current->name,
+                'level' => $current->level,
+            ];
+            $current = $current->parent;
+        }
+
+        return $hierarchy;
+    }
+
     public function upsert(array $locations): void
     {
+        $locations = array_map(static function (array $location): array {
+            $location['parent_code'] = $location['parent_code'] === '' ? null : $location['parent_code'];
+
+            return $location;
+        }, $locations);
+
         DB::transaction(function () use ($locations): void {
-            foreach ($locations as $location) {
-                PsgcLocation::query()->updateOrCreate(
-                    ['code' => $location['code']],
-                    [
-                        'parent_code' => $location['parent_code'],
-                        'name' => $location['name'],
-                        'level' => $location['level'],
-                        'full_name' => $location['full_name'],
-                    ],
+            foreach (array_chunk($locations, 500) as $chunk) {
+                PsgcLocation::query()->upsert(
+                    $chunk,
+                    ['code'],
+                    ['parent_code', 'name', 'level', 'full_name'],
                 );
             }
         });
+    }
+
+    public function verificationReport(): array
+    {
+        $counts = DB::table('psgc_locations')
+            ->select('level', DB::raw('COUNT(*) AS row_count'))
+            ->groupBy('level')
+            ->pluck('row_count', 'level')
+            ->all();
+
+        $missingParents = DB::table('psgc_locations as child')
+            ->leftJoin('psgc_locations as parent', 'parent.code', '=', 'child.parent_code')
+            ->where(function ($query): void {
+                $query->where(function ($query): void {
+                    $query->where('child.level', '<>', 'region')
+                        ->whereNull('child.parent_code');
+                })->orWhere(function ($query): void {
+                    $query->whereNotNull('child.parent_code')
+                        ->whereNull('parent.code');
+                });
+            })
+            ->count();
+
+        $wrongParents = DB::table('psgc_locations as child')
+            ->leftJoin('psgc_locations as parent', 'parent.code', '=', 'child.parent_code')
+            ->where(function ($query): void {
+                $query->where(function ($query): void {
+                    $query->where('child.level', 'region')
+                        ->whereNotNull('parent.code');
+                })->orWhere(function ($query): void {
+                    $query->where('child.level', 'province')
+                        ->whereNotNull('parent.code')
+                        ->where('parent.level', '<>', 'region');
+                })->orWhere(function ($query): void {
+                    $query->where('child.level', 'city')
+                        ->whereNotNull('parent.code')
+                        ->whereNotIn('parent.level', ['region', 'province']);
+                })->orWhere(function ($query): void {
+                    $query->where('child.level', 'barangay')
+                        ->whereNotNull('parent.code')
+                        ->where('parent.level', '<>', 'city');
+                })->orWhere(function ($query): void {
+                    $query->where('child.level', 'district')
+                        ->whereNotNull('parent.code')
+                        ->where('parent.level', '<>', 'region');
+                })->orWhere(function ($query): void {
+                    $query->where('child.level', 'submunicipality')
+                        ->whereNotNull('parent.code')
+                        ->where('parent.level', '<>', 'city');
+                })->orWhere(function ($query): void {
+                    $query->whereNotIn('child.level', [
+                        'region',
+                        'province',
+                        'city',
+                        'barangay',
+                        'district',
+                        'submunicipality',
+                    ])->whereNotNull('parent.code');
+                });
+            })
+            ->count();
+
+        return [
+            'counts' => array_replace(
+                array_fill_keys(['region', 'province', 'city', 'barangay', 'district', 'submunicipality'], 0),
+                $counts,
+            ),
+            'missing_parent_count' => $missingParents,
+            'wrong_parent_count' => $wrongParents,
+            'invalid_parent_count' => $missingParents + $wrongParents,
+        ];
     }
 
     private function ancestorName(PsgcLocation $location, string $level): string

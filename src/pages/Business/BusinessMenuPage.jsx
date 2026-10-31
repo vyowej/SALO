@@ -6,6 +6,7 @@ import { Modal } from '../../components/ui/Modal';
 import { useCan } from '../../hooks/useCan';
 import { businessService } from '../../services/businessService';
 import './BusinessMenuPage.css';
+import ImageWithFallback from '../../components/ui/ImageWithFallback';
 
 function tagLabel(tag) {
   return tag.name.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -265,7 +266,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
       header: 'Item',
       cell: ({ row }) => (
         <div className="business-menu-item-name">
-          {row.original.image_url ? <img src={row.original.image_url} alt="" /> : <span aria-hidden="true">🍽</span>}
+          {row.original.image_url ? <ImageWithFallback src={row.original.image_url} alt="" /> : <span aria-hidden="true">🍽</span>}
           <div><strong>{row.original.name}</strong><small>{row.original.description || 'No description'}</small></div>
         </div>
       ),
@@ -494,7 +495,7 @@ export default function BusinessMenuPage({ restaurantId, user, readOnly, onWorks
 
       <Modal open={itemFormOpen} title={editingItem ? 'Edit menu item' : 'Add New Menu Item'} onClose={() => !saving && setItemFormOpen(false)}>
         <form className="business-menu-item-form" onSubmit={submitItem}>
-          {editingItem?.image_url ? <img className="business-menu-item-form__current-photo" src={editingItem.image_url} alt={`${editingItem.name} current`} /> : null}
+          {editingItem?.image_url ? <ImageWithFallback className="business-menu-item-form__current-photo" src={editingItem.image_url} alt={`${editingItem.name} current`} /> : null}
           <label>Food photo {!editingItem ? <span aria-hidden="true">*</span> : null}
             <input
               type="file"

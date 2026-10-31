@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { config } from '../../config';
 import '../Page.css';
 
 export default function VerifyEmailPage() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
   const { isLoggedIn, authLoading, verifyEmail } = useAuth();
@@ -44,7 +45,12 @@ export default function VerifyEmailPage() {
         {visibleStatus === 'sign-in' ? <p role="alert">Sign in in this browser to verify your email address.</p> : null}
         {visibleStatus === 'invalid' ? <p className="form-error" role="alert">This verification link is invalid, expired, or unavailable in preview mode.</p> : null}
         <div className="auth-card__actions">
-          <Link to={isLoggedIn ? '/profile' : '/login'} className="text-link">{isLoggedIn ? 'Back to profile' : 'Sign in'}</Link>
+          <Link
+            to={isLoggedIn ? '/profile' : `/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}${location.hash}`)}`}
+            className="text-link"
+          >
+            {isLoggedIn ? 'Back to profile' : 'Sign in'}
+          </Link>
         </div>
       </div>
     </div>

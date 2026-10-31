@@ -50,6 +50,7 @@ export function AdminShell({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const searchRef = useRef(null);
+  const sidebarRef = useRef(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -76,6 +77,41 @@ export function AdminShell({ children }) {
     return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
 
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const sidebar = sidebarRef.current;
+    const focusableItems = () => [...sidebar.querySelectorAll(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )];
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setMobileOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusableItems();
+      if (!items.length) return;
+      if (event.shiftKey && document.activeElement === items[0]) {
+        event.preventDefault();
+        items[items.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === items[items.length - 1]) {
+        event.preventDefault();
+        items[0].focus();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    sidebar.querySelector('.admin-sidebar__close')?.focus();
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, [mobileOpen]);
+
   const handleLogout = async () => {
     setLogoutError('');
     try {
@@ -90,7 +126,14 @@ export function AdminShell({ children }) {
   return (
     <div className={`admin-workspace${collapsed ? ' admin-workspace--collapsed' : ''}${mobileOpen ? ' admin-workspace--mobile-open' : ''}`}>
       {mobileOpen ? <button className="admin-mobile-scrim" type="button" aria-label={ADMIN_COPY.closeSidebar} onClick={() => setMobileOpen(false)} /> : null}
-      <aside className="admin-sidebar" aria-label={ADMIN_COPY.navigation}>
+      <aside
+        id="admin-sidebar"
+        ref={sidebarRef}
+        className="admin-sidebar"
+        aria-label={ADMIN_COPY.navigation}
+        role={mobileOpen ? 'dialog' : undefined}
+        aria-modal={mobileOpen ? 'true' : undefined}
+      >
         <div className="admin-sidebar__brand">
           <BrandLogo to="/admin" variant={collapsed ? 'icon' : 'full'} className="admin-brand-logo" />
           <button type="button" className="admin-icon-button admin-sidebar__close" onClick={() => setMobileOpen(false)} aria-label={ADMIN_COPY.closeSidebar}>
@@ -166,7 +209,14 @@ export function AdminShell({ children }) {
 
       <div className="admin-main">
         <header className="admin-topbar">
-          <button type="button" className="admin-icon-button admin-topbar__menu" onClick={() => setMobileOpen(true)} aria-label={ADMIN_COPY.menu}>
+          <button
+            type="button"
+            className="admin-icon-button admin-topbar__menu"
+            onClick={() => setMobileOpen(true)}
+            aria-label={ADMIN_COPY.menu}
+            aria-controls="admin-sidebar"
+            aria-expanded={mobileOpen}
+          >
             <Menu aria-hidden="true" />
           </button>
           <div className="admin-topbar__titles">

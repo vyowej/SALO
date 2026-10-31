@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="title">
+  <title id="title">Food photo unavailable</title>
+  <rect width="640" height="420" fill="#FAF7F2"/>
+  <circle cx="320" cy="210" r="118" fill="#F0E5D7"/>
+  <circle cx="320" cy="210" r="82" fill="#FFFFFF" stroke="#CFC2B2" stroke-width="8"/>
+  <circle cx="320" cy="210" r="50" fill="#D96B35" opacity=".82"/>
+  <path d="M288 213c16-25 34-25 51-5 9 10 18 12 28 8-8 22-25 34-50 34-16 0-28-12-29-37Z" fill="#52634D"/>
+  <circle cx="300" cy="193" r="6" fill="#D9A441"/>
+  <circle cx="342" cy="229" r="5" fill="#D9A441"/>
+</svg>

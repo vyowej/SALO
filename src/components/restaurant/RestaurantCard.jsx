@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock3, MapPin, Star } from 'lucide-react';
+import { Clock3, MapPin } from 'lucide-react';
 import { formatPeso } from '../../utils/formatPeso';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { useLocationContext } from '../../context/LocationContext';
 import { locationService } from '../../services/locationService';
+import ImageWithFallback from '../ui/ImageWithFallback';
+import StarRating from '../ui/StarRating';
 
 export function RestaurantCard({ restaurant }) {
   const openStatus = getOpenStatus(restaurant);
@@ -40,11 +42,11 @@ export function RestaurantCard({ restaurant }) {
       aria-label={`${restaurant.name}. ${openStatus.label}. ${isAcceptingOrders ? 'Order now or view menu' : 'View menu'}`}
     >
       <div className="restaurant-card__image-wrap">
-        <img src={restaurant.image} alt="" className="restaurant-card__image" loading="lazy" />
+        <ImageWithFallback src={restaurant.image} alt="" className="restaurant-card__image" loading="lazy" />
         <span className={`restaurant-status restaurant-status--${openStatus.status}`}>
           <i aria-hidden="true" />{openStatus.label}
         </span>
-        <span className="restaurant-rating"><Star size={12} fill="currentColor" /> {restaurant.rating}</span>
+        <span className="restaurant-rating"><StarRating value={restaurant.rating} size={12} /></span>
         {imageTag ? <span className="restaurant-image-tag">{imageTag}</span> : null}
         {outsideRange ? <span className="restaurant-range-badge">Outside delivery range</span> : null}
       </div>

@@ -17,4 +17,14 @@ class PsgcLocationService
     {
         return $this->locations->search($query);
     }
+
+    public function hierarchyForCode(string $code): ?array
+    {
+        return $this->locations->hierarchyForCode($code);
+    }
+
+    public function verificationReport(): array
+    {
+        return $this->locations->verificationReport();
+    }
 }

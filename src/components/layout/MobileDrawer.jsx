@@ -12,6 +12,8 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
 
   useEffect(() => {
     if (!open || !drawerRef.current) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
     const focusable = () => [...drawerRef.current.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled)')];
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -21,7 +23,10 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
       if (event.key !== 'Tab') return;
       const items = focusable();
       if (!items.length) return;
-      if (event.shiftKey && document.activeElement === items[0]) {
+      if (!drawerRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        items[event.shiftKey ? items.length - 1 : 0].focus();
+      } else if (event.shiftKey && document.activeElement === items[0]) {
         event.preventDefault();
         items[items.length - 1].focus();
       } else if (!event.shiftKey && document.activeElement === items[items.length - 1]) {
@@ -30,8 +35,13 @@ export function MobileDrawer({ open, onClose, user, onLogout, userRole, searchQu
       }
     };
     focusable()[0]?.focus();
+    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
   }, [open, onClose]);
 
   const linkIsActive = (to) => {
