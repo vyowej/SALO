@@ -2,14 +2,14 @@
 
 ## Current state
 
-The configured database `salo` is an existing MariaDB 10.11.16 database with application data. Its Laravel `migrations` table was not present when inspected. The eight checked-in migrations contain non-idempotent table creation and definitions that differ from confirmed live columns, keys, and enums.
+The configured database `salo` is an existing MariaDB 10.11.16 database with application data. Its Laravel `migrations` table was not present when inspected. The eight checked-in migrations are not an approved baseline for adoption. Read-only `SHOW COLUMNS` comparison of the authoritative [database/salo_db.sql](../database/salo_db.sql) against all 49 live tables found matching column names, types, and nullability; MariaDB normalizes JSON/timestamp/default display. Full parity of indexes, foreign keys, and checks has not been exhaustively verified.
 
 No migration, schema install, or data-changing SQL was run during the schema review. In particular, do not run any of the following against `salo`:
 
 - `php artisan migrate`
 - `php artisan migrate:install`
 - `php artisan migrate:fresh` or `migrate:refresh`
-- `docs/DATABASE_SCHEMA_V3.sql` (it begins by dropping and recreating the database)
+- `database/salo_db.sql` (it begins by dropping and recreating the database)
 
 The repository migrations are useful source code but are not an adoption baseline for the populated database. A missing migration history does not mean the database is empty.
 

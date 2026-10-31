@@ -33,8 +33,8 @@ These are proposed stable identifiers, not a claim that the existing frontend al
 | Capability / membership role | Restaurant-scoped permissions | Additional limits |
 |---|---|---|
 | Customer | None by membership | Read own profile, addresses, carts, orders, reservations; submit own restaurant/driver applications |
-| Owner membership | All permissions listed above | One owner membership per restaurant minimum; only owner can manage team/invitations and ownership transfer; cannot grant platform admin/driver |
-| Manager membership | `restaurant.view`, `restaurant.edit`, `menu.manage`, `orders.view`, `orders.manage`, `reservations.view`, `reservations.manage`, `tables.manage`, `discounts.manage`, `analytics.view` | No `team.manage`; cannot transfer ownership |
+| Owner membership | All permissions listed above | Only Owner can manage staff and invite another Owner; Owners cannot transfer ownership. Owner additions and Manager ownership-change requests requiring Owner confirmation are blocked until the root schema represents them. Cannot grant platform admin/driver. |
+| Manager membership | `restaurant.view`, `restaurant.edit`, `menu.manage`, `orders.view`, `orders.manage`, `reservations.view`, `reservations.manage`, `tables.manage`, `discounts.manage`, `analytics.view` | No `team.manage`; may request an ownership change for Owner confirmation, but cannot change ownership directly. Request flow is blocked until schema support exists. |
 | Reservation manager membership | `restaurant.view`, `reservations.view`, `reservations.manage`, `tables.manage` | No access to menu pricing, discounts, team, or order/customer data beyond what is necessary for reservations |
 | Staff membership | `restaurant.view`, `menu.manage`, `orders.view`, `orders.manage`, `reservations.view` | Cannot alter restaurant profile/hours, manage reservations, tables, discounts, analytics, or team |
 | Driver capability | No restaurant membership permission | Can set own availability, browse safe unclaimed job summaries, claim eligible jobs, access assigned-job details, update assigned milestones/location |
