@@ -7,7 +7,6 @@ use App\Models\PlatformAdmin;
 use App\Models\Restaurant;
 use App\Models\RestaurantStaff;
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -56,7 +55,6 @@ class TeamAndAuditTest extends TestCase
             'status' => 'invited',
         ]);
 
-        Auth::guard('web')->logout();
         $this->postJson('/api/v1/team-invitations/'.$token.'/activate', [
             'first_name' => 'Alex',
             'last_name' => 'Rivera',
@@ -97,11 +95,11 @@ class TeamAndAuditTest extends TestCase
         $this->assertNotSame('', $token);
 
         $wrongAccount = $this->createUser('wrong@example.test');
-        $this->actingAs($wrongAccount, 'web')
+        $this->actingAs($wrongAccount, 'sanctum')
             ->postJson('/api/v1/team-invitations/'.$token.'/accept')
             ->assertForbidden();
 
-        $this->actingAs($invitee, 'web')
+        $this->actingAs($invitee, 'sanctum')
             ->postJson('/api/v1/team-invitations/'.$token.'/accept')
             ->assertOk()
             ->assertJsonPath('data.position', 'manager');
@@ -110,7 +108,7 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $invitee->getKey(),
             'status' => 'active',
         ]);
-        $this->actingAs($invitee, 'web')
+        $this->actingAs($invitee, 'sanctum')
             ->postJson('/api/v1/team-invitations/'.$token.'/accept')
             ->assertNotFound();
     }
@@ -134,7 +132,6 @@ class TeamAndAuditTest extends TestCase
         $firstToken = explode('/', (string) $firstInvite->json('data.invite_path'))[2] ?? '';
         $secondToken = explode('/', (string) $secondInvite->json('data.invite_path'))[2] ?? '';
 
-        Auth::guard('web')->logout();
         $this->postJson('/api/v1/team-invitations/'.$firstToken.'/activate', [
             'first_name' => 'Alex',
             'last_name' => 'Rivera',
@@ -143,7 +140,7 @@ class TeamAndAuditTest extends TestCase
         ])->assertOk();
 
         $invitee = User::query()->where('email', $email)->firstOrFail();
-        $this->actingAs($invitee, 'web')
+        $this->actingAs($invitee, 'sanctum')
             ->postJson('/api/v1/team-invitations/'.$secondToken.'/accept')
             ->assertOk()
             ->assertJsonPath('data.position', 'manager');
@@ -422,8 +419,8 @@ class TeamAndAuditTest extends TestCase
             ->getJson($this->path($restaurant, '/business'))
             ->assertForbidden();
         $this->businessRequest($owner, $restaurant)
-            ->patchJson($this->path($restaurant, '/team/'.$staff->getKey()), ['status' => 'removed'])
-            ->assertOk();
+            ->deleteJson($this->path($restaurant, '/team/'.$staff->getKey()))
+            ->assertNoContent();
         $this->businessRequest($member, $restaurant)
             ->getJson($this->path($restaurant, '/business'))
             ->assertForbidden();
@@ -479,7 +476,7 @@ class TeamAndAuditTest extends TestCase
 
     private function businessRequest(User $user, Restaurant $restaurant): self
     {
-        return $this->actingAs($user, 'web')
+        return $this->actingAs($user, 'sanctum')
             ->withSession([
                 'salo.active_mode' => 'business',
                 'salo.selected_restaurant_id' => (string) $restaurant->getKey(),

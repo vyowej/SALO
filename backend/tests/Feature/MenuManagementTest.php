@@ -412,7 +412,7 @@ class MenuManagementTest extends \Tests\TestCase
 
     private function businessRequest(User $user, Restaurant $restaurant): self
     {
-        return $this->actingAs($user, 'web')
+        return $this->actingAs($user, 'sanctum')
             ->withSession([
                 'salo.active_mode' => 'business',
                 'salo.selected_restaurant_id' => (string) $restaurant->getKey(),
