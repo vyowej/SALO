@@ -14,12 +14,14 @@ class DatabasePsgcLocationRepository implements PsgcLocationRepository
         if ($parentCode !== null && $parentCode !== '') {
             $query->where('parent_code', $parentCode);
         }
-        if ($search !== null && trim($search) !== '') {
-            $query->where('name', 'like', '%'.trim($search).'%');
+        $search = trim((string) $search);
+        if ($search !== '') {
+            $query->where('name', 'like', '%'.$search.'%')
+                ->orderByRaw('CASE WHEN name LIKE ? THEN 0 ELSE 1 END', [$search.'%']);
         }
 
         return $query->orderBy('name')
-            ->limit(1000)
+            ->limit($search === '' ? 1000 : 30)
             ->get(['code', 'parent_code', 'name', 'level', 'full_name'])
             ->map(fn (PsgcLocation $location): array => [
                 'code' => $location->code,
@@ -31,12 +33,14 @@ class DatabasePsgcLocationRepository implements PsgcLocationRepository
             ->all();
     }
 
-    public function search(string $query): array
+    public function search(string $query, ?string $level = null, ?string $parentCode = null): array
     {
         $query = trim($query);
         $tokens = preg_split('/\s+/u', preg_replace('/[^\pL\pN]+/u', ' ', $query), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $fullTextQuery = implode(' ', array_map(fn (string $token): string => '+'.$token.'*', $tokens));
         $locations = PsgcLocation::query()
+            ->when($level !== null, fn ($builder) => $builder->where('level', $level))
+            ->when($parentCode !== null, fn ($builder) => $builder->where('parent_code', $parentCode))
             ->where(function ($builder) use ($query, $fullTextQuery): void {
                 $builder->where('name', 'like', $query.'%')
                     ->orWhereRaw('MATCH(name, full_name) AGAINST (? IN BOOLEAN MODE)', [$fullTextQuery]);
@@ -60,6 +64,47 @@ class DatabasePsgcLocationRepository implements PsgcLocationRepository
             'region_code' => $this->ancestorCode($location, 'region'),
             'province_code' => $this->ancestorCode($location, 'province'),
             'city_code' => $this->ancestorCode($location, 'city'),
+            'barangay_code' => $this->ancestorCode($location, 'barangay'),
+        ])->all();
+    }
+
+    public function resolveAdministrativeCandidates(array $namesByLevel): array
+    {
+        $namesByLevel = array_filter(
+            $namesByLevel,
+            fn ($names, $level): bool => in_array($level, ['region', 'province', 'city', 'barangay'], true)
+                && is_array($names)
+                && $names !== [],
+            ARRAY_FILTER_USE_BOTH,
+        );
+        if ($namesByLevel === []) {
+            return [];
+        }
+
+        $locations = PsgcLocation::query()
+            ->where(function ($query) use ($namesByLevel): void {
+                foreach ($namesByLevel as $level => $names) {
+                    $query->orWhere(function ($query) use ($level, $names): void {
+                        $query->where('level', $level)->whereIn('name', $names);
+                    });
+                }
+            })
+            ->with('parent.parent.parent')
+            ->orderBy('full_name')
+            ->get(['code', 'parent_code', 'name', 'level', 'full_name']);
+
+        return $locations->map(fn (PsgcLocation $location): array => [
+            'code' => (string) $location->code,
+            'parent_code' => $location->parent_code === null ? null : (string) $location->parent_code,
+            'name' => $location->name,
+            'level' => $location->level,
+            'region' => $this->ancestorName($location, 'region'),
+            'region_code' => $this->ancestorCode($location, 'region'),
+            'province' => $this->ancestorName($location, 'province'),
+            'province_code' => $this->ancestorCode($location, 'province'),
+            'city' => $this->ancestorName($location, 'city'),
+            'city_code' => $this->ancestorCode($location, 'city'),
+            'barangay' => $this->ancestorName($location, 'barangay'),
             'barangay_code' => $this->ancestorCode($location, 'barangay'),
         ])->all();
     }

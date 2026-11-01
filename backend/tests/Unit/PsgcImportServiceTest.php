@@ -169,7 +169,12 @@ class RecordingPsgcLocationRepository implements PsgcLocationRepository
         return [];
     }
 
-    public function search(string $query): array
+    public function search(string $query, ?string $level = null, ?string $parentCode = null): array
+    {
+        return [];
+    }
+
+    public function resolveAdministrativeCandidates(array $namesByLevel): array
     {
         return [];
     }

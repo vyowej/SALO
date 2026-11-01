@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\PsgcLocationService;
+use App\Services\Contracts\LocationService;
 use Illuminate\Console\Command;
 
 class VerifyPsgcLocations extends Command
@@ -11,7 +11,7 @@ class VerifyPsgcLocations extends Command
 
     protected $description = 'Read-only counts and parent-hierarchy checks for imported PSGC locations';
 
-    public function handle(PsgcLocationService $locations): int
+    public function handle(LocationService $locations): int
     {
         $report = $locations->verificationReport();
         $this->info('PSGC rows by level:');

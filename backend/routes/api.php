@@ -27,11 +27,16 @@ use App\Http\Controllers\Api\V1\Customer\AddressController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use App\Http\Controllers\Api\V1\Customer\SettingsController;
 use App\Http\Controllers\Api\V1\Locations\PsgcLocationController;
+use App\Http\Controllers\Api\V1\Locations\LocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('force.json')->group(function (): void {
     Route::get('/locations/psgc', [PsgcLocationController::class, 'index']);
     Route::get('/locations/psgc/search', [PsgcLocationController::class, 'search']);
+    Route::get('/locations/places/search', [LocationController::class, 'searchPlaces'])
+        ->middleware('throttle:30,1');
+    Route::post('/locations/places/reverse', [LocationController::class, 'reverseGeocode'])
+        ->middleware('throttle:10,1');
 
     Route::middleware('guest:web')->group(function (): void {
         Route::post('/auth/register', [RegisteredUserController::class, 'store']);

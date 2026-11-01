@@ -15,6 +15,8 @@ class PsgcLocationSearchRequest extends FormRequest
     {
         return [
             'query' => ['required', 'string', 'min:2', 'max:100'],
+            'level' => ['sometimes', 'in:region,province,city,barangay'],
+            'parent_code' => ['sometimes', 'nullable', 'string', 'max:10', 'exists:psgc_locations,code'],
         ];
     }
 }

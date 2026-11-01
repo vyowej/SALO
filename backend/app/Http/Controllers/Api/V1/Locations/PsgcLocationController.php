@@ -6,12 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Locations\PsgcLocationRequest;
 use App\Http\Requests\Locations\PsgcLocationSearchRequest;
 use App\Models\PsgcLocation;
-use App\Services\PsgcLocationService;
+use App\Services\Contracts\LocationService;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class PsgcLocationController extends Controller
 {
-    public function index(PsgcLocationRequest $request, PsgcLocationService $locations): JsonResource
+    public function index(PsgcLocationRequest $request, LocationService $locations): JsonResource
     {
         $this->authorize('viewAny', PsgcLocation::class);
         $data = $locations->list(
@@ -23,10 +23,16 @@ class PsgcLocationController extends Controller
         return JsonResource::make($data);
     }
 
-    public function search(PsgcLocationSearchRequest $request, PsgcLocationService $locations): JsonResource
+    public function search(PsgcLocationSearchRequest $request, LocationService $locations): JsonResource
     {
         $this->authorize('viewAny', PsgcLocation::class);
 
-        return JsonResource::make($locations->search($request->validated('query')));
+        $validated = $request->validated();
+
+        return JsonResource::make($locations->search(
+            $validated['query'],
+            $validated['level'] ?? null,
+            $validated['parent_code'] ?? null,
+        ));
     }
 }

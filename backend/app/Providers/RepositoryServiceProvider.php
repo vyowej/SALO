@@ -19,6 +19,7 @@ use App\Repositories\Contracts\MenuRepository;
 use App\Repositories\Contracts\OrderRepository;
 use App\Repositories\Contracts\ReservationRepository;
 use App\Repositories\Contracts\UserRepository;
+use App\Services\Contracts\LocationService;
 use App\Repositories\Database\DatabaseAuthTokenRepository;
 use App\Repositories\Database\DatabaseAddressRepository;
 use App\Repositories\Database\DatabaseBusinessDiscountRepository;
@@ -36,6 +37,7 @@ use App\Repositories\Database\DatabaseOrderRepository;
 use App\Repositories\Database\DatabaseReservationRepository;
 use App\Repositories\Database\DatabaseUserRepository;
 use App\Repositories\Stub\InMemoryAdminRepository;
+use App\Services\PsgcLocationService;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -52,6 +54,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(RestaurantPageRepository::class, DatabaseRestaurantPageRepository::class);
         $this->app->singleton(PlatformSettingsRepository::class, DatabasePlatformSettingsRepository::class);
         $this->app->singleton(PsgcLocationRepository::class, DatabasePsgcLocationRepository::class);
+        $this->app->singleton(LocationService::class, PsgcLocationService::class);
         $this->app->singleton(SessionRepository::class, DatabaseSessionRepository::class);
         $this->app->singleton(TeamRepository::class, DatabaseTeamRepository::class);
         $this->app->singleton(MenuRepository::class, DatabaseMenuRepository::class);

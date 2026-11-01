@@ -13,23 +13,43 @@ const unsupportedProvider = () => {
 };
 
 const findByName = (list, term) => list.find((entry) => entry.name.toLowerCase().includes(term.toLowerCase()));
-const loadPsgcLocations = (level, parentCode) => {
+const filterMockLocations = (locations, search) => {
+  const query = search.trim().toLowerCase();
+  if (!query) return locations;
+  return locations.filter((location) => location.name.toLowerCase().includes(query)).slice(0, 30);
+};
+const loadPsgcLocations = (level, parentCode, search) => {
   const params = new URLSearchParams({ level });
   if (parentCode) params.set('parent_code', parentCode);
+  if (search?.trim()) params.set('search', search.trim());
   return apiRequest(`/locations/psgc?${params.toString()}`);
 };
 
-const searchMockLocations = async (query) => {
+const searchMockLocations = async (query, expectedLevel = null, parentCode = null) => {
   await wait(200);
   const locations = [
-    ...regions.map((entry) => ({ ...entry, level: 'region' })),
-    ...Object.values(provinces).flat().map((entry) => ({ ...entry, level: 'province' })),
-    ...Object.values(cities).flat().map((entry) => ({ ...entry, level: 'city' })),
-    ...Object.values(barangays).flat().map((entry) => ({ ...entry, level: 'barangay' })),
+    ...regions.map((entry) => ({ ...entry, level: 'region', parent_code: null })),
+    ...Object.entries(provinces).flatMap(([regionCode, entries]) => entries.map((entry) => ({
+      ...entry,
+      level: 'province',
+      parent_code: regionCode,
+    }))),
+    ...Object.entries(cities).flatMap(([parent, entries]) => entries.map((entry) => ({
+      ...entry,
+      level: 'city',
+      parent_code: parent,
+    }))),
+    ...Object.entries(barangays).flatMap(([cityCode, entries]) => entries.map((entry) => ({
+      ...entry,
+      level: 'barangay',
+      parent_code: cityCode,
+    }))),
   ];
   const term = query.trim().toLowerCase();
   return locations
     .filter((entry) => entry.name.toLowerCase().includes(term))
+    .filter((entry) => !expectedLevel || entry.level === expectedLevel)
+    .filter((entry) => !parentCode || entry.parent_code === parentCode)
     .slice(0, 30)
     .map((entry) => ({
       ...entry,
@@ -78,32 +98,32 @@ export const locationService = {
       && Number(longitude) <= bounds.max_longitude;
   },
 
-  async getRegions() {
-    if (!config.useMock) return loadPsgcLocations('region');
+  async getRegions(search = '') {
+    if (!config.useMock) return loadPsgcLocations('region', null, search);
     await wait();
     unsupportedProvider();
-    return regions;
+    return filterMockLocations(regions, search);
   },
 
-  async getProvinces(regionCode) {
-    if (!config.useMock) return loadPsgcLocations('province', regionCode);
+  async getProvinces(regionCode, search = '') {
+    if (!config.useMock) return loadPsgcLocations('province', regionCode, search);
     await wait(300);
     unsupportedProvider();
-    return provinces[regionCode] || [];
+    return filterMockLocations(provinces[regionCode] || [], search);
   },
 
-  async getCities(provinceCode) {
-    if (!config.useMock) return loadPsgcLocations('city', provinceCode);
+  async getCities(provinceCode, search = '') {
+    if (!config.useMock) return loadPsgcLocations('city', provinceCode, search);
     await wait(300);
     unsupportedProvider();
-    return cities[provinceCode] || [];
+    return filterMockLocations(cities[provinceCode] || [], search);
   },
 
-  async getBarangays(cityCode) {
-    if (!config.useMock) return loadPsgcLocations('barangay', cityCode);
+  async getBarangays(cityCode, search = '') {
+    if (!config.useMock) return loadPsgcLocations('barangay', cityCode, search);
     await wait(300);
     unsupportedProvider();
-    return barangays[cityCode] || [];
+    return filterMockLocations(barangays[cityCode] || [], search);
   },
 
   async searchPlaces(query) {
@@ -113,33 +133,38 @@ export const locationService = {
       return mockPlaceSearchResults.filter((place) => `${place.detail} ${place.label}`.toLowerCase().includes(query.toLowerCase()));
     }
 
-    return (await this.searchPsgcLocations(query)).map((location) => ({
-      ...location,
-      psgc_code: location.code,
-      label: location.name,
-      detail: location.full_name,
-      street: '',
-      house_no: '',
-      latitude: null,
-      longitude: null,
-      is_main: false,
-      rider_note: '',
-    }));
+    const params = new URLSearchParams({ q: query.trim(), limit: '5' });
+    const result = await apiRequest(`/locations/places/search?${params.toString()}`);
+    if (!Array.isArray(result?.suggestions)) {
+      throw new Error('The location service returned invalid street suggestions.');
+    }
+    return result.suggestions;
   },
 
-  async searchPsgcLocations(query) {
+  async searchPsgcLocations(query, level = null, parentCode = null) {
     if (!query.trim()) return [];
     if (!config.useMock) {
       const params = new URLSearchParams({ query: query.trim() });
+      if (level) params.set('level', level);
+      if (parentCode) params.set('parent_code', parentCode);
       return apiRequest(`/locations/psgc/search?${params.toString()}`);
     }
-    return searchMockLocations(query);
+    return searchMockLocations(query, level, parentCode);
   },
 
   async reverseGeocode(latitude, longitude) {
-    await wait(250);
-    unsupportedProvider();
-    return { ...defaultMockAddress, latitude, longitude };
+    if (!await this.isWithinPhilippines({ latitude, longitude })) {
+      throw new Error('The pin must be within the supported Philippines coordinate bounds.');
+    }
+    if (config.useMock) {
+      await wait(250);
+      unsupportedProvider();
+      return { ...defaultMockAddress, latitude, longitude };
+    }
+    return apiRequest('/locations/places/reverse', {
+      method: 'POST',
+      body: { latitude, longitude },
+    });
   },
 
   async getCurrentPosition() {
