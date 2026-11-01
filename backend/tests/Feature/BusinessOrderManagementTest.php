@@ -13,6 +13,8 @@ use App\Models\Restaurant;
 use App\Models\RestaurantStaff;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 class BusinessOrderManagementTest extends \Tests\TestCase
 {
@@ -21,6 +23,27 @@ class BusinessOrderManagementTest extends \Tests\TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Schema::table('restaurants', function (Blueprint $table): void {
+            if (!Schema::hasColumn('restaurants', 'country_code')) {
+                $table->char('country_code', 2)->default('PH');
+            }
+            if (!Schema::hasColumn('restaurants', 'formatted_address')) {
+                $table->string('formatted_address', 300)->nullable();
+            }
+        });
+        if (!Schema::hasColumn('orders', 'checkout_id')) {
+            Schema::table('orders', function (Blueprint $table): void {
+                $table->unsignedBigInteger('checkout_id')->nullable();
+                $table->char('delivery_country_code', 2)->nullable();
+                $table->string('cancelled_by_type', 30)->nullable();
+                $table->unsignedBigInteger('cancelled_by_user_id')->nullable();
+            });
+        }
+        if (!Schema::hasColumn('order_status_histories', 'changed_by')) {
+            Schema::table('order_status_histories', function (Blueprint $table): void {
+                $table->unsignedBigInteger('changed_by')->nullable();
+            });
+        }
         $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
     }
 
@@ -267,8 +290,10 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             'idempotency_key' => 'order-test-'.uniqid(),
             'placed_at' => now(),
         ]);
-        $order = Order::query()->create([
+        $order = new Order();
+        $order->forceFill([
             'checkout_id' => $group->getKey(),
+            'checkout_group_id' => $group->getKey(),
             'restaurant_id' => $restaurant->getKey(),
             'reference_code' => 'O'.str_pad((string) $reference++, 11, '0', STR_PAD_LEFT),
             'order_type' => $orderType,
@@ -285,7 +310,8 @@ class BusinessOrderManagementTest extends \Tests\TestCase
             'discount_amount' => '0.00',
             'total_amount' => $orderType === 'delivery' ? '77.00' : '42.00',
             'placed_at' => now(),
-        ]);
+        ])->save();
+        $order->refresh();
         OrderItem::query()->create([
             'order_id' => $order->getKey(),
             'item_id' => $item->getKey(),
