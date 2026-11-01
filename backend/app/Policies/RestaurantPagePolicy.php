@@ -9,6 +9,24 @@ class RestaurantPagePolicy
 {
     public function __construct(private readonly RestaurantAccessPolicy $access) {}
 
+    public function viewAnyCustomer(User $user): bool
+    {
+        return $user->status === 'active'
+            && in_array('customer', $user->capabilities, true);
+    }
+
+    public function viewCustomer(User $user, Restaurant $restaurant): bool
+    {
+        return $this->viewAnyCustomer($user)
+            && $restaurant->status === 'approved'
+            && (bool) $restaurant->is_published;
+    }
+
+    public function viewPopular(?User $user = null): bool
+    {
+        return true;
+    }
+
     public function view(User $user, Restaurant $restaurant): bool
     {
         return $this->access->allows($user, $restaurant, 'restaurant.view');

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Clock3, MapPin, RotateCw, Utensils, X } from 'lucide-react';
 import { restaurantService } from '../../services/restaurantService';
@@ -130,76 +130,62 @@ export default function CustomerHomePage() {
       return false;
     }
   });
+  const loadRequestId = useRef(0);
   const firstName = user?.first_name || user?.name?.split(' ')[0] || 'there';
 
-  const loadData = async () => {
+  const homeFilters = useMemo(() => {
+    const filters = {
+      cuisine: category || undefined,
+      service_mode: serviceMode === 'Reserve' ? undefined : serviceMode === 'Pick-up' ? 'pickup' : 'delivery',
+      sort: sortBy === 'Nearest' ? 'nearest' : sortBy === 'Rating' ? 'rating' : 'popularity',
+      per_page: 8,
+      latitude: selectedAddress?.latitude,
+      longitude: selectedAddress?.longitude,
+    };
+    if (activeFilter === 'Open now') filters.open_now = true;
+    if (activeFilter === 'Open 24/7') filters.open_24_7 = true;
+    if (activeFilter === 'Featured') filters.featured = true;
+    if (activeFilter === 'Filipino only') filters.filipino_only = true;
+    if (activeFilter === 'Halal-certified') filters.dietary = ['halal_certified'];
+    if (activeFilter === 'Vegetarian') filters.dietary = ['vegetarian'];
+    if (activeFilter === 'Vegan') filters.dietary = ['vegan'];
+    if (activeFilter === 'Reservations' || serviceMode === 'Reserve') filters.accepts_reservations = true;
+    if (filters.sort === 'nearest' && (!filters.latitude || !filters.longitude)) filters.sort = 'popularity';
+    return filters;
+  }, [activeFilter, category, selectedAddress, serviceMode, sortBy]);
+
+  const loadData = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     setError('');
     try {
-      const [restaurantData, orderData, categoryData, contentData] = await Promise.all([
-        restaurantService.getAllRestaurants(),
-        restaurantService.getOrders(),
-        restaurantService.getCategories(),
-        restaurantService.getCustomerHomeContent(),
+      const [contentData, orderData] = await Promise.all([
+        restaurantService.getCustomerHomeContent(homeFilters),
+        config.useMock ? restaurantService.getOrders() : Promise.resolve([]),
       ]);
-      setRestaurants(restaurantData);
+      if (requestId !== loadRequestId.current) return;
+      setRestaurants(contentData.restaurants || []);
       setOrders(orderData);
-      setCategories(categoryData);
+      setCategories(contentData.categories || []);
       setHomeContent(contentData);
     } catch (loadError) {
       console.error('Unable to load customer home data.', loadError);
-      setError('We couldn’t load restaurants right now.');
+      if (requestId === loadRequestId.current) setError('We couldn’t load restaurants right now.');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
-  };
+  }, [homeFilters]);
 
   useEffect(() => {
-    let active = true;
-    Promise.all([
-      restaurantService.getAllRestaurants(),
-      restaurantService.getOrders(),
-      restaurantService.getCategories(),
-      restaurantService.getCustomerHomeContent(),
-    ])
-      .then(([restaurantData, orderData, categoryData, contentData]) => {
-        if (!active) return;
-        setRestaurants(restaurantData);
-        setOrders(orderData);
-        setCategories(categoryData);
-        setHomeContent(contentData);
-      })
-      .catch((loadError) => {
-        console.error('Unable to load customer home data.', loadError);
-        if (active) setError('We couldn’t load restaurants right now.');
-      })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-
-  const filteredRestaurants = useMemo(() => restaurants.filter((restaurant) => {
-    const tagText = restaurant.tags.join(' ').toLowerCase();
-    const categoryMatches = !category || restaurant.tags.includes(category) || restaurant.cuisine.includes(category);
-    const filterMatches = !activeFilter
-      || (activeFilter === 'Open now' && ['open', 'closing-soon'].includes(getOpenStatus(restaurant).status))
-      || (activeFilter === 'Filipino only' && restaurant.filipinoOnly)
-      || (activeFilter === 'Pork-free' && tagText.includes('pork-free'))
-      || (activeFilter === 'Halal-certified' && tagText.includes('halal'))
-      || (activeFilter === 'Vegetarian' && tagText.includes('vegetarian'))
-      || (activeFilter === 'Reservations' && restaurant.acceptsReservations)
-      || (activeFilter === 'Free delivery' && restaurant.deliveryFee === 0);
-    return categoryMatches && filterMatches;
-  }).sort((first, second) => {
-    if (sortBy === 'Fastest') return Number.parseInt(first.deliveryTime, 10) - Number.parseInt(second.deliveryTime, 10);
-    if (sortBy === 'Rating') return second.rating - first.rating;
-    if (sortBy === 'Nearest') return first.distanceKm - second.distanceKm;
-    const firstOpen = ['open', 'closing-soon'].includes(getOpenStatus(first).status);
-    const secondOpen = ['open', 'closing-soon'].includes(getOpenStatus(second).status);
-    return Number(secondOpen) - Number(firstOpen);
-  }), [restaurants, category, activeFilter, sortBy]);
+    const timer = window.setTimeout(loadData, 0);
+    return () => {
+      window.clearTimeout(timer);
+      loadRequestId.current += 1;
+    };
+  }, [loadData]);
 
   const activeOrder = orders.find((order) => ['Placed', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'On the way'].includes(order.status));
-  const firstClosedIndex = filteredRestaurants.findIndex((restaurant) => !['open', 'closing-soon'].includes(getOpenStatus(restaurant).status));
+  const firstClosedIndex = restaurants.findIndex((restaurant) => !['open', 'closing-soon'].includes(getOpenStatus(restaurant).status));
 
   const dismissVerifyBanner = () => {
     setVerifyBannerDismissed(true);
@@ -323,15 +309,15 @@ export default function CustomerHomePage() {
             <button key={filter} type="button" className={['chip', activeFilter === filter ? 'chip--selected' : ''].filter(Boolean).join(' ')} onClick={() => setActiveFilter(activeFilter === filter ? '' : filter)}>{filter}</button>
           ))}
           <select aria-label="Sort restaurants" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-            <option>Recommended</option><option>Fastest</option><option>Rating</option><option>Nearest</option>
+            <option>Recommended</option><option>Rating</option><option disabled={!selectedAddress?.latitude}>Nearest</option>
           </select>
         </div>
         {error ? (
           <div className="empty-state"><h3>Restaurants unavailable</h3><p>{error}</p><button className="btn btn--secondary" type="button" onClick={loadData}><RotateCw size={15} /> Try again</button></div>
         ) : loading ? (
           <div className="customer-restaurant-grid">{Array.from({ length: 6 }, (_, index) => <div className="skeleton-card customer-card-skeleton" key={index}><div className="skeleton skeleton-card__image" /><div className="skeleton-card__body"><div className="skeleton skeleton--text" /><div className="skeleton skeleton--text skeleton-card__line--short" /></div></div>)}</div>
-        ) : filteredRestaurants.length ? (
-          <div className="customer-restaurant-grid">{filteredRestaurants.map((restaurant, index) => <Fragment key={restaurant.id}>{index === firstClosedIndex && firstClosedIndex > 0 ? <p className="restaurant-closed-divider">Closed now · opening times are shown on each restaurant</p> : null}<RestaurantCard restaurant={restaurant} /></Fragment>)}</div>
+        ) : restaurants.length ? (
+          <div className="customer-restaurant-grid">{restaurants.map((restaurant, index) => <Fragment key={restaurant.id}>{index === firstClosedIndex && firstClosedIndex > 0 ? <p className="restaurant-closed-divider">Closed now · opening times are shown on each restaurant</p> : null}<RestaurantCard restaurant={restaurant} /></Fragment>)}</div>
         ) : (
           <div className="empty-state"><h3>No restaurants match those filters</h3><p>Clear a filter to see more nearby options.</p></div>
         )}

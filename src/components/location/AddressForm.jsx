@@ -1,128 +1,333 @@
-import { useCallback, useEffect, useState } from 'react';
-import { MapPin, RotateCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import { locationService } from '../../services/locationService';
+import { AsyncLocationCombobox } from '../ui/AsyncLocationCombobox';
+import { formatAddressPreview } from '../../utils/addressPreview';
+import { reverseGeocodeAddress } from '../../utils/reverseGeocodeAddress';
 import MapView from './MapView';
 
 const emptyAddress = {
+  country_code: 'PH',
   label: 'Home',
   custom_label: '',
   address_type: 'home',
   region: '',
+  region_code: '',
   province: '',
+  province_code: '',
+  province_display: '',
   city_municipality: '',
+  city_code: '',
   barangay: '',
+  psgc_code: '',
+  psgc_full_name: '',
   street: '',
   house_no: '',
   latitude: null,
   longitude: null,
   is_main: true,
+  delivery_note: '',
   rider_note: '',
 };
 
-const labels = ['Home', 'Office', 'School', 'Other'];
+const labels = ['Home', 'Work', 'Church', 'School', 'Other'];
+
+const addressTypeForLabel = {
+  Home: 'home',
+  Work: 'work',
+  Church: 'other',
+  School: 'other',
+  Other: 'other',
+};
+
+const isNcrRegion = (region = '') => {
+  const normalized = region.toLocaleLowerCase();
+  return normalized.includes('ncr') || normalized.includes('national capital');
+};
+
+const provinceDisplayFor = (region, cityCode) => {
+  if (!cityCode) return '';
+  return isNcrRegion(region) ? 'Metro Manila (NCR)' : 'None (independent city)';
+};
+
+const normalizedLabel = (label) => (label === 'Office' ? 'Work' : label || 'Home');
 
 export function AddressForm({ value = emptyAddress, onChange, showLocationActions = true }) {
-  const address = { ...emptyAddress, ...value };
-  const [regions, setRegions] = useState([]);
-  const [provinces, setProvinces] = useState([]);
-  const [cities, setCities] = useState([]);
-  const [barangays, setBarangays] = useState([]);
-  const [selectedCodes, setSelectedCodes] = useState({ region: '', province: '', city: '', barangay: '' });
-  const [loading, setLoading] = useState({ regions: true, provinces: false, cities: false, barangays: false });
+  const address = { ...emptyAddress, ...value, country_code: 'PH' };
+  const [selectedCodes, setSelectedCodes] = useState({
+    region: address.region_code || '',
+    province: address.province_code || '',
+    city: address.city_code || '',
+    barangay: address.psgc_code || '',
+  });
   const [errors, setErrors] = useState({});
-  const [locationQuery, setLocationQuery] = useState(value.psgc_full_name || '');
-  const [selectedSearchCode, setSelectedSearchCode] = useState('');
-  const [locationResults, setLocationResults] = useState([]);
-  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
-  const [locationSearchError, setLocationSearchError] = useState('');
   const [locationState, setLocationState] = useState('');
   const [locationAccuracy, setLocationAccuracy] = useState(null);
   const [manualEntry, setManualEntry] = useState(true);
+  const reverseRequestId = useRef(0);
 
-  const setField = (field, fieldValue) => onChange?.({ ...address, [field]: fieldValue });
-  const setFields = (fields) => onChange?.({ ...address, ...fields });
-
-  const loadOptions = useCallback(async (key, loader, setter, code) => {
-    setLoading((current) => ({ ...current, [key]: true }));
-    setErrors((current) => ({ ...current, [key]: '' }));
-    try {
-      setter(await loader(code));
-    } catch (error) {
-      console.error(`Unable to load address ${key}.`, error);
-      setErrors((current) => ({ ...current, [key]: 'We couldn’t load these locations.' }));
-    } finally {
-      setLoading((current) => ({ ...current, [key]: false }));
-    }
-  }, []);
+  const setField = (field, fieldValue) => {
+    const fields = { [field]: fieldValue };
+    if (field === 'delivery_note') fields.rider_note = fieldValue;
+    if (field === 'rider_note') fields.delivery_note = fieldValue;
+    setFields(fields);
+  };
+  const setFields = (fields) => {
+    const updatedAddress = { ...address, ...fields };
+    onChange?.({
+      ...updatedAddress,
+      formatted_address: fields.formatted_address || formatAddressPreview(updatedAddress),
+    });
+  };
+  const regionCode = address.region_code || '';
+  const provinceCode = address.province_code || '';
+  const cityCode = address.city_code || '';
+  const barangayCode = address.psgc_code || '';
+  const cityName = address.city_municipality;
+  const provinceName = address.province;
+  const regionName = address.region;
 
   useEffect(() => {
     let active = true;
-    locationService.getRegions()
-      .then((items) => { if (active) setRegions(items); })
-      .catch((error) => {
-        console.error('Unable to load address regions.', error);
-        if (active) setErrors((current) => ({ ...current, regions: 'We couldn’t load these locations.' }));
+    if (regionCode || (provinceCode && cityCode) || !cityName) return () => { active = false; };
+
+    locationService.searchPsgcLocations(cityName, 'city')
+      .then(async (locations) => {
+        if (!active) return;
+        const selected = locations.find((location) => location.code === cityCode)
+          || locations.find((location) => location.name.toLocaleLowerCase() === cityName.toLocaleLowerCase());
+        if (!selected) {
+          setErrors((current) => ({ ...current, hierarchy: 'This saved city could not be matched. Search for its province or city to continue.' }));
+          return;
+        }
+        let resolvedRegionCode = selected.region_code || '';
+        if (!resolvedRegionCode && selected.province_code) {
+          const provinceOptions = await locationService.searchPsgcLocations(
+            provinceName || selected.province || '',
+            'province',
+          );
+          const selectedProvince = provinceOptions.find((province) => province.code === selected.province_code);
+          resolvedRegionCode = selectedProvince?.region_code || selectedProvince?.parent_code || '';
+        }
+        if (!resolvedRegionCode && !selected.province_code) resolvedRegionCode = selected.parent_code || '';
+        if (!active) return;
+        setSelectedCodes({
+          region: resolvedRegionCode || '',
+          province: selected.province_code || '',
+          city: selected.code,
+          barangay: barangayCode,
+        });
+        onChange?.({
+          ...value,
+          region: regionName || selected.region || '',
+          region_code: resolvedRegionCode || '',
+          province: provinceName || selected.province || '',
+          province_code: selected.province_code || '',
+          province_display: provinceDisplayFor(
+            regionName || selected.region,
+            selected.province_code ? '' : selected.code,
+          ),
+          city_code: selected.code,
+        });
       })
-      .finally(() => { if (active) setLoading((current) => ({ ...current, regions: false })); });
+      .catch((error) => {
+        console.error('Unable to initialize the saved address hierarchy.', error);
+        if (active) setErrors((current) => ({ ...current, hierarchy: 'Saved location details could not be resolved. Search for the city again.' }));
+      });
+
     return () => { active = false; };
+  }, [
+    barangayCode,
+    cityCode,
+    cityName,
+    onChange,
+    provinceName,
+    provinceCode,
+    regionCode,
+    regionName,
+    value,
+  ]);
+
+  const loadProvinceOptions = useCallback(async (query) => {
+    const results = await locationService.searchPsgcLocations(query);
+    return results.filter((location) => location.level === 'province' || location.level === 'city');
   }, []);
 
-  useEffect(() => {
-    if ((selectedSearchCode && locationQuery === value.psgc_full_name) || locationQuery.trim().length < 2) return undefined;
+  const loadCityOptions = useCallback((query) => (
+    locationService.getCities(selectedCodes.province || selectedCodes.region, query)
+  ), [selectedCodes.province, selectedCodes.region]);
 
-    let active = true;
-    const timer = window.setTimeout(() => {
-      setLocationSearchLoading(true);
-      setLocationSearchError('');
-      locationService.searchPsgcLocations(locationQuery)
-        .then((results) => { if (active) setLocationResults(results); })
-        .catch((error) => {
-          console.error('Unable to search PSGC locations.', error);
-          if (active) setLocationSearchError('Location search is unavailable. Use the location lists below.');
-        })
-        .finally(() => { if (active) setLocationSearchLoading(false); });
-    }, 250);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [locationQuery, selectedSearchCode, value.psgc_full_name]);
+  const loadBarangayOptions = useCallback((query) => (
+    locationService.getBarangays(selectedCodes.city, query)
+  ), [selectedCodes.city]);
 
-  const choosePsgcLocation = async (location) => {
+  const clearLowerThanProvince = () => {
+    setSelectedCodes({ region: '', province: '', city: '', barangay: '' });
+    setFields({
+      region: '',
+      region_code: '',
+      province: '',
+      province_code: '',
+      province_display: '',
+      city_municipality: '',
+      city_code: '',
+      barangay: '',
+      psgc_code: '',
+      psgc_full_name: '',
+    });
+    setErrors((current) => ({ ...current, hierarchy: '' }));
+  };
+
+  const clearLowerThanCity = () => {
+    setSelectedCodes((current) => ({ ...current, city: '', barangay: '' }));
+    setFields({
+      city_municipality: '',
+      city_code: '',
+      barangay: '',
+      psgc_code: '',
+      psgc_full_name: '',
+    });
+    setErrors((current) => ({ ...current, hierarchy: '' }));
+  };
+
+  const clearBarangay = () => {
+    setSelectedCodes((current) => ({ ...current, barangay: '' }));
+    setFields({ barangay: '', psgc_code: '', psgc_full_name: '' });
+  };
+
+  const chooseProvinceOrCity = (location) => {
+    if (!location) {
+      clearLowerThanProvince();
+      return;
+    }
+
+    if (location.level === 'city') {
+      const regionCode = location.region_code || (
+        location.province_code ? selectedCodes.region : location.parent_code
+      );
+      const provinceDisplay = provinceDisplayFor(location.region, location.province_code ? '' : location.code);
+      setSelectedCodes({
+        region: regionCode || '',
+        province: location.province_code || '',
+        city: location.code,
+        barangay: '',
+      });
+      setFields({
+        region: location.region || '',
+        region_code: regionCode || '',
+        province: location.province || '',
+        province_code: location.province_code || '',
+        province_display: provinceDisplay,
+        city_municipality: location.city_municipality || location.name,
+        city_code: location.code,
+        barangay: '',
+        psgc_code: '',
+        psgc_full_name: '',
+      });
+      return;
+    }
+
     setSelectedCodes({
-      region: location.region_code || '',
-      province: location.province_code || '',
-      city: location.city_code || '',
-      barangay: location.barangay_code || '',
+      region: location.region_code || location.parent_code || '',
+      province: location.code,
+      city: '',
+      barangay: '',
     });
     setFields({
-      psgc_code: location.code,
-      psgc_full_name: location.full_name,
       region: location.region || '',
-      province: location.province || '',
-      city_municipality: location.city_municipality || '',
-      barangay: location.barangay || '',
+      region_code: location.region_code || location.parent_code || '',
+      province: location.name,
+      province_code: location.code,
+      province_display: '',
+      city_municipality: '',
+      city_code: '',
+      barangay: '',
+      psgc_code: '',
+      psgc_full_name: '',
     });
-    setLocationQuery(location.full_name);
-    setSelectedSearchCode(location.code);
-    setLocationResults([]);
-    setLocationSearchError('');
+  };
+
+  const chooseCity = (location) => {
+    if (!location) {
+      clearLowerThanCity();
+      return;
+    }
+    const provinceDisplay = provinceDisplayFor(address.region, selectedCodes.province ? '' : location.code);
+    setSelectedCodes((current) => ({ ...current, city: location.code, barangay: '' }));
+    setFields({
+      city_municipality: location.name,
+      city_code: location.code,
+      province_display: provinceDisplay,
+      barangay: '',
+      psgc_code: '',
+      psgc_full_name: '',
+    });
+  };
+
+  const chooseBarangay = (location) => {
+    if (!location) {
+      clearBarangay();
+      return;
+    }
+    setSelectedCodes((current) => ({ ...current, barangay: location.code }));
+    setFields({
+      barangay: location.name,
+      psgc_code: location.code,
+      psgc_full_name: location.full_name || location.name,
+    });
+  };
+
+  const chooseLabel = (label) => setFields({
+    label,
+    address_type: addressTypeForLabel[label],
+    custom_label: label === 'Other' ? address.custom_label : '',
+  });
+
+  const reverseAtPosition = async (position) => {
+    const requestId = ++reverseRequestId.current;
+    const coordinates = {
+      latitude: Number(position.latitude),
+      longitude: Number(position.longitude),
+    };
+    setLocationState('geocoding');
+    setErrors((current) => ({ ...current, reverse: '', pin: '' }));
 
     try {
-      if (location.region_code) setProvinces(await locationService.getProvinces(location.region_code));
-      if (location.province_code || location.region_code) {
-        setCities(await locationService.getCities(location.province_code || location.region_code));
+      if (!await locationService.isWithinPhilippines(coordinates)) {
+        if (requestId === reverseRequestId.current) setLocationState('outside');
+        return false;
       }
-      if (location.city_code) setBarangays(await locationService.getBarangays(location.city_code));
+
+      const result = await locationService.reverseGeocode(coordinates.latitude, coordinates.longitude);
+      if (requestId !== reverseRequestId.current) return false;
+
+      const resolvedAddress = reverseGeocodeAddress({ ...result, ...coordinates });
+      setSelectedCodes({
+        region: resolvedAddress.region_code,
+        province: resolvedAddress.province_code,
+        city: resolvedAddress.city_code,
+        barangay: resolvedAddress.psgc_code,
+      });
+      setFields(resolvedAddress);
+      setLocationState(resolvedAddress.unresolved_components.length ? 'partial' : 'geocoded');
+      return true;
     } catch (error) {
-      console.error('Unable to load the selected PSGC hierarchy.', error);
-      setLocationSearchError('The location was selected, but its hierarchy could not be loaded.');
+      console.error('Unable to reverse-geocode the selected coordinates.', error);
+      if (requestId !== reverseRequestId.current) return false;
+      setFields(coordinates);
+      setErrors((current) => ({
+        ...current,
+        reverse: 'We couldn’t look up this location. The pin and address fields remain editable.',
+      }));
+      setLocationState('geocode-unavailable');
+      return true;
     }
   };
 
   const useCurrentLocation = async () => {
     setLocationState('asking');
     setLocationAccuracy(null);
+    setErrors((current) => ({ ...current, reverse: '', pin: '' }));
     let result;
     try {
       result = await locationService.getCurrentPosition();
@@ -132,176 +337,175 @@ export function AddressForm({ value = emptyAddress, onChange, showLocationAction
       setManualEntry(true);
       return;
     }
-    if (result.state === 'granted') {
-      if (!locationService.isWithinPhilippines(result.position)) {
-        setLocationState('outside');
-        setManualEntry(true);
-        return;
-      }
-      setLocationAccuracy(result.position.accuracy);
-      setFields({
-        latitude: result.position.latitude,
-        longitude: result.position.longitude,
-      });
-      setManualEntry(true);
-      setLocationState('granted');
-    } else {
+
+    if (result.state !== 'granted') {
       setLocationState(result.state);
       setManualEntry(true);
-    }
-  };
-
-  const updateHierarchy = async (level, code) => {
-    if (level === 'region') {
-      const selected = regions.find((entry) => entry.code === code);
-      setSelectedCodes({ region: code, province: '', city: '', barangay: '' });
-      setCities([]);
-      setBarangays([]);
-      setFields({ psgc_code: code || null, region: selected?.name || '', province: '', city_municipality: '', barangay: '' });
-      if (code) {
-        await loadOptions('provinces', locationService.getProvinces, setProvinces, code);
-        await loadOptions('cities', locationService.getCities, setCities, code);
-      } else {
-        setProvinces([]);
-        setCities([]);
-      }
-    }
-    if (level === 'province') {
-      const selected = provinces.find((entry) => entry.code === code);
-      setSelectedCodes((current) => ({ ...current, province: code, city: '', barangay: '' }));
-      setBarangays([]);
-      setFields({ psgc_code: code || null, province: selected?.name || '', city_municipality: '', barangay: '' });
-      if (code) await loadOptions('cities', locationService.getCities, setCities, code);
-      else setCities([]);
-    }
-    if (level === 'city') {
-      const selected = cities.find((entry) => entry.code === code);
-      setSelectedCodes((current) => ({ ...current, city: code, barangay: '' }));
-      setFields({ psgc_code: code || null, city_municipality: selected?.name || '', barangay: '' });
-      if (code) await loadOptions('barangays', locationService.getBarangays, setBarangays, code);
-      else setBarangays([]);
-    }
-    if (level === 'barangay') {
-      const selected = barangays.find((entry) => entry.code === code);
-      setSelectedCodes((current) => ({ ...current, barangay: code }));
-      setFields({ psgc_code: code || null, barangay: selected?.name || '' });
-    }
-  };
-
-  const retry = (key) => {
-    const actions = {
-      regions: () => loadOptions('regions', () => locationService.getRegions(), setRegions),
-      provinces: () => loadOptions('provinces', locationService.getProvinces, setProvinces, selectedCodes.region),
-      cities: () => loadOptions('cities', locationService.getCities, setCities, selectedCodes.province || selectedCodes.region),
-      barangays: () => loadOptions('barangays', locationService.getBarangays, setBarangays, selectedCodes.city),
-    };
-    actions[key]?.();
-  };
-
-  const handlePinChange = async (pin) => {
-    try {
-      if (!await locationService.isWithinPhilippines(pin)) {
-        setErrors((current) => ({ ...current, pin: 'This pin is outside the configured Philippines bounds. Choose another location.' }));
-        return;
-      }
-    } catch (error) {
-      console.error('Unable to validate the map pin.', error);
-      setErrors((current) => ({ ...current, pin: 'We couldn’t validate this pin. Try again when location settings are available.' }));
       return;
     }
-    setErrors((current) => ({ ...current, pin: '' }));
-    onChange?.({ ...address, ...pin });
+
+    setLocationAccuracy(result.position.accuracy);
+    setManualEntry(true);
+    await reverseAtPosition(result.position);
   };
 
-  const locationSelect = (label, level, options, valueCode, disabled) => (
-    <div className="field address-form__field" key={level}>
-      <label htmlFor={`address-${level}`}>{label}</label>
-      {loading[level === 'city' ? 'cities' : `${level}s`] ? (
-        <div className="skeleton address-form__select-skeleton" aria-label={`Loading ${label}`} />
-      ) : errors[`${level === 'city' ? 'cities' : `${level}s`}`] ? (
-        <div className="address-form__load-error"><span>{errors[level === 'city' ? 'cities' : `${level}s`]}</span><button type="button" onClick={() => retry(level === 'city' ? 'cities' : `${level}s`)}><RotateCw size={14} /> Retry</button></div>
-      ) : (
-        <select id={`address-${level}`} value={valueCode} disabled={disabled} onChange={(event) => updateHierarchy(level, event.target.value)}>
-          <option value="">Select {label.toLowerCase()}</option>
-          {options.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
-        </select>
-      )}
-    </div>
-  );
+  const handlePinChange = (pin) => reverseAtPosition(pin);
+
+  const handleReverseGeocodeRetry = () => {
+    if (address.latitude === null || address.longitude === null) return;
+    reverseAtPosition({ latitude: address.latitude, longitude: address.longitude });
+  };
+
+  const currentLabel = normalizedLabel(address.label);
+  const provinceDisplay = address.province_display
+    || provinceDisplayFor(address.region, selectedCodes.city && !selectedCodes.province ? selectedCodes.city : '');
+  const cityParentCode = selectedCodes.province || selectedCodes.region;
+  const formattedPreview = formatAddressPreview({ ...address, province_display: provinceDisplay });
 
   return (
     <div className="address-form">
-      <div className="address-form__label-group">
-        <span className="field-label">Address label</span>
-        <div className="option-list">
-          {labels.map((label) => <button key={label} type="button" className={`option-button ${address.label === label ? 'is-selected' : ''}`} onClick={() => setField('label', label)}>{label}</button>)}
-        </div>
-        {address.label === 'Other' ? (
-          <div className="field">
-            <label htmlFor="address-custom-label">Custom label (optional)</label>
-            <input id="address-custom-label" value={address.custom_label || ''} onChange={(event) => setField('custom_label', event.target.value)} maxLength={60} />
-          </div>
-        ) : null}
+      <div className="field">
+        <label htmlFor="address-country">Country</label>
+        <input id="address-country" value="Philippines" readOnly aria-readonly="true" />
       </div>
       {showLocationActions ? (
         <div className="address-form__location-actions">
-          <button type="button" className="btn btn--secondary btn--md" onClick={useCurrentLocation} disabled={locationState === 'asking'}><MapPin size={16} />{locationState === 'asking' ? 'Finding location…' : 'Use my current location'}</button>
+          <button type="button" className="btn btn--secondary btn--md" onClick={useCurrentLocation} disabled={locationState === 'asking' || locationState === 'geocoding'}>
+            <MapPin size={16} aria-hidden="true" />{locationState === 'asking' ? 'Finding location…' : 'Use my current location'}
+          </button>
           <button type="button" className="text-link" onClick={() => setManualEntry(true)}>Enter manually</button>
         </div>
       ) : null}
       {locationState === 'denied' ? <p className="address-form__location-message" role="status">Location access was declined. Enter your address manually to continue.</p> : null}
       {locationState === 'unavailable' || locationState === 'timeout' ? <p className="address-form__location-message" role="status">We couldn’t get your location. You can enter your address manually.</p> : null}
-      {locationState === 'outside' ? <p className="address-form__location-message" role="alert">Your current location is outside the configured Philippines bounds. Enter a Philippine address manually.</p> : null}
+      {locationState === 'outside' ? <p className="address-form__location-message" role="alert">The selected location is outside the configured Philippines bounds. Enter a Philippine address manually.</p> : null}
+      {locationState === 'geocoding' ? <p className="address-form__location-message" role="status">Looking up the address for this pin…</p> : null}
+      {locationState === 'geocoded' ? <p className="address-form__location-message" role="status">Location details filled. Review and edit the address fields.</p> : null}
+      {locationState === 'partial' ? (
+        <p className="address-form__location-message" role="status">
+          Some location details could not be matched to PSGC ({address.unresolved_components.join(', ')}). Search for those fields; the address remains editable.
+        </p>
+      ) : null}
+      {locationState === 'geocode-unavailable' ? (
+        <p className="address-form__location-message" role="alert">
+          {errors.reverse}
+          <button type="button" className="text-link" onClick={handleReverseGeocodeRetry}>Retry lookup</button>
+        </p>
+      ) : null}
       {locationAccuracy !== null ? <p className="address-form__location-message" role="status">GPS accuracy: about {Math.round(locationAccuracy)} m. Adjust the pin if needed.</p> : null}
       {manualEntry || !showLocationActions ? (
         <>
-          <div className="field address-form__location-search">
-            <label htmlFor="address-location-search">Search city, province, or barangay</label>
-            <input id="address-location-search" value={locationQuery} onChange={(event) => { setSelectedSearchCode(''); setLocationResults([]); setLocationSearchError(''); setLocationQuery(event.target.value); }} placeholder="Type at least 2 characters" autoComplete="off" />
-            {locationSearchLoading ? <span className="address-form__location-hint" role="status">Searching locations…</span> : null}
-            {locationSearchError ? <span className="address-form__location-error" role="alert">{locationSearchError}</span> : null}
-            {locationResults.length ? (
-              <ul className="address-form__location-results" role="listbox" aria-label="PSGC search results">
-                {locationResults.map((location) => (
-                  <li key={location.code}>
-                    <button type="button" role="option" onClick={() => choosePsgcLocation(location)}>
-                      <strong>{location.name}</strong><span>{location.full_name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+          <div className="form-grid address-form__hierarchy">
+            {provinceDisplay ? (
+              <div className="field">
+                <label htmlFor="address-province-display">Province</label>
+                <input id="address-province-display" value={provinceDisplay} readOnly aria-readonly="true" />
+                <button type="button" className="text-link" onClick={clearLowerThanProvince}>Choose a different location</button>
+              </div>
+            ) : (
+              <div className="field">
+                <AsyncLocationCombobox
+                  id="address-province"
+                  label="Province"
+                  value={address.province}
+                  onSelect={chooseProvinceOrCity}
+                  loadOptions={loadProvinceOptions}
+                  hint=""
+                  placeholder="Search provinces or cities"
+                />
+              </div>
+            )}
+            <div className="field">
+              <AsyncLocationCombobox
+                id="address-city"
+                label="City or Municipality"
+                value={address.city_municipality}
+                onSelect={chooseCity}
+                loadOptions={loadCityOptions}
+                disabled={!cityParentCode}
+                hint="Select a province or region first."
+                placeholder="Search cities or municipalities"
+              />
+            </div>
+            <div className="field">
+              <AsyncLocationCombobox
+                id="address-barangay"
+                label="Barangay"
+                value={address.barangay}
+                onSelect={chooseBarangay}
+                loadOptions={loadBarangayOptions}
+                disabled={!selectedCodes.city}
+                hint="Select a city or municipality first."
+                placeholder="Search barangays"
+              />
+            </div>
+          </div>
+          {errors.hierarchy ? <p className="form-error" role="alert">{errors.hierarchy}</p> : null}
+          <div className="form-grid address-form__street">
+            <div className="field">
+              <label htmlFor="address-street">Street</label>
+              <input id="address-street" value={address.street} onChange={(event) => setField('street', event.target.value)} required />
+            </div>
+            <div className="field">
+              <label htmlFor="address-house">House number (optional)</label>
+              <input id="address-house" value={address.house_no} onChange={(event) => setField('house_no', event.target.value)} />
+            </div>
+          </div>
+          <div className="address-form__label-group">
+            <span className="field-label">Address label</span>
+            <div className="option-list" role="group" aria-label="Address label">
+              {labels.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={`option-button ${currentLabel === label ? 'is-selected' : ''}`}
+                  aria-pressed={currentLabel === label}
+                  onClick={() => chooseLabel(label)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {currentLabel === 'Other' ? (
+              <div className="field">
+                <label htmlFor="address-custom-label">Custom label</label>
+                <input
+                  id="address-custom-label"
+                  value={address.custom_label || ''}
+                  onChange={(event) => setField('custom_label', event.target.value)}
+                  maxLength={60}
+                  required
+                />
+              </div>
             ) : null}
           </div>
-          {address.psgc_code && address.psgc_full_name ? (
-            <div className="address-form__selected-location">
-              <span>Selected location: <strong>{address.psgc_full_name}</strong></span>
-              <button type="button" className="text-link" onClick={() => {
-                setSelectedCodes({ region: '', province: '', city: '', barangay: '' });
-                setLocationQuery('');
-                setSelectedSearchCode('');
-                setFields({ psgc_code: null, psgc_full_name: '', region: '', province: '', city_municipality: '', barangay: '' });
-              }}>Change location</button>
-            </div>
-          ) : (
-            <div className="form-grid address-form__hierarchy">
-              {locationSelect('Region', 'region', regions, selectedCodes.region, false)}
-              {locationSelect('Province', 'province', provinces, selectedCodes.province, !selectedCodes.region)}
-              {locationSelect('City / Municipality', 'city', cities, selectedCodes.city, !selectedCodes.province && !selectedCodes.region)}
-              {locationSelect('Barangay', 'barangay', barangays, selectedCodes.barangay, !selectedCodes.city)}
-            </div>
-          )}
-          <div className="form-grid address-form__street">
-            <div className="field"><label htmlFor="address-street">Street</label><input id="address-street" value={address.street} onChange={(event) => setField('street', event.target.value)} required /></div>
-            <div className="field"><label htmlFor="address-house">House / Unit no. (optional)</label><input id="address-house" value={address.house_no} onChange={(event) => setField('house_no', event.target.value)} /></div>
+          <div className="field">
+            <label htmlFor="address-delivery-note">Delivery note (optional)</label>
+            <input
+              id="address-delivery-note"
+              value={address.delivery_note || address.rider_note || ''}
+              onChange={(event) => setField('delivery_note', event.target.value)}
+              placeholder="Gate code, landmark, or directions"
+            />
           </div>
+          <p className="address-form__preview" aria-live="polite">
+            <span>Address preview</span>
+            <strong>{formattedPreview || 'Your address will appear here.'}</strong>
+          </p>
         </>
       ) : null}
       <div className="address-form__map-block">
-        <div><strong><MapPin size={15} /> Pin my location</strong><span>Help your rider find your doorstep.</span></div>
+        <div>
+          <strong><MapPin size={15} aria-hidden="true" /> Pin my location</strong>
+          <span>Help your rider find your doorstep.</span>
+        </div>
         {errors.pin ? <p className="form-error" role="alert">{errors.pin}</p> : null}
-        <MapView center={address.latitude !== null && address.longitude !== null ? address : undefined} pin={address.latitude !== null && address.longitude !== null ? address : undefined} onPinChange={handlePinChange} />
+        <MapView
+          center={address.latitude !== null && address.longitude !== null ? address : undefined}
+          pin={address.latitude !== null && address.longitude !== null ? address : undefined}
+          onPinChange={handlePinChange}
+        />
       </div>
-      <div className="field"><label htmlFor="address-rider-note">Rider note (optional)</label><input id="address-rider-note" value={address.rider_note} onChange={(event) => setField('rider_note', event.target.value)} placeholder="Gate code, landmark, or directions" /></div>
     </div>
   );
 }

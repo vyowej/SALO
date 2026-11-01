@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -86,5 +87,15 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class)->orderBy('id');
+    }
+
+    public function discountRedemptions(): HasMany
+    {
+        return $this->hasMany(DiscountRedemption::class);
+    }
+
+    public function restaurantReview(): HasOne
+    {
+        return $this->hasOne(RestaurantReview::class);
     }
 }

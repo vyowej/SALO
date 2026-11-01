@@ -24,6 +24,7 @@ class BusinessOrderService
         private readonly OrderRepository $orders,
         private readonly RestaurantPageRepository $restaurants,
         private readonly AuditLogRepository $audit,
+        private readonly CustomerNotificationService $notifications,
     ) {}
 
     public function list(Restaurant $restaurant, array $filters, bool $includeActors): array
@@ -102,6 +103,7 @@ class BusinessOrderService
                 $toStatus,
                 $normalizedReason,
             );
+            $this->notifications->orderStatusChanged($order, $toStatus);
             $this->audit->record([
                 'actor_user_id' => $actor->getKey(),
                 'restaurant_id' => $lockedRestaurant->getKey(),
@@ -149,6 +151,7 @@ class BusinessOrderService
                     'cancelled',
                     $lockedOrder->cancel_reason,
                 );
+                $this->notifications->orderStatusChanged($lockedOrder, 'cancelled');
 
                 return true;
             });

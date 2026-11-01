@@ -88,6 +88,28 @@
   text-align: center;
 }
 
+.order-status-timeline {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.order-status-timeline li {
+  padding-left: 0.2rem;
+}
+
+.order-status-timeline strong {
+  color: var(--text);
+}
+
+.order-status-timeline time {
+  display: block;
+  font-size: 0.68rem;
+}
+
 .order-rider-card {
   display: flex;
   align-items: center;

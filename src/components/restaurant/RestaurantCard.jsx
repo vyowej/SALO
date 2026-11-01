@@ -11,13 +11,16 @@ import StarRating from '../ui/StarRating';
 export function RestaurantCard({ restaurant }) {
   const openStatus = getOpenStatus(restaurant);
   const isAcceptingOrders = openStatus.status === 'open' || openStatus.status === 'closing-soon';
-  const imageTag = restaurant.deliveryFee === 0 ? 'Free delivery' : restaurant.promo ? 'Promo' : restaurant.acceptsReservations ? 'Reserve' : '';
+  const imageTag = restaurant.acceptsReservations ? 'Reserve' : '';
   const { selectedAddress } = useLocationContext();
   const [distanceResult, setDistanceResult] = useState(null);
 
   useEffect(() => {
     let active = true;
-    if (!selectedAddress?.latitude || !restaurant.latitude) return undefined;
+    if (selectedAddress?.latitude === null || selectedAddress?.latitude === undefined
+      || selectedAddress?.longitude === null || selectedAddress?.longitude === undefined
+      || restaurant.latitude === null || restaurant.latitude === undefined
+      || restaurant.longitude === null || restaurant.longitude === undefined) return undefined;
     locationService.getDistanceKm(selectedAddress, restaurant).then((value) => {
       if (!active) return;
       setDistanceResult({
@@ -32,8 +35,13 @@ export function RestaurantCard({ restaurant }) {
   const resultMatchesAddress = distanceResult?.restaurantId === restaurant.id
     && distanceResult.latitude === selectedAddress?.latitude
     && distanceResult.longitude === selectedAddress?.longitude;
-  const distance = resultMatchesAddress ? distanceResult.distance : restaurant.distanceKm || 2.4;
-  const outsideRange = resultMatchesAddress && distance > restaurant.delivery_radius_km;
+  const distance = resultMatchesAddress ? distanceResult.distance : restaurant.distanceKm;
+  const hasDeliveryRadius = restaurant.delivery_radius_km !== null && restaurant.delivery_radius_km !== undefined;
+  const outsideRange = distance !== null && distance !== undefined
+    && hasDeliveryRadius && distance > restaurant.delivery_radius_km;
+  const deliveryFeeLabel = restaurant.deliveryFee === null || restaurant.deliveryFee === undefined
+    ? 'Fee at checkout'
+    : restaurant.deliveryFee === 0 ? 'Free delivery' : formatPeso(restaurant.deliveryFee);
 
   return (
     <Link
@@ -46,7 +54,7 @@ export function RestaurantCard({ restaurant }) {
         <span className={`restaurant-status restaurant-status--${openStatus.status}`}>
           <i aria-hidden="true" />{openStatus.label}
         </span>
-        <span className="restaurant-rating"><StarRating value={restaurant.rating} size={12} /></span>
+        <span className="restaurant-rating"><StarRating value={restaurant.rating} count={restaurant.ratingCount} size={12} /></span>
         {imageTag ? <span className="restaurant-image-tag">{imageTag}</span> : null}
         {outsideRange ? <span className="restaurant-range-badge">Outside delivery range</span> : null}
       </div>
@@ -58,9 +66,9 @@ export function RestaurantCard({ restaurant }) {
           </div>
         </div>
         <div className="restaurant-card__meta">
-          <span><Clock3 size={13} /> {restaurant.deliveryTime}</span>
-          <span>{outsideRange ? 'Pick-up available' : restaurant.deliveryFee === 0 ? 'Free delivery' : formatPeso(restaurant.deliveryFee)}</span>
-          <span><MapPin size={13} /> {distance.toFixed(1)} km away</span>
+          <span><Clock3 size={13} /> {restaurant.deliveryTime || 'Timing at checkout'}</span>
+          <span>{outsideRange ? 'Pick-up available' : deliveryFeeLabel}</span>
+          <span><MapPin size={13} /> {distance === null || distance === undefined ? 'Distance unavailable' : `${Number(distance).toFixed(1)} km away`}</span>
         </div>
         <div className="restaurant-card__tags">
           {(restaurant.tags || []).filter((tag) => ['Pork-free', 'Halal Certified', 'Vegetarian'].includes(tag)).slice(0, 2).map((tag) => (

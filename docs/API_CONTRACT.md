@@ -62,7 +62,7 @@ Unless noted, request bodies are JSON. `—` means no body. Route parameters are
 
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
-| `GET /public/restaurants/popular` | Optional `limit` (server-capped), `page` | Paginated `Restaurant[]`; approved/public-safe fields only | Guest, customer, owner, rider, admin |
+| `GET /restaurants/popular` | Optional `limit` (1–12), `latitude`, `longitude` | Popular `Restaurant[]`; approved/public-safe fields only, with optional distance | Guest, customer, owner, rider, admin |
 
 This is the sole unauthenticated restaurant listing. The endpoint must not return pending, rejected, suspended, inactive, or owner-private restaurant data.
 
@@ -101,7 +101,7 @@ Registration grants `customer` only. Login is rate-limited and rejects deactivat
 
 Location responses normalize to `code`/`id`, `name`, `parent_code`, `level`, hierarchy, and optional coordinates/address components. Search is type-ahead, never a dropdown; each selection clears lower fields and reloads them under the selected parent. The backend validates every PSGC code and its level/parent, including barangay-to-city. If a city is entered first, suggestions include the hierarchy and selecting one fills the province/region context. Provider errors return `LOCATION_PROVIDER_UNAVAILABLE` with a safe fallback message, not raw upstream bodies. No provider key is sent to the browser.
 
-PSGC search uses the imported local table and returns at most 30 ranked hierarchy matches. Street suggestions use Geoapify only when configured; results are restricted to `countrycode:ph`, capped at 10, and the API key is read from `backend/.env`. Reverse lookup is a single Nominatim request made by the backend with `LOCATION_NOMINATIM_USER_AGENT`; successful lookups are cached and globally serialized to at most one request per second using the configured shared cache lock. Provider administration fields are resolved against local PSGC records before being returned. If a location cannot be matched, its PSGC-derived field remains blank and is named in `unresolved_components` for manual correction. Manual street entry does not depend on either provider. Geoapify terms/limits and Nominatim terms/attribution remain [VERIFY] before production use.
+PSGC search uses the imported local table and returns at most 30 ranked hierarchy matches. Street suggestions use Geoapify only when configured; results are restricted to `countrycode:ph`, capped at 10, and the API key is read from `backend/.env`. Reverse lookup is a single Nominatim request made by the backend with `LOCATION_NOMINATIM_USER_AGENT`, defaulting to the SALO application identifier when unset; deployments should override it with a contact-bearing identifier. Successful lookups are cached and globally serialized to at most one request per second using the configured shared cache lock. Provider administration fields are resolved against local PSGC records before being returned. If a location cannot be matched, its PSGC-derived field remains blank and is named in `unresolved_components` for manual correction. Manual street entry does not depend on either provider. Geoapify terms/limits and Nominatim terms/attribution remain [VERIFY] before production use.
 
 The [PSGC API](https://psgc.gitlab.io/api/) is an import/cache source, not a runtime dependency. Province, city, and barangay suggestions come only from the local PSGC table. PSGC v3 has region/province/city/barangay levels; a municipality is a `city` row. NCR city/municipality rows are children of the NCR region, without province rows; independent cities such as Zamboanga City are city rows whose parent is their region. Display `Metro Manila (NCR)` or `None (independent city)` in the skipped province position, respectively. Evaluate Geoapify first for PH-limited street/landmark autocomplete, with Photon and LocationIQ as alternatives; verify each provider's free-tier limits, terms, coverage, attribution, and privacy impact [VERIFY]. Nominatim is for a single reverse-geocoding lookup only, never autocomplete; custom User-Agent, one request per second per application, caching, timeout, terms, and attribution apply [VERIFY]. All calls are backend-only; keys remain in `backend/.env`. Send only the minimum address/coordinate data and never SALO user IDs; disclose third-party transfers.
 
@@ -109,11 +109,17 @@ The [PSGC API](https://psgc.gitlab.io/api/) is an import/cache source, not a run
 
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
-| `GET /restaurants` | Optional `q`, `cuisine`, `service_mode`, `open_now`, `featured`, `page` | Paginated approved `Restaurant[]` | customer |
-| `GET /restaurants/categories` | — | Categories derived from approved, visible catalog | customer |
-| `GET /customer/home` | — | Customer home sections composed from authorized restaurants, orders, and categories | customer |
+| `GET /restaurants` | Optional `q`, `cuisine`, `service_mode`, `dietary[]`, `open_now`, `open_24_7`, `filipino_only`, `accepts_reservations`, `featured`, `sort`, `latitude`, `longitude`, `page`, `per_page` | Paginated approved `Restaurant[]` with hours, closures, visible rating summary, popularity, optional distance, public photos, and dietary badges | customer |
+| `GET /restaurants/categories` | — | Cuisine list derived from approved, published restaurants | customer |
+| `GET /customer/home` | Optional restaurant filters supported by `GET /restaurants` | Filtered restaurant cards, cuisine list, and pagination metadata; order history remains in the order slice | customer |
 | `GET /restaurants/{restaurant}` | — | Approved `Restaurant` detail | customer |
-| `GET /restaurants/{restaurant}/menu` | Optional `category_id`, `page` | Active public `MenuCategory[]` and visible items | customer |
+| `GET /restaurants/{restaurant}/menu` | Optional `q`, `category_id`, `dietary[]` | Active public `MenuCategory[]`; published items only, with sold-out items marked non-orderable | customer |
+| `GET /restaurants/{restaurant}/reviews` | Optional `page`, `per_page` | Paginated visible review summaries; reviewer identity is omitted | customer |
+| `GET /customer/favorites` | Optional `type=restaurant|menu_item` | Current user's public restaurant and menu-item favorites | customer |
+| `PUT /customer/favorites/restaurants/{restaurant}` | `{}` | `{ "favorited": true }` | customer |
+| `DELETE /customer/favorites/restaurants/{restaurant}` | — | `{ "favorited": false }` | customer |
+| `PUT /customer/favorites/menu-items/{item}` | `{}` | `{ "favorited": true }` | customer |
+| `DELETE /customer/favorites/menu-items/{item}` | — | `{ "favorited": false }` | customer |
 | `GET /restaurants/{restaurant}/availability` | Required `date`, `time`, `guests`; optional `service_mode` | Availability summary and eligible slot/table result | customer |
 
 No public restaurant search, detail, menu, availability, category, or owner listing is exposed to guests. Only the popular endpoint above is public.
@@ -128,10 +134,11 @@ No public restaurant search, detail, menu, availability, category, or owner list
 | `DELETE /customer/addresses/{address}` | — | `{ "deleted": true }` | customer |
 | `PATCH /customer/addresses/{address}/primary` | — | Updated default `Address` | customer |
 
-| `POST /customer/delivery-quotes` | `restaurant_id`, `address_id`, `service_mode`; no trusted client distance/fee | Server quote with distance/fee source and expiry | customer |
-| `GET /customer/carts` | — | Current user's restaurant-partitioned carts | customer |
-| `PUT /customer/carts/{restaurant}` | `service_mode` (`delivery` or `walk_in`), `items[]` with `menu_item_id`, positive `quantity`, option IDs | Updated cart with server-priced line snapshots and expiry | customer |
-| `DELETE /customer/carts/{restaurant}` | — | `{ "deleted": true }` | customer |
+| `GET /customer/carts` | — | Current user's non-expired restaurant-partitioned carts | customer |
+| `POST /customer/carts/{restaurant}/items` | `{item_id,quantity,note?}` | Updated cart with current display-price hints and expiry | Customer; public restaurant and item association required |
+| `PATCH /customer/carts/{restaurant}/items/{item}` | `{quantity,note?}`; quantity zero removes | Updated cart | Own cart only; quantity 1–99 when retained |
+| `DELETE /customer/carts/{restaurant}/items/{item}` | — | Updated cart | Own cart only |
+| `DELETE /customer/carts/{restaurant}` | — | Empty cart | Own cart only |
 
 Address writes validate that the selected barangay code exists and is at `barangay` level, and that submitted city and province codes match its local PSGC ancestor chain. NCR and independent cities omit `province_code`; their city is checked against its region parent. A legacy `psgc_code`-only request is accepted and its ancestor chain is derived from PSGC. Labels map Home/Work/Church to matching `address_type`, School to `address_type=other,label=School`, and Other to `address_type=other,label=Other,custom_label` (required). The database repository stores only `PH` and the barangay leaf code and builds `formatted_address`; deleting an address soft-deletes it. Transactions and the schema's generated unique key maintain one default address whenever the user has any active saved addresses.
 
@@ -145,10 +152,9 @@ Address label values are Home, Work, School, Church, or Other; Other accepts cus
 
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
-| `POST /customer/discounts/quote` | `code`, `restaurant_id`, `service_mode`, `items[]` with `menu_item_id`, `quantity` | Server quote: subtotal, eligible discount, fees, final order total, expiry | customer |
-| `POST /customer/checkout-groups` | `orders[]`; each has `restaurant_id`, `service_mode`, `address_id` when delivery, recipient/contact, optional `scheduled_at`, optional `discount_code`, and `items[]` with item/option IDs and quantities. Required `Idempotency-Key` header. | Created `CheckoutGroup` with all `Order[]` and derived `grand_total` | customer |
-| `GET /customer/checkout-groups` | Optional `page` | Paginated `CheckoutGroup[]` | customer |
-| `GET /customer/checkout-groups/{group}` | — | Owned `CheckoutGroup` | customer |
+| `POST /customer/discounts/validate` | `{restaurant_id,code,order_type,address_id?,payment_method}` | Server validation result with discount amount, message, scope, subtotal, and total | customer; amount and eligibility are never trusted at checkout |
+| `POST /customer/checkout/quote` | `{orders:[{restaurant_id,order_type,address_id?,discount_code?,payment_method}]}` | Per-order quote rows, validation errors, and derived grand total | customer; quote does not reserve stock |
+| `POST /customer/checkout` | Same order sections plus recipient fields and optional `scheduled_for`; required `Idempotency-Key` header | Created `CheckoutGroup` with `Order[]` and derived `grand_total` | customer; email verified; atomic, idempotent checkout |
 | `GET /customer/orders` | Optional `status`, `page` | Paginated current user's `Order[]` | customer |
 | `GET /customer/orders/{order}` | — | Owned `Order` | customer |
 | `POST /customer/orders/{order}/cancel` | Optional `reason` | Updated `Order` | customer |

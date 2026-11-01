@@ -15,6 +15,7 @@
     "@fullcalendar/react": "^6.1.22",
     "@fullcalendar/timegrid": "^6.1.22",
     "@tanstack/react-table": "^8.21.3",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.62.0",
     "luxon": "^3.7.2",
     "react": "^19.3.1",

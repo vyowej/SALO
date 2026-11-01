@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Minus, Plus, Tag, Trash2, X } from 'lucide-react';
+import { config } from '../../config';
+import CustomerCartPage from './CustomerCartPage';
 import { useCart } from '../../context/CartContext';
 import { useLocationContext } from '../../context/LocationContext';
 import { formatPeso } from '../../utils/formatPeso';
@@ -10,10 +12,17 @@ import { FILIPINO_VOICE } from '../../constants/voice';
 import { EMPTY_CART_LABELS } from '../../constants/guestExperience';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/admin/ConfirmDialog';
 import '../Page.css';
 import './Cart.css';
 
 export default function CartPage() {
+  const { restaurantCarts } = useCart();
+  const restaurantCount = Object.values(restaurantCarts).filter((items) => items.length).length;
+  return config.useMock && restaurantCount < 2 ? <MockCartPage /> : <CustomerCartPage />;
+}
+
+function MockCartPage() {
   const [searchParams] = useSearchParams();
   const {
     restaurantCarts,
@@ -36,6 +45,7 @@ export default function CartPage() {
   const [voucherMessage, setVoucherMessage] = useState('');
   const [deliveryQuote, setDeliveryQuote] = useState(null);
   const [undoItem, setUndoItem] = useState(null);
+  const [pendingRemoveItem, setPendingRemoveItem] = useState(null);
   const [toast, setToast] = useState('');
   const [sheetError, setSheetError] = useState('');
   const sheetRef = useRef(null);
@@ -165,8 +175,14 @@ export default function CartPage() {
   };
 
   const removeCartItem = (item) => {
-    setUndoItem({ restaurantId: activeRestaurantId, item });
-    removeItem(activeRestaurantId, item.cartKey || item.id);
+    setPendingRemoveItem({ restaurantId: activeRestaurantId, item });
+  };
+
+  const confirmRemoveCartItem = () => {
+    if (!pendingRemoveItem) return;
+    setUndoItem(pendingRemoveItem);
+    removeItem(pendingRemoveItem.restaurantId, pendingRemoveItem.item.cartKey || pendingRemoveItem.item.id);
+    setPendingRemoveItem(null);
   };
 
   const undoRemove = () => {
@@ -230,6 +246,15 @@ export default function CartPage() {
       </div>
 
       {undoItem || toast ? <div className="toast cart-toast" role="status">{undoItem ? <><span>Item removed from cart.</span><button type="button" onClick={undoRemove}>Undo</button></> : toast}</div> : null}
+
+      <ConfirmDialog
+        open={Boolean(pendingRemoveItem)}
+        title="Remove this item?"
+        message={pendingRemoveItem ? `Remove ${pendingRemoveItem.item.name} from your cart?` : ''}
+        confirmLabel="Remove item"
+        onCancel={() => setPendingRemoveItem(null)}
+        onConfirm={confirmRemoveCartItem}
+      />
 
       {voucherOpen ? <div className="modal-backdrop cart-sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setVoucherOpen(false); }}><section className="modal cart-voucher-sheet" role="dialog" aria-modal="true" aria-labelledby="voucher-title" ref={sheetRef} onTouchStart={(event) => { touchStartY.current = event.touches[0].clientY; }} onTouchEnd={(event) => { if (event.changedTouches[0].clientY - touchStartY.current > 90) setVoucherOpen(false); }}><div className="item-sheet__handle" /><header className="modal__header"><div><h2 id="voucher-title">Apply a voucher</h2><p>Enter a valid code for this cart.</p></div><button type="button" className="icon-button" aria-label="Close voucher sheet" onClick={() => setVoucherOpen(false)}><X size={17} /></button></header><form className="modal__body cart-voucher-form" onSubmit={applyVoucher}><div className="field"><label htmlFor="voucher-code">Voucher code</label><input id="voucher-code" autoComplete="off" value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="e.g. SALO120" required /></div><p className="voucher-hints">Try SALO120 (₱120 off ₱500+) or FREEDEL.</p>{sheetError ? <p className="form-error" role="alert">{sheetError}</p> : null}<Button variant="primary" type="submit">Apply voucher</Button></form></section></div> : null}
     </div>

@@ -7,31 +7,30 @@ import { LocationProvider } from './context/LocationContext';
 import { useAuth, USER_ROLES } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ROLE_PATHS } from './constants/navigation';
-import LandingPage from './pages/Landing/Landing';
-import CustomerHomePage from './pages/CustomerHome/CustomerHomePage';
-import RestaurantsPage from './pages/Restaurants/RestaurantsPage';
-import RestaurantDetailPage from './pages/RestaurantDetail/RestaurantDetailPage';
-import CartPage from './pages/Cart/CartPage';
-import CheckoutPage from './pages/Checkout/CheckoutPage';
-import OrdersPage from './pages/Orders/OrdersPage';
-import OrderDetailPage from './pages/OrderDetail/OrderDetailPage';
-import ReservationsPage from './pages/Reservations/ReservationsPage';
-import ReservePage from './pages/Reserve/ReservePage';
-import ReservationBookingPage from './pages/Reservations/ReservationBookingPage';
-import LoginPage from './pages/Login/LoginPage';
-import RegisterPage from './pages/Register/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPassword/ForgotPasswordPage';
-import VerifyEmailPage from './pages/VerifyEmail/VerifyEmailPage';
-import ProfilePage from './pages/Profile/ProfilePage';
-import SettingsPage from './pages/Settings/SettingsPage';
-import PartnerApplyPage from './pages/PartnerApply/PartnerApplyPage';
-import RiderApplyPage from './pages/RiderApply/RiderApplyPage';
-import BusinessPage from './pages/Business/BusinessPage';
-import TeamInvitationPage from './pages/Business/TeamInvitationPage';
-import RiderPage from './pages/Rider/RiderPage';
-import NotFoundPage from './pages/NotFound/NotFoundPage';
-import FeatureGatePage from './pages/FeatureGate/FeatureGatePage';
-
+const LandingPage = lazy(() => import('./pages/Landing/Landing'));
+const CustomerHomePage = lazy(() => import('./pages/CustomerHome/CustomerHomePage'));
+const RestaurantsPage = lazy(() => import('./pages/Restaurants/RestaurantsPage'));
+const RestaurantDetailPage = lazy(() => import('./pages/RestaurantDetail/RestaurantDetailPage'));
+const CartPage = lazy(() => import('./pages/Cart/CartPage'));
+const CheckoutPage = lazy(() => import('./pages/Checkout/CheckoutPage'));
+const OrdersPage = lazy(() => import('./pages/Orders/OrdersPage'));
+const OrderDetailPage = lazy(() => import('./pages/OrderDetail/OrderDetailPage'));
+const ReservationsPage = lazy(() => import('./pages/Reservations/ReservationsPage'));
+const ReservePage = lazy(() => import('./pages/Reserve/ReservePage'));
+const ReservationBookingPage = lazy(() => import('./pages/Reservations/ReservationBookingPage'));
+const LoginPage = lazy(() => import('./pages/Login/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/Register/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPassword/ForgotPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmail/VerifyEmailPage'));
+const ProfilePage = lazy(() => import('./pages/Profile/ProfilePage'));
+const SettingsPage = lazy(() => import('./pages/Settings/SettingsPage'));
+const PartnerApplyPage = lazy(() => import('./pages/PartnerApply/PartnerApplyPage'));
+const RiderApplyPage = lazy(() => import('./pages/RiderApply/RiderApplyPage'));
+const BusinessPage = lazy(() => import('./pages/Business/BusinessPage'));
+const TeamInvitationPage = lazy(() => import('./pages/Business/TeamInvitationPage'));
+const RiderPage = lazy(() => import('./pages/Rider/RiderPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFound/NotFoundPage'));
+const FeatureGatePage = lazy(() => import('./pages/FeatureGate/FeatureGatePage'));
 const AdminPage = lazy(() => import('./pages/Admin/AdminPage'));
 
 function HomeGate() {
@@ -99,7 +98,8 @@ function App() {
         <AuthProvider>
           <CartProvider>
             <LocationProvider>
-              <Routes>
+              <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}>
+                <Routes>
               <Route path="/" element={<Layout><HomeGate /></Layout>} />
               <Route path="/restaurants" element={<Layout><GuestFeatureRoute><RestaurantsPage /></GuestFeatureRoute></Layout>} />
               <Route path="/restaurants/:id" element={<Layout><GuestFeatureRoute><RestaurantDetailPage /></GuestFeatureRoute></Layout>} />
@@ -125,7 +125,8 @@ function App() {
               <Route path="/rider" element={<RequireCapability capability={USER_ROLES.RIDER}><Layout><RiderPage /></Layout></RequireCapability>} />
               <Route path="/admin/*" element={<RequireCapability capability={USER_ROLES.ADMIN}><Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><AdminPage /></Suspense></RequireCapability>} />
               <Route path="*" element={<Layout><NotFoundPage /></Layout>} />
-                </Routes>
+                  </Routes>
+                </Suspense>
               </LocationProvider>
             </CartProvider>
           </AuthProvider>

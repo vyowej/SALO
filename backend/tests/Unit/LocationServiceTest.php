@@ -113,6 +113,10 @@ class LocationServiceTest extends TestCase
         );
         self::assertSame([], $result['unresolved_components']);
         Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request): bool => $request->hasHeader(
+            'User-Agent',
+            'SALO test suite (test@example.invalid)',
+        ));
     }
 
     public function test_national_capital_region_alias_and_trailing_city_name_match(): void

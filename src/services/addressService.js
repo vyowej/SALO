@@ -21,16 +21,20 @@ const normalizeAddress = (address, index = 0) => {
   const detail = address.detail || streetAddress;
   return ({
   id: address.id || `saved-${index + 1}`,
-  label: address.label || 'Home',
+  label: address.label === 'Office' ? 'Work' : address.label || 'Home',
   detail: detail && !detail.toLocaleLowerCase().includes(countryName.toLocaleLowerCase())
     ? `${detail}, ${countryName}`
     : detail,
   country_code: countryCode,
   region: address.region || (config.useMock ? defaultMockAddress.region : ''),
+  region_code: address.region_code || '',
   province: address.province || (config.useMock ? defaultMockAddress.province : ''),
+  province_code: address.province_code || '',
   city_municipality: address.city_municipality || (config.useMock ? defaultMockAddress.city_municipality : ''),
+  city_code: address.city_code || '',
   barangay: address.barangay || (config.useMock ? defaultMockAddress.barangay : ''),
-  psgc_code: address.psgc_code || '',
+  barangay_code: address.barangay_code || address.psgc_code || '',
+  psgc_code: address.psgc_code || address.barangay_code || '',
   psgc_full_name: address.psgc_full_name || '',
   address_type: address.address_type || 'home',
   custom_label: address.custom_label || '',
@@ -67,7 +71,9 @@ const toApiAddress = (address) => ({
   label: address.label || 'Home',
   address_type: ({
     Home: 'home',
+    Work: 'work',
     Office: 'work',
+    Church: 'other',
     School: 'other',
     Other: 'other',
   }[address.label] || address.address_type || 'home'),

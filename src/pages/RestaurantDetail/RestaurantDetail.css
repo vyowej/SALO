@@ -58,6 +58,49 @@
   margin-top: 0.45rem;
 }
 
+.restaurant-photo-gallery {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.25rem 0 0.75rem;
+}
+
+.restaurant-photo-gallery img {
+  width: 7rem;
+  height: 5rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  object-fit: cover;
+}
+
+.restaurant-reviews {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.restaurant-review {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--surface);
+}
+
+.restaurant-review p {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.restaurant-review__reply {
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--primary);
+}
+
 .restaurant-intro__search {
   display: flex;
   align-items: center;
@@ -169,6 +212,22 @@
   color: var(--on-action);
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.restaurant-favorite-button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.restaurant-favorite-button.is-favorite {
+  color: var(--primary);
 }
 
 .restaurant-add-button:disabled {

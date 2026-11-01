@@ -10,6 +10,7 @@ import { locationService } from '../../services/locationService';
 import { getOpenStatus } from '../../utils/getOpenStatus';
 import { formatPeso } from '../../utils/formatPeso';
 import { Button } from '../../components/ui/Button';
+import CustomerCheckoutPage from './CustomerCheckoutPage';
 import LocationPicker from '../../components/location/LocationPicker';
 import '../Page.css';
 import './Checkout.css';
@@ -27,6 +28,13 @@ const minScheduledAt = (() => {
 })();
 
 export default function CheckoutPage() {
+  const { restaurantCarts } = useCart();
+  const restaurantCount = Object.values(restaurantCarts).filter((items) => items.length).length;
+  const [useSingleRestaurantCheckout] = useState(() => config.useMock && restaurantCount < 2);
+  return useSingleRestaurantCheckout ? <MockCheckoutPage /> : <CustomerCheckoutPage />;
+}
+
+function MockCheckoutPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { activeCart, activeRestaurantId, totalPrice, clearRestaurant } = useCart();

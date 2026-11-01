@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RotateCw, Truck } from 'lucide-react';
-import { restaurantService } from '../../services/restaurantService';
+import { customerOrderService } from '../../services/customerOrderService';
 import { formatPeso } from '../../utils/formatPeso';
 import { Button } from '../../components/ui/Button';
 import { useCart } from '../../context/CartContext';
 import '../Page.css';
 import './Orders.css';
 
-const isCompleted = (order) => ['Completed', 'Delivered', 'Cancelled'].includes(order.status);
+const isCompleted = (order) => ['Completed', 'Delivered', 'Cancelled', 'Rejected'].includes(order.status);
 
 export default function OrdersPage() {
   const { addItem, setActiveRestaurant } = useCart();
@@ -22,7 +22,7 @@ export default function OrdersPage() {
     setLoading(true);
     setError('');
     try {
-      setOrders(await restaurantService.getOrders());
+      setOrders(await customerOrderService.getOrders());
     } catch (loadError) {
       console.error('Unable to load orders.', loadError);
       setError('We couldn’t load your orders.');
@@ -33,7 +33,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     let active = true;
-    restaurantService.getOrders()
+    customerOrderService.getOrders()
       .then((items) => { if (active) setOrders(items); })
       .catch((loadError) => {
         console.error('Unable to load orders.', loadError);

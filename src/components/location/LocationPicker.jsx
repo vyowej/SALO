@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LocateFixed, MapPin, Search } from 'lucide-react';
 import { addressService } from '../../services/addressService';
 import { locationService } from '../../services/locationService';
+import { reverseGeocodeAddress } from '../../utils/reverseGeocodeAddress';
 import AddressForm from './AddressForm';
 import MapView from './MapView';
 
@@ -129,23 +130,37 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
       setLocationState(result.state);
       return;
     }
+    setLocationAccuracy(result.position.accuracy);
+    setManualMode(true);
     try {
       if (!await locationService.isWithinPhilippines(result.position)) {
         setLocationState('outside');
+        setError('Your current location is outside the configured Philippines bounds. Choose or enter a Philippine address.');
         return;
       }
+      setLocationState('geocoding');
+      const reverseResult = await locationService.reverseGeocode(
+        result.position.latitude,
+        result.position.longitude,
+      );
+      const resolvedAddress = reverseGeocodeAddress(reverseResult);
+      setManualAddress((current) => ({
+        ...current,
+        ...resolvedAddress,
+      }));
+      setLocationState(resolvedAddress.unresolved_components.length ? 'partial' : 'geocoded');
+      setError(resolvedAddress.unresolved_components.length
+        ? `Some location details could not be matched to PSGC (${resolvedAddress.unresolved_components.join(', ')}). Search for those fields.`
+        : '');
+    } catch (locationError) {
+      console.error('Unable to reverse-geocode the current location.', locationError);
       setManualAddress((current) => ({
         ...current,
         latitude: result.position.latitude,
         longitude: result.position.longitude,
       }));
-      setLocationAccuracy(result.position.accuracy);
-      setManualMode(true);
-      setLocationState('granted');
-    } catch (locationError) {
-      console.error('Unable to use the current location.', locationError);
-      setError('We couldn’t use this location. Choose an address or enter it manually.');
-      setLocationState('unavailable');
+      setError('We couldn’t look up this location. The pin and address fields remain editable.');
+      setLocationState('geocode-unavailable');
     }
   };
 
@@ -182,8 +197,12 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
   };
 
   const saveManualAddress = async () => {
-    if (!manualAddress.psgc_code && !manualAddress.street.trim()) {
-      setError('Choose a Philippine location or enter a street address before saving.');
+    if (!manualAddress.psgc_code || !manualAddress.street.trim()) {
+      setError('Choose a barangay and enter a street address before saving.');
+      return;
+    }
+    if (manualAddress.label === 'Other' && !String(manualAddress.custom_label || '').trim()) {
+      setError('Enter a custom label for this address.');
       return;
     }
     try {
@@ -218,7 +237,7 @@ export function LocationPicker({ open, onClose, selectedAddress, onSelect }) {
         </header>
         <div className="modal__body location-picker__body">
           <label className="location-picker__search"><Search size={17} /><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search city, province, or barangay" aria-label="Search Philippine locations" /></label>
-          <button type="button" className="location-picker__current" onClick={useCurrentLocation} disabled={locationState === 'asking'}><LocateFixed size={17} />{locationState === 'asking' ? 'Finding your location…' : 'Use current location'}</button>
+          <button type="button" className="location-picker__current" onClick={useCurrentLocation} disabled={locationState === 'asking' || locationState === 'geocoding'}><LocateFixed size={17} />{locationState === 'asking' ? 'Finding your location…' : locationState === 'geocoding' ? 'Looking up address…' : 'Use current location'}</button>
           {deniedMessage ? <p className="location-picker__message" role="status">{deniedMessage}</p> : null}
           {locationAccuracy !== null ? <p className="location-picker__message" role="status">GPS accuracy: about {Math.round(locationAccuracy)} m. Adjust the pin if needed.</p> : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}

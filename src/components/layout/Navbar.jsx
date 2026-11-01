@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Bike, ChevronDown, LogOut, MapPin, Menu, Moon, Search, ShieldCheck, ShoppingCart, Sun, UserCircle2, UtensilsCrossed } from 'lucide-react';
 import { useAuth, USER_ROLES } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useLocationContext } from '../../context/LocationContext';
 import { useTheme } from '../../context/ThemeContext';
-import LocationPicker from '../location/LocationPicker';
 import MobileDrawer from './MobileDrawer';
 import BrandLogo from '../brand/BrandLogo';
 import { restaurantService } from '../../services/restaurantService';
+import { customerOrderService } from '../../services/customerOrderService';
 import { getPageTitle, getShellRole, PUBLIC_NAV_LINKS, ROLE_LABELS, SHELL_LABELS } from '../../constants/navigation';
+
+const LocationPicker = lazy(() => import('../location/LocationPicker'));
 
 const viewDetails = {
   [USER_ROLES.CUSTOMER]: { label: ROLE_LABELS[USER_ROLES.CUSTOMER], to: '/', icon: UserCircle2 },
@@ -30,6 +32,9 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
   const [addressOpen, setAddressOpen] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [modeError, setModeError] = useState('');
@@ -83,6 +88,20 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
     return () => document.removeEventListener('keydown', focusSearch);
   }, []);
 
+  const loadNotifications = useCallback(async () => {
+    if (!customerMode) return;
+    setNotificationsLoading(true);
+    setNotificationsError('');
+    try {
+      setNotifications(await customerOrderService.getNotifications());
+    } catch (error) {
+      console.error('Unable to load customer notifications.', error);
+      setNotificationsError('Notifications could not be loaded.');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [customerMode]);
+
   const availableViews = useMemo(() => capabilities
     .map((capability) => ({ capability, ...viewDetails[capability] }))
     .filter(({ to }) => Boolean(to)), [capabilities]);
@@ -118,6 +137,18 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
       console.error('Unable to sign out.', error);
       setLogoutError(SHELL_LABELS.signOutError);
       setMenuOpen(true);
+    }
+  };
+
+  const markNotificationRead = async (id) => {
+    try {
+      const updated = await customerOrderService.markNotificationRead(id);
+      setNotifications((current) => current.map((notification) => (
+        notification.id === String(id) ? updated : notification
+      )));
+    } catch (error) {
+      console.error('Unable to mark customer notification as read.', error);
+      setNotificationsError('This notification could not be updated.');
     }
   };
 
@@ -198,13 +229,29 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
             ) : null}
             {appMode ? (
               <div className="navbar__notifications" ref={notificationsRef}>
-                <button type="button" className="icon-button" aria-label={SHELL_LABELS.notifications} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}>
+                <button type="button" className="icon-button" aria-label={SHELL_LABELS.notifications} aria-expanded={notificationsOpen} onClick={() => {
+                  const opening = !notificationsOpen;
+                  setNotificationsOpen(opening);
+                  if (opening && customerMode) loadNotifications();
+                }}>
                   <Bell aria-hidden="true" size={18} />
                 </button>
                 {notificationsOpen ? (
                   <section className="navbar__notification-panel glass-data" aria-label={SHELL_LABELS.notifications}>
                     <strong>{SHELL_LABELS.notifications}</strong>
-                    <p>{SHELL_LABELS.noNotifications}</p>
+                    {!customerMode ? <p>{SHELL_LABELS.noNotifications}</p> : null}
+                    {customerMode && notificationsLoading ? <p role="status">Loading notifications…</p> : null}
+                    {customerMode && notificationsError ? (
+                      <div role="alert"><p>{notificationsError}</p><button type="button" className="text-link" onClick={loadNotifications}>Try again</button></div>
+                    ) : null}
+                    {customerMode && !notificationsLoading && !notificationsError && notifications.length === 0 ? <p>{SHELL_LABELS.noNotifications}</p> : null}
+                    {customerMode && !notificationsLoading && !notificationsError ? notifications.map((notification) => (
+                      <div key={notification.id} className="navbar__notification-item">
+                        <p>{notification.message}</p>
+                        {!notification.read_at ? <button type="button" className="text-link" onClick={() => markNotificationRead(notification.id)}>Mark as read</button> : null}
+                      </div>
+                    )) : null}
+                    {customerMode ? <Link to="/orders" className="text-link" onClick={() => setNotificationsOpen(false)}>View orders</Link> : null}
                   </section>
                 ) : null}
               </div>
@@ -264,7 +311,11 @@ export function Navbar({ onToggleSidebar = () => {}, sidebarOpen = false }) {
         />
       ) : null}
 
-      <LocationPicker open={addressOpen} onClose={closeAddressPicker} selectedAddress={selectedAddress} onSelect={selectAddress} />
+      {addressOpen ? (
+        <Suspense fallback={<div role="status">Loading location picker…</div>}>
+          <LocationPicker open onClose={closeAddressPicker} selectedAddress={selectedAddress} onSelect={selectAddress} />
+        </Suspense>
+      ) : null}
     </>
   );
 }

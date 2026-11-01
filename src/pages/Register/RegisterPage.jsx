@@ -98,9 +98,10 @@ export default function RegisterPage() {
       }
     }
     if (step === 1) {
-      if (!address.region || !address.city_municipality || !address.barangay || !address.street.trim()) {
-        return 'Complete your region, city, barangay, and street.';
+      if (!address.psgc_code || !address.region || !address.city_municipality || !address.barangay || !address.street.trim()) {
+        return 'Choose a barangay and complete your city, region, and street.';
       }
+      if (address.label === 'Other' && !String(address.custom_label || '').trim()) return 'Enter a custom label for this address.';
     }
     if (step === 2) {
       if (!emailPattern.test(user.email.trim())) return 'Enter a valid email address.';

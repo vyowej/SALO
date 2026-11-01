@@ -10,6 +10,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use App\Exceptions\CartValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -45,6 +46,20 @@ return Application::configure(basePath: dirname(__DIR__))
                     'fields' => $exception->errors(),
                 ],
             ], 422);
+        });
+
+        $exceptions->render(function (CartValidationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'error' => [
+                    'code' => $exception->errorCode,
+                    'message' => $exception->getMessage(),
+                    'fields' => $exception->fields,
+                ],
+            ], $exception->httpStatus);
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request) {

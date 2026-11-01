@@ -4,6 +4,12 @@ namespace App\Providers;
 
 use App\Models\Restaurant;
 use App\Models\UserAddress;
+use App\Models\Cart;
+use App\Models\CustomerNotification;
+use App\Models\Order;
+use App\Policies\CustomerCartPolicy;
+use App\Policies\CustomerNotificationPolicy;
+use App\Policies\CustomerOrderPolicy;
 use App\Models\PsgcLocation;
 use App\Policies\PsgcLocationPolicy;
 use App\Policies\RestaurantPagePolicy;
@@ -33,6 +39,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(PsgcLocation::class, PsgcLocationPolicy::class);
         Gate::policy(Restaurant::class, RestaurantPagePolicy::class);
         Gate::policy(UserAddress::class, UserAddressPolicy::class);
+        Gate::policy(Cart::class, CustomerCartPolicy::class);
+        Gate::policy(Order::class, CustomerOrderPolicy::class);
+        Gate::policy(CustomerNotification::class, CustomerNotificationPolicy::class);
 
         RateLimiter::for('auth-login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
@@ -46,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(max(1, (int) config('salo.auth.recovery_attempts_per_minute', 5)))
                 ->by($identity.'|'.$request->ip());
+        });
+
+        RateLimiter::for('checkout', function (Request $request) {
+            return Limit::perMinute(10)
+                ->by((string) $request->user()?->getAuthIdentifier());
         });
 
         RateLimiter::for('auth-otp', function (Request $request) {

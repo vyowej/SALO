@@ -24,7 +24,13 @@ use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\V1\Customer\AddressController;
+use App\Http\Controllers\Api\V1\Customer\CustomerFavoriteController;
+use App\Http\Controllers\Api\V1\Customer\CustomerCartController;
+use App\Http\Controllers\Api\V1\Customer\CustomerCheckoutController;
+use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
+use App\Http\Controllers\Api\V1\Customer\CustomerOrderController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
+use App\Http\Controllers\Api\V1\Customer\RestaurantDiscoveryController;
 use App\Http\Controllers\Api\V1\Customer\SettingsController;
 use App\Http\Controllers\Api\V1\Locations\PsgcLocationController;
 use App\Http\Controllers\Api\V1\Locations\LocationController;
@@ -37,6 +43,7 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         ->middleware('throttle:30,1');
     Route::post('/locations/places/reverse', [LocationController::class, 'reverseGeocode'])
         ->middleware('throttle:10,1');
+    Route::get('/restaurants/popular', [RestaurantDiscoveryController::class, 'popular']);
 
     Route::middleware('guest:web')->group(function (): void {
         Route::post('/auth/register', [RegisteredUserController::class, 'store']);
@@ -81,6 +88,7 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         });
 
         Route::middleware('capability:customer')->prefix('customer')->group(function (): void {
+            Route::get('/home', [RestaurantDiscoveryController::class, 'home']);
             Route::get('/profile', [ProfileController::class, 'show']);
             Route::patch('/profile', [ProfileController::class, 'update']);
             Route::delete('/profile', [ProfileController::class, 'destroy']);
@@ -92,6 +100,51 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::patch('/addresses/{address}', [AddressController::class, 'update']);
             Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
             Route::patch('/addresses/{address}/primary', [AddressController::class, 'setPrimary']);
+            Route::get('/carts', [CustomerCartController::class, 'index']);
+            Route::post('/carts/{restaurant}/items', [CustomerCartController::class, 'storeItem'])
+                ->whereNumber('restaurant');
+            Route::patch('/carts/{restaurant}/items/{item}', [CustomerCartController::class, 'updateItem'])
+                ->whereNumber('restaurant')
+                ->whereNumber('item');
+            Route::delete('/carts/{restaurant}/items/{item}', [CustomerCartController::class, 'destroyItem'])
+                ->whereNumber('restaurant')
+                ->whereNumber('item');
+            Route::delete('/carts/{restaurant}', [CustomerCartController::class, 'destroy'])
+                ->whereNumber('restaurant');
+            Route::post('/checkout/quote', [CustomerCheckoutController::class, 'quote']);
+            Route::post('/checkout', [CustomerCheckoutController::class, 'store'])
+                ->middleware('throttle:checkout');
+            Route::get('/orders', [CustomerOrderController::class, 'index']);
+            Route::get('/orders/{order}/tracking', [CustomerOrderController::class, 'tracking'])->whereNumber('order');
+            Route::post('/orders/{order}/cancel', [CustomerOrderController::class, 'cancel'])->whereNumber('order');
+            Route::post('/orders/{order}/receipt-confirmation', [CustomerOrderController::class, 'confirmReceipt'])->whereNumber('order');
+            Route::post('/orders/{order}/reviews/restaurant', [CustomerOrderController::class, 'reviewRestaurant'])->whereNumber('order');
+            Route::get('/orders/{order}', [CustomerOrderController::class, 'show'])->whereNumber('order');
+            Route::get('/notifications', [CustomerNotificationController::class, 'index']);
+            Route::patch('/notifications/{notification}/read', [CustomerNotificationController::class, 'markRead'])
+                ->whereNumber('notification');
+            Route::post('/discounts/validate', [CustomerCheckoutController::class, 'validateDiscount'])
+                ->middleware('throttle:30,1');
+            Route::get('/favorites', [CustomerFavoriteController::class, 'index']);
+            Route::put('/favorites/restaurants/{restaurant}', [CustomerFavoriteController::class, 'favoriteRestaurant'])
+                ->whereNumber('restaurant');
+            Route::delete('/favorites/restaurants/{restaurant}', [CustomerFavoriteController::class, 'unfavoriteRestaurant'])
+                ->whereNumber('restaurant');
+            Route::put('/favorites/menu-items/{item}', [CustomerFavoriteController::class, 'favoriteMenuItem'])
+                ->whereNumber('item');
+            Route::delete('/favorites/menu-items/{item}', [CustomerFavoriteController::class, 'unfavoriteMenuItem'])
+                ->whereNumber('item');
+        });
+
+        Route::middleware('capability:customer')->group(function (): void {
+            Route::get('/restaurants/categories', [RestaurantDiscoveryController::class, 'categories']);
+            Route::get('/restaurants', [RestaurantDiscoveryController::class, 'index']);
+            Route::get('/restaurants/{restaurant}/menu', [RestaurantDiscoveryController::class, 'menu'])
+                ->whereNumber('restaurant');
+            Route::get('/restaurants/{restaurant}/reviews', [RestaurantDiscoveryController::class, 'reviews'])
+                ->whereNumber('restaurant');
+            Route::get('/restaurants/{restaurant}', [RestaurantDiscoveryController::class, 'show'])
+                ->whereNumber('restaurant');
         });
 
         Route::middleware('capability:admin')->prefix('admin')->group(function (): void {

@@ -78,8 +78,12 @@ export default function ProfilePage() {
   const saveMainAddress = async () => {
     setSaveError('');
     setSavedMessage('');
-    if (!addressDraft.region || !addressDraft.city_municipality || !addressDraft.barangay || !addressDraft.street.trim()) {
-      setSaveError('Complete the address fields before saving.');
+    if (!addressDraft.psgc_code || !addressDraft.region || !addressDraft.city_municipality || !addressDraft.barangay || !addressDraft.street.trim()) {
+      setSaveError('Choose a barangay and complete the city, region, and street before saving.');
+      return;
+    }
+    if (addressDraft.label === 'Other' && !String(addressDraft.custom_label || '').trim()) {
+      setSaveError('Enter a custom label for this address.');
       return;
     }
     try {

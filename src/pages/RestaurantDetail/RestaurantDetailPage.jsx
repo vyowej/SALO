@@ -8,6 +8,7 @@ import { formatPeso } from '../../utils/formatPeso';
 import { restaurantService } from '../../services/restaurantService';
 import { locationService } from '../../services/locationService';
 import { getOpenStatus } from '../../utils/getOpenStatus';
+import ImageWithFallback from '../../components/ui/ImageWithFallback';
 import '../Page.css';
 import './RestaurantDetail.css';
 
@@ -25,15 +26,27 @@ export default function RestaurantDetailPage() {
   } = useCart();
   const { selectedAddress } = useLocationContext();
   const [restaurant, setRestaurant] = useState(null);
+  const [menu, setMenu] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState('');
+  const [menuRefresh, setMenuRefresh] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsError, setReviewsError] = useState('');
+  const [reviewsRefresh, setReviewsRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [menuQuery, setMenuQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [itemNote, setItemNote] = useState('');
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [pendingCartItem, setPendingCartItem] = useState(null);
-  const [favorite, setFavorite] = useState(false);
+  const [favoriteResult, setFavoriteResult] = useState(null);
+  const [favoriteErrorResult, setFavoriteErrorResult] = useState(null);
+  const [favoritePending, setFavoritePending] = useState(false);
+  const [favoriteMenuIds, setFavoriteMenuIds] = useState(() => new Set());
+  const [favoriteMenuPendingIds, setFavoriteMenuPendingIds] = useState(() => new Set());
   const [serviceMode, setServiceMode] = useState('Delivery');
   const [distanceResult, setDistanceResult] = useState(null);
   const [toast, setToast] = useState('');
@@ -43,9 +56,12 @@ export default function RestaurantDetailPage() {
   const touchStartY = useRef(0);
   const toastTimer = useRef(null);
 
-  const menuGroups = useMemo(() => (restaurant?.menu || [])
+  const menuGroups = useMemo(() => menu
     .map((group) => ({ ...group, items: group.items.filter(isVisibleItem) }))
-    .filter((group) => group.items.length), [restaurant]);
+    .filter((group) => group.items.length), [menu]);
+  const restaurantKey = restaurant?.id;
+  const favorite = favoriteResult?.id === id && favoriteResult.value;
+  const favoriteError = favoriteErrorResult?.id === id ? favoriteErrorResult.message : '';
   const openStatus = restaurant ? getOpenStatus(restaurant) : null;
   const canOrder = openStatus?.status === 'open' || openStatus?.status === 'closing-soon';
   const distanceMatchesSelection = Boolean(distanceResult && restaurant
@@ -53,8 +69,12 @@ export default function RestaurantDetailPage() {
     && distanceResult.latitude === selectedAddress?.latitude
     && distanceResult.longitude === selectedAddress?.longitude);
   const distance = distanceMatchesSelection ? distanceResult.distance : null;
-  const outsideRange = distanceMatchesSelection && distance > restaurant.delivery_radius_km;
-  const checkingRange = Boolean(restaurant && selectedAddress?.latitude && !distanceMatchesSelection);
+  const hasDeliveryRadius = restaurant?.delivery_radius_km !== null && restaurant?.delivery_radius_km !== undefined;
+  const outsideRange = distanceMatchesSelection && hasDeliveryRadius && distance > restaurant.delivery_radius_km;
+  const hasCoordinates = selectedAddress?.latitude !== null && selectedAddress?.latitude !== undefined
+    && restaurant?.latitude !== null && restaurant?.latitude !== undefined
+    && restaurant?.longitude !== null && restaurant?.longitude !== undefined;
+  const checkingRange = Boolean(restaurant && hasCoordinates && !distanceMatchesSelection);
   const deliveryBlocked = outsideRange && serviceMode === 'Delivery';
   const restaurantCart = restaurant ? cart[restaurant.id] || [] : [];
   const otherRestaurantCarts = restaurant ? Object.keys(cart).filter((cartId) => cartId !== restaurant.id && cart[cartId]?.length) : [];
@@ -105,7 +125,34 @@ export default function RestaurantDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!restaurant || !selectedAddress?.latitude) return undefined;
+    let active = true;
+    restaurantService.getFavorites('menu_item')
+      .then((items) => {
+        if (active) setFavoriteMenuIds(new Set(items.map((item) => String(item.id))));
+      })
+      .catch((favoriteLoadError) => {
+        console.error('Unable to load favorite menu items.', favoriteLoadError);
+        if (active) setFavoriteErrorResult({ id, message: 'Favorite status is unavailable.' });
+      });
+    return () => { active = false; };
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    restaurantService.isRestaurantFavorite(id)
+      .then((isFavorite) => { if (active) setFavoriteResult({ id, value: isFavorite }); })
+      .catch((favoriteLoadError) => {
+        console.error('Unable to load restaurant favorite state.', favoriteLoadError);
+        if (active) setFavoriteErrorResult({ id, message: 'Favorite status is unavailable.' });
+      });
+    return () => { active = false; };
+  }, [id]);
+
+  useEffect(() => {
+    if (!restaurant || selectedAddress?.latitude === null || selectedAddress?.latitude === undefined
+      || selectedAddress?.longitude === null || selectedAddress?.longitude === undefined
+      || restaurant.latitude === null || restaurant.latitude === undefined
+      || restaurant.longitude === null || restaurant.longitude === undefined) return undefined;
     let active = true;
     locationService.getDistanceKm(selectedAddress, restaurant).then((value) => {
       if (!active) return;
@@ -118,6 +165,41 @@ export default function RestaurantDetailPage() {
     }).catch((distanceError) => console.error('Unable to calculate delivery range.', distanceError));
     return () => { active = false; };
   }, [restaurant, selectedAddress]);
+
+  useEffect(() => {
+    if (!restaurantKey || String(restaurantKey) !== String(id)) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setMenuLoading(true);
+      setMenuError('');
+      try {
+        const groups = await restaurantService.getRestaurantMenu(id, menuQuery.trim() ? { q: menuQuery.trim() } : {});
+        if (!active) return;
+        setMenu(groups);
+        if (groups.length) setSelectedCategory((current) => current || groups[0].category);
+      } catch (menuLoadError) {
+        console.error('Unable to load restaurant menu.', menuLoadError);
+        if (active) setMenuError('We couldn’t load the menu right now.');
+      } finally {
+        if (active) setMenuLoading(false);
+      }
+    }, menuQuery.trim() ? 250 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [id, menuQuery, menuRefresh, restaurantKey]);
+
+  useEffect(() => {
+    let active = true;
+    restaurantService.getRestaurantReviews(id)
+      .then((result) => { if (active) setReviews(result.items); })
+      .catch((reviewsLoadError) => {
+        console.error('Unable to load restaurant reviews.', reviewsLoadError);
+        if (active) setReviewsError('Reviews are unavailable right now.');
+      });
+    return () => { active = false; };
+  }, [id, reviewsRefresh]);
 
   useEffect(() => {
     if (!menuGroups.length || typeof IntersectionObserver === 'undefined') return undefined;
@@ -164,6 +246,47 @@ export default function RestaurantDetailPage() {
     setToast(message);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(''), 2600);
+  };
+
+  const toggleFavorite = async () => {
+    if (favoritePending) return;
+    setFavoritePending(true);
+    setFavoriteErrorResult({ id, message: '' });
+    try {
+      const result = await restaurantService.setRestaurantFavorite(restaurant.id, !favorite);
+      setFavoriteResult({ id, value: Boolean(result?.favorited) });
+    } catch (favoriteErrorValue) {
+      console.error('Unable to update restaurant favorite.', favoriteErrorValue);
+      setFavoriteErrorResult({ id, message: 'We couldn’t update this favorite. Please try again.' });
+    } finally {
+      setFavoritePending(false);
+    }
+  };
+
+  const toggleMenuFavorite = async (itemId) => {
+    const key = String(itemId);
+    if (favoriteMenuPendingIds.has(key)) return;
+    const nextFavorited = !favoriteMenuIds.has(key);
+    setFavoriteMenuPendingIds((current) => new Set([...current, key]));
+    setFavoriteErrorResult({ id, message: '' });
+    try {
+      const result = await restaurantService.setMenuItemFavorite(itemId, nextFavorited);
+      setFavoriteMenuIds((current) => {
+        const next = new Set(current);
+        if (result?.favorited) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+    } catch (favoriteErrorValue) {
+      console.error('Unable to update menu item favorite.', favoriteErrorValue);
+      setFavoriteErrorResult({ id, message: 'We couldn’t update this favorite. Please try again.' });
+    } finally {
+      setFavoriteMenuPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
   };
 
   const showAddItem = (item) => {
@@ -240,48 +363,75 @@ export default function RestaurantDetailPage() {
 
       <main className="restaurant-detail-main">
         <div className="detail-hero restaurant-cover">
-          <img src={restaurant.image} alt="" />
+          <ImageWithFallback src={restaurant.image} alt="" />
           <div className="restaurant-cover__actions">
             <Link to="/restaurants" className="restaurant-cover__icon" aria-label="Back to restaurants"><ArrowLeft size={18} /></Link>
-            <button type="button" className={`restaurant-cover__icon ${favorite ? 'is-favorite' : ''}`} aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'} onClick={() => setFavorite((current) => !current)}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} /></button>
+            <button type="button" className={`restaurant-cover__icon ${favorite ? 'is-favorite' : ''}`} aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={favorite} disabled={favoritePending} onClick={toggleFavorite}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} /></button>
           </div>
           <div className="detail-hero__overlay">
             <div className="tag-row"><span className={`detail-status detail-status--${openStatus.status}`}><i />{openStatus.label}</span>{restaurant.acceptsReservations ? <span>Reserve available</span> : null}</div>
             <h1>{restaurant.name}</h1>
             <div className="detail-hero__meta">
-              <span><Star size={15} /> {restaurant.rating}</span>
-              <span><MapPin size={15} /> {distance === null ? restaurant.location : `${distance.toFixed(1)} km away`}</span>
-              <span>{restaurant.deliveryTime}</span>
-              <span>{outsideRange ? 'Outside delivery range' : `${formatPeso(restaurant.deliveryFee)} delivery`}</span>
+              <span><Star size={15} /> {restaurant.rating === null || restaurant.rating === undefined ? 'No ratings yet' : `${restaurant.rating}${restaurant.ratingCount ? ` (${restaurant.ratingCount})` : ''}`}</span>
+              <span><MapPin size={15} /> {distance === null ? restaurant.location : `${Number(distance).toFixed(1)} km away`}</span>
+              <span>{restaurant.deliveryTime || 'Timing at checkout'}</span>
+              <span>{outsideRange ? 'Outside delivery range' : restaurant.deliveryFee === null || restaurant.deliveryFee === undefined ? 'Fee at checkout' : `${formatPeso(restaurant.deliveryFee)} delivery`}</span>
             </div>
           </div>
         </div>
+        {favoriteError ? <p className="restaurant-range-check" role="alert">{favoriteError}</p> : null}
+        {restaurant.photos?.length > 1 ? (
+          <div className="restaurant-photo-gallery" aria-label={`${restaurant.name} photos`}>
+            {restaurant.photos.map((photo) => <ImageWithFallback key={photo.id} src={photo.url} alt={photo.alt_text || `${restaurant.name}`} loading="lazy" />)}
+          </div>
+        ) : null}
 
         {checkingRange ? <p className="restaurant-range-check" role="status">Checking delivery availability for this address…</p> : null}
         {deliveryBlocked ? <div className="range-warning" role="status"><strong>Outside delivery range</strong><span>Delivery is available within {restaurant.delivery_radius_km} km. Pick-up is still available for this restaurant.</span><button type="button" className="text-link" onClick={() => setServiceMode('Pick-up')}>Choose pick-up</button></div> : null}
-        <div className="restaurant-intro"><div><p>{restaurant.cuisine} · {restaurant.description}</p><div className="detail-summary__tags">{restaurant.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div><div className="restaurant-intro__search"><Search size={16} /><input type="search" placeholder="Search menu" aria-label="Search menu" onChange={(event) => { const query = event.target.value.toLowerCase(); setSelectedCategory(query ? menuGroups.find((group) => group.items.some((item) => item.name.toLowerCase().includes(query)))?.category || '' : menuGroups[0]?.category || ''); }} /></div></div>
+        <div className="restaurant-intro"><div><p>{restaurant.cuisine} · {restaurant.description}</p><div className="detail-summary__tags">{restaurant.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{restaurant.latitude !== null && restaurant.latitude !== undefined && restaurant.longitude !== null && restaurant.longitude !== undefined ? <a className="text-link" href={`geo:${restaurant.latitude},${restaurant.longitude}?q=${encodeURIComponent(restaurant.name)}`}>Get directions</a> : null}</div><div className="restaurant-intro__search"><Search size={16} /><input type="search" value={menuQuery} placeholder="Search menu" aria-label="Search menu" onChange={(event) => { const query = event.target.value; setMenuQuery(query); setSelectedCategory(query ? menuGroups.find((group) => group.items.some((item) => item.name.toLowerCase().includes(query.toLowerCase())))?.category || '' : menuGroups[0]?.category || ''); }} /></div></div>
 
         <nav className="menu-category-tabs" aria-label="Menu categories">{menuGroups.map((group) => <button key={group.category} type="button" className={selectedCategory === group.category ? 'is-selected' : ''} onClick={() => scrollToGroup(group.category)}>{group.category}</button>)}</nav>
-        <div className="restaurant-menu-groups">
-          {menuGroups.map((group) => (
-            <section key={group.category} className="menu-group restaurant-menu-group" id={`menu-${group.category.replace(/\s+/g, '-').toLowerCase()}`} data-menu-category={group.category} ref={(node) => { groupRefs.current[group.category] = node; }}>
-              <h2>{group.category}</h2>
-              <div className="menu-items">
-                {group.items.map((item) => (
-                  <article key={item.id} className={`menu-item restaurant-menu-item ${item.soldOut ? 'is-sold-out' : ''}`}>
-                    <img src={item.image || restaurant.image} alt="" loading="lazy" />
-                    <div className="menu-item__content">
-                      <div className="menu-item__header"><span className="menu-item__title">{item.name}</span><span className="menu-item__price">{formatPeso(item.price)}</span></div>
-                      <p className="menu-item__meta">{item.description}</p>
-                      <div className="menu-item__dietary">{item.dietaryTags?.map((tag) => <span key={tag}>{tag}</span>)}{item.soldOut ? <span className="sold-out-tag">Sold out</span> : null}</div>
-                    </div>
-                    <button type="button" className="restaurant-add-button" aria-label={item.soldOut ? `${item.name} sold out` : `Customize and add ${item.name}`} disabled={item.soldOut || !canOrder || deliveryBlocked || checkingRange} onClick={() => showAddItem(item)}>{item.soldOut ? '—' : '+'}</button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        {menuError ? (
+          <div className="empty-state"><h3>Menu unavailable</h3><p>{menuError}</p><Button variant="secondary" onClick={() => setMenuRefresh((value) => value + 1)}>Try again</Button></div>
+        ) : menuLoading && !menuGroups.length ? (
+          <p className="muted-copy" role="status">Loading menu…</p>
+        ) : menuGroups.length ? (
+          <div className="restaurant-menu-groups">
+            {menuGroups.map((group) => (
+              <section key={group.category} className="menu-group restaurant-menu-group" id={`menu-${group.category.replace(/\s+/g, '-').toLowerCase()}`} data-menu-category={group.category} ref={(node) => { groupRefs.current[group.category] = node; }}>
+                <h2>{group.category}</h2>
+                <div className="menu-items">
+                  {group.items.map((item) => (
+                    <article key={item.id} className={`menu-item restaurant-menu-item ${item.soldOut ? 'is-sold-out' : ''}`}>
+                      <ImageWithFallback src={item.image || restaurant.image} alt="" loading="lazy" />
+                      <div className="menu-item__content">
+                        <div className="menu-item__header"><span className="menu-item__title">{item.name}</span><span className="menu-item__price">{formatPeso(item.price)}</span></div>
+                        <p className="menu-item__meta">{item.description}</p>
+                        <div className="menu-item__dietary">{item.dietaryTags?.map((tag) => <span key={tag}>{tag}</span>)}{item.soldOut ? <span className="sold-out-tag">Sold out</span> : null}</div>
+                      </div>
+                      <button type="button" className={`restaurant-favorite-button ${favoriteMenuIds.has(String(item.id)) ? 'is-favorite' : ''}`} aria-label={favoriteMenuIds.has(String(item.id)) ? `Remove ${item.name} from favorites` : `Add ${item.name} to favorites`} aria-pressed={favoriteMenuIds.has(String(item.id))} disabled={favoriteMenuPendingIds.has(String(item.id))} onClick={() => toggleMenuFavorite(item.id)}><Heart size={16} fill={favoriteMenuIds.has(String(item.id)) ? 'currentColor' : 'none'} /></button>
+                      <button type="button" className="restaurant-add-button" aria-label={item.soldOut ? `${item.name} sold out` : `Customize and add ${item.name}`} disabled={item.soldOut || !canOrder || deliveryBlocked || checkingRange} onClick={() => showAddItem(item)}>{item.soldOut ? '—' : '+'}</button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state"><h3>No menu items found</h3><p>Try a different search.</p></div>
+        )}
+        <section className="restaurant-reviews" aria-labelledby="restaurant-reviews-title">
+          <div className="section-title-row"><h2 id="restaurant-reviews-title">Customer reviews</h2><span>{restaurant.ratingCount ? `${restaurant.rating} · ${restaurant.ratingCount} reviews` : 'No ratings yet'}</span></div>
+          {reviewsError ? (
+            <div className="empty-state"><p>{reviewsError}</p><Button variant="secondary" onClick={() => setReviewsRefresh((value) => value + 1)}>Try again</Button></div>
+          ) : reviews.length ? reviews.map((review) => (
+            <article key={review.id} className="restaurant-review">
+              <strong>{review.author_label}</strong><span>{review.rating} / 5</span>
+              {review.comment ? <p>{review.comment}</p> : null}
+              {review.reply ? <p className="restaurant-review__reply">{review.reply}</p> : null}
+            </article>
+          )) : <p className="muted-copy">No customer reviews yet.</p>}
+        </section>
       </main>
 
       <aside className="detail-summary restaurant-cart-panel">
