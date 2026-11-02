@@ -165,12 +165,13 @@ The client sends identifiers and quantities, never authoritative prices, fees, d
 
 | Method and URL | Request | Success `data` | Allowed |
 |---|---|---|---|
-| `POST /customer/reservations` | `restaurant_id`, `date`, `time`, `guests`, optional guest note | Created `Reservation` in `pending` | customer |
-| `GET /customer/reservations` | Optional `status`, `page` | Paginated current user's `Reservation[]` | customer |
-| `GET /customer/reservations/{reservation}` | — | Owned `Reservation` | customer |
-| `POST /customer/reservations/{reservation}/cancel` | Optional `reason` | Updated `Reservation` | customer |
+| `GET /restaurants/{restaurant}/reservation-slots` | `date`, `guest_count`, optional `duration_minutes` | Available slots with table ID, table number, capacity, area, start/end and duration | customer |
+| `POST /customer/reservations` | `restaurant_id`, `table_id`, `start_at`, optional `duration_minutes`, `guest_count`, `reserved_for_name`, `contact_phone`, optional `special_request` | `201` owned reservation resource | verified customer |
+| `GET /customer/reservations` | Optional `status`, `from`, `to`, `page`, `per_page` | Paginated current user's reservations | customer |
+| `GET /customer/reservations/{reservation}` | — | Owned reservation with restaurant/table summary | customer |
+| `POST /customer/reservations/{reservation}/cancel` | Optional `reason` | Updated owned reservation resource | customer |
 
-The reservation create action checks valid future date/time, capacity, table maintenance, restaurant opening hours or 24/7 flag, and overlapping reservations. It locks the candidate table row inside the transaction before checking for overlap. Customer cancellation is allowed until two hours before start.
+Reservation creation rechecks the selected table, capacity, operating hours or 24/7 schedule, closure dates, slot interval, booking window and overlapping reservations inside a transaction while locking the restaurant and candidate table. A customer may have at most three active reservations. Confirmation is automatic or pending according to the restaurant's configured mode; pending reservations use its review window. Cancellation is allowed only before the restaurant-configured cutoff. Customer rescheduling is not enabled because v3 has no reschedule-request state.
 
 ### Owner onboarding and owned restaurant operations
 

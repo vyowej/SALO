@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\Customer\CustomerCartController;
 use App\Http\Controllers\Api\V1\Customer\CustomerCheckoutController;
 use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerOrderController;
+use App\Http\Controllers\Api\V1\Customer\CustomerReservationController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use App\Http\Controllers\Api\V1\Customer\RestaurantDiscoveryController;
 use App\Http\Controllers\Api\V1\Customer\SettingsController;
@@ -134,6 +135,20 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
                 ->whereNumber('item');
             Route::delete('/favorites/menu-items/{item}', [CustomerFavoriteController::class, 'unfavoriteMenuItem'])
                 ->whereNumber('item');
+        });
+
+        Route::middleware(['auth:sanctum', 'capability:customer'])->group(function (): void {
+            Route::get('/restaurants/{restaurant}/reservation-slots', [CustomerReservationController::class, 'slots'])
+                ->whereNumber('restaurant');
+        });
+
+        Route::middleware(['auth:sanctum', 'capability:customer'])->prefix('customer')->group(function (): void {
+            Route::get('/reservations', [CustomerReservationController::class, 'index']);
+            Route::post('/reservations', [CustomerReservationController::class, 'store']);
+            Route::get('/reservations/{reservation}', [CustomerReservationController::class, 'show'])
+                ->whereNumber('reservation');
+            Route::post('/reservations/{reservation}/cancel', [CustomerReservationController::class, 'cancel'])
+                ->whereNumber('reservation');
         });
 
         Route::middleware('capability:customer')->group(function (): void {

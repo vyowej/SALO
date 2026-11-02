@@ -42,7 +42,7 @@ class ReservationAvailabilityService
             return $this->reservations->createReservation([
                 'user_id' => $customer->getKey(),
                 'table_id' => $table->getKey(),
-                'reference_code' => 'SALO-RSV-'.Str::upper(Str::random(10)),
+                'reference_code' => $this->newReferenceCode(),
                 'start_at' => $startAt,
                 'duration_minutes' => $duration,
                 'guest_count' => (int) $data['guest_count'],
@@ -55,6 +55,109 @@ class ReservationAvailabilityService
                     : null,
             ]);
         });
+    }
+
+    public function availableSlots(
+        Restaurant $restaurant,
+        string $date,
+        int $guestCount,
+        ?int $durationMinutes = null,
+    ): array {
+        $settings = $this->reservations->settings($restaurant);
+        if (
+            $settings === null
+            || ! $settings->accepts_reservations
+            || ! $this->settingsAreConfigured($settings)
+            || $restaurant->status !== 'approved'
+            || ! $restaurant->is_published
+        ) {
+            return [];
+        }
+
+        $duration = $durationMinutes ?? (int) $settings->dining_minutes;
+        $tables = $this->reservations->availableTables($restaurant, $guestCount);
+        if ($tables->isEmpty()) {
+            return [];
+        }
+
+        $day = Carbon::createFromFormat('!Y-m-d', $date, 'Asia/Manila');
+        $hours = $this->restaurants->hours($restaurant);
+        $slots = [];
+        $consider = function (Carbon $localStart, Carbon $localEnd) use (
+            $restaurant,
+            $settings,
+            $guestCount,
+            $duration,
+            $tables,
+            &$slots,
+        ): void {
+            if ($localStart->lt(now('Asia/Manila')->addHours((int) $settings->min_lead_hours))) {
+                return;
+            }
+
+            $localFinish = $localStart->copy()->addMinutes($duration);
+            if ($localFinish->gt($localEnd)) {
+                return;
+            }
+            $startAt = $localStart->copy()->utc();
+            $endAt = $localFinish->copy()->utc();
+
+            try {
+                $this->assertBookingAllowed($restaurant, $settings, [
+                    'start_at' => $startAt,
+                    'duration_minutes' => $duration,
+                    'guest_count' => $guestCount,
+                ]);
+                $this->assertWithinRestaurantHours($restaurant, $settings, $startAt, $endAt);
+            } catch (ValidationException) {
+                return;
+            }
+
+            foreach ($tables as $table) {
+                if ($this->hasOverlap($table, $startAt, $endAt, null)) {
+                    continue;
+                }
+
+                $slots[] = [
+                    'table_id' => (string) $table->getKey(),
+                    'table_number' => $table->table_number,
+                    'capacity' => (int) $table->capacity,
+                    'area' => $table->area,
+                    'start_at' => $startAt->toISOString(),
+                    'end_at' => $endAt->toISOString(),
+                    'duration_minutes' => $duration,
+                    'guest_count' => $guestCount,
+                ];
+                break;
+            }
+        };
+
+        if ($restaurant->is_24_7) {
+            $anchor = $day->copy()->startOfDay();
+            $endOfDay = $anchor->copy()->addDay();
+            for ($start = $anchor->copy(); $start->lt($endOfDay); $start->addMinutes((int) $settings->slot_minutes)) {
+                $consider($start->copy(), $endOfDay->copy()->addMinutes($duration));
+            }
+
+            return $slots;
+        }
+
+        foreach ([$day->copy()->subDay(), $day->copy()] as $shiftDate) {
+            foreach ($hours->where('weekday', $shiftDate->dayOfWeekIso) as $shift) {
+                $shiftStart = $shiftDate->copy()->setTimeFromTimeString((string) $shift->open_time);
+                $shiftEnd = $shiftDate->copy()->setTimeFromTimeString((string) $shift->close_time);
+                if ($shift->crosses_midnight) {
+                    $shiftEnd->addDay();
+                }
+                for ($start = $shiftStart->copy(); $start->lt($shiftEnd); $start->addMinutes((int) $settings->slot_minutes)) {
+                    if ($start->toDateString() === $date) {
+                        $consider($start->copy(), $shiftEnd);
+                    }
+                }
+            }
+        }
+
+        return $slots;
     }
 
     public function lockAvailableTable(
@@ -92,14 +195,7 @@ class ReservationAvailabilityService
         if (
             $settings === null
             || ! $settings->accepts_reservations
-            || $settings->review_window_hours === null
-            || $settings->slot_minutes === null
-            || $settings->dining_minutes === null
-            || $settings->min_lead_hours === null
-            || $settings->max_months_ahead === null
-            || $settings->max_party_size === null
-            || $settings->grace_minutes === null
-            || $settings->cancel_cutoff_hours === null
+            || ! $this->settingsAreConfigured($settings)
         ) {
             throw ValidationException::withMessages([
                 'settings' => ['This restaurant is not accepting reservations.'],
@@ -137,6 +233,23 @@ class ReservationAvailabilityService
                 'duration_minutes' => ['Reservation duration must be between 1 minute and 24 hours.'],
             ]);
         }
+    }
+
+    private function settingsAreConfigured(ReservationSetting $settings): bool
+    {
+        return $settings->review_window_hours !== null
+            && $settings->slot_minutes !== null
+            && $settings->dining_minutes !== null
+            && $settings->min_lead_hours !== null
+            && $settings->max_months_ahead !== null
+            && $settings->max_party_size !== null
+            && $settings->grace_minutes !== null
+            && $settings->cancel_cutoff_hours !== null;
+    }
+
+    private function newReferenceCode(): string
+    {
+        return Str::upper('R'.Str::random(11));
     }
 
     private function assertWithinRestaurantHours(

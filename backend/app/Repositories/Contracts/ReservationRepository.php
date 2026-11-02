@@ -18,6 +18,8 @@ interface ReservationRepository
 
     public function lockCandidateTables(Restaurant $restaurant, int $guestCount, ?int $tableId = null): Collection;
 
+    public function availableTables(Restaurant $restaurant, int $guestCount): Collection;
+
     public function createTable(Restaurant $restaurant, array $attributes): RestaurantTable;
 
     public function updateTable(RestaurantTable $table, array $attributes): RestaurantTable;

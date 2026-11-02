@@ -80,7 +80,7 @@ The live database exists, but Customer persistence is not verified end-to-end be
 | Location and addresses | Profile address form, header location controls, location picker; checkout address selection; restaurant location editor; rider home-location editor | Revised order for every address surface: Country, Province, City or Municipality, Barangay, Street, House number. Country displays Philippines and is locked for now. PSGC hierarchy fields are local type-ahead with parent restrictions; persist one barangay leaf code and derive ancestors. Street is free text with optional backend-called, PH-limited suggestions. Current-location reverse geocoding fills editable fields; dragging the pin refreshes them. Show and store a one-line formatted address. The design is owner-approved; source remains pre-revision, and C1 is blocked until PSGC data and database readiness. Provider limits, terms, and privacy remain [VERIFY]. |
 | Cart and checkout | `/cart`, `/checkout` | Browser storage/mock calculations; must become authenticated backend carts and server-quoted atomic multi-restaurant checkout. |
 | Orders and tracking | `/orders`, `/orders/:id` | Mock order records and simulation. Backend customer ownership endpoints and driver/tracking records are missing. |
-| Reservations | `/reservations`, `/reservations/new`, `/reserve` | Mock Customer reservation data. Business availability service exists; authenticated Customer endpoints are missing. |
+| Reservations | `/reservations`, `/reservations/new`, `/reserve` | Customer booking, slot lookup, owned history/detail and cutoff-aware cancellation are wired to the Customer API and mock service. Focused Customer reservation feature tests cover ownership, email verification, active limits, slot recheck, confirmation modes and cancellation; no reschedule endpoint is enabled. |
 | Profile and settings | `/profile`, `/settings` | Profile/settings APIs exist; address durability, email-change OTP, password/session revocation contract and sensitive confirmations need verification/completion. |
 | Favorites | No dedicated route found | Missing. |
 | Receipt confirmation, rating, help and notifications | No Customer route/API found | Missing. |
@@ -249,6 +249,8 @@ Tracking polls every 5–10 seconds, pauses while the tab is hidden and backs of
 | `GET /customer/reservations/{reservation}` | None | Reservation plus restaurant/table summary | Own reservation only. |
 | `POST /customer/reservations/{reservation}/cancel` | `{reason?}` | Updated v3 reservation resource | Own reservation; enforce restaurant cutoff. V3 has no late-cancel field; do not emit or persist a late-cancel indicator unless an existing status supports it. |
 | `POST /customer/reservations/{reservation}/reschedule` | Not enabled | — | **[VERIFY]** V3 has no reschedule-request state/table. Until the owner changes v3, cancel and book a new slot; do not claim a pending restaurant approval request. |
+
+**C5 implementation status:** The customer routes, repository/service flow, policy checks, resource and booking/history UI are implemented. The mock fixture flow persists created and cancelled reservations in browser storage. Feature tests use the in-memory SQLite test database; live-schema behavior remains unverified.
 
 ### Settings, partner/rider links and help (C6)
 

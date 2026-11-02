@@ -7,9 +7,11 @@ use App\Models\UserAddress;
 use App\Models\Cart;
 use App\Models\CustomerNotification;
 use App\Models\Order;
+use App\Models\Reservation;
 use App\Policies\CustomerCartPolicy;
 use App\Policies\CustomerNotificationPolicy;
 use App\Policies\CustomerOrderPolicy;
+use App\Policies\CustomerReservationPolicy;
 use App\Models\PsgcLocation;
 use App\Policies\PsgcLocationPolicy;
 use App\Policies\RestaurantPagePolicy;
@@ -42,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Cart::class, CustomerCartPolicy::class);
         Gate::policy(Order::class, CustomerOrderPolicy::class);
         Gate::policy(CustomerNotification::class, CustomerNotificationPolicy::class);
+        Gate::policy(Reservation::class, CustomerReservationPolicy::class);
 
         RateLimiter::for('auth-login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));

@@ -46,6 +46,16 @@ class DatabaseReservationRepository implements ReservationRepository
             ->get();
     }
 
+    public function availableTables(Restaurant $restaurant, int $guestCount): Collection
+    {
+        return $restaurant->restaurantTables()
+            ->where('status', 'active')
+            ->where('capacity', '>=', $guestCount)
+            ->orderBy('capacity')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function createTable(Restaurant $restaurant, array $attributes): RestaurantTable
     {
         return $restaurant->restaurantTables()->create($attributes);

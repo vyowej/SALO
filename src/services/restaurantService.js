@@ -19,6 +19,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ORDER_STORAGE_KEY = 'salo-order-records-v1';
 const FAVORITE_RESTAURANT_STORAGE_KEY = 'salo-favorite-restaurants-v1';
 const FAVORITE_MENU_ITEM_STORAGE_KEY = 'salo-favorite-menu-items-v1';
+const CUSTOMER_RESERVATION_STORAGE_KEY = 'salo-customer-reservations-v1';
 const orderSteps = mockOrderFlow.statusSteps;
 const readStoredOrders = () => {
   if (typeof window === 'undefined') return orders.map((order) => ({ ...order }));
@@ -106,6 +107,58 @@ const normalizeCustomerRestaurant = (restaurant) => ({
   closureDates: restaurant.closure_dates || [],
   menu: (restaurant.menu || []).map(normalizeMenuCategory),
 });
+
+const normalizeCustomerReservation = (reservation) => {
+  const start = reservation.start_at ? new Date(reservation.start_at) : null;
+  const date = reservation.date || (start
+    ? new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(start)
+    : '');
+  const time = reservation.time || (start
+    ? new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(start)
+    : '');
+  const rawStatus = reservation.status || 'pending';
+
+  return {
+    ...reservation,
+    restaurant: reservation.restaurant?.name || reservation.restaurant || '',
+    restaurant_id: String(reservation.restaurant_id || reservation.restaurantId || ''),
+    date,
+    time,
+    guests: Number(reservation.guest_count ?? reservation.guests ?? 0),
+    statusCode: String(reservation.statusCode || rawStatus).toLowerCase(),
+    status: String(rawStatus).charAt(0).toUpperCase() + String(rawStatus).slice(1).replaceAll('_', ' '),
+    can_cancel: Boolean(reservation.can_cancel),
+  };
+};
+
+const readStoredCustomerReservations = () => {
+  if (typeof window === 'undefined') return reservationRecords;
+  try {
+    const stored = window.localStorage.getItem(CUSTOMER_RESERVATION_STORAGE_KEY);
+    if (!stored) return reservationRecords;
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) throw new Error('Stored reservation data is not a list.');
+    return parsed.map(normalizeCustomerReservation);
+  } catch (error) {
+    console.error('Unable to read saved reservations.', error);
+    throw new Error('Saved reservations are unavailable. Clear site storage and try again.', { cause: error });
+  }
+};
+
+const saveCustomerReservations = (records) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CUSTOMER_RESERVATION_STORAGE_KEY, JSON.stringify(records));
+  }
+};
 
 const paramsFrom = (filters = {}) => {
   const params = new URLSearchParams();
@@ -486,23 +539,125 @@ export const restaurantService = {
     return updated;
   },
 
-  async getReservations() {
+  async getReservations(page = 1) {
+    if (!config.useMock) {
+      const response = await apiRequest(`/customer/reservations?page=${page}&per_page=50`, { preserveEnvelope: true });
+      return {
+        items: (response?.data || []).map(normalizeCustomerReservation),
+        meta: response?.meta || { current_page: page, last_page: page },
+      };
+    }
     await wait(350);
-    return reservationRecords;
+    reservationRecords = readStoredCustomerReservations();
+    const records = reservationRecords.map(normalizeCustomerReservation);
+    const perPage = 50;
+    const lastPage = Math.max(1, Math.ceil(records.length / perPage));
+    const currentPage = Math.min(Math.max(1, Number(page) || 1), lastPage);
+    const start = (currentPage - 1) * perPage;
+    return {
+      items: records.slice(start, start + perPage),
+      meta: { current_page: currentPage, last_page: lastPage },
+    };
+  },
+
+  async getReservationSlots(restaurantId, filters) {
+    if (!config.useMock) {
+      const params = paramsFrom(filters);
+      const slots = await apiRequest(`/restaurants/${encodeURIComponent(restaurantId)}/reservation-slots?${params}`);
+      return Array.isArray(slots) ? slots : [];
+    }
+
+    await wait(config.mockDelay);
+    const restaurant = restaurants.find((item) => String(item.id) === String(restaurantId));
+    if (!restaurant || !restaurant.acceptsReservations) return [];
+    reservationRecords = readStoredCustomerReservations();
+    const duration = Number(filters.duration_minutes) || 90;
+    const guestCount = Number(filters.guest_count);
+    const candidates = [];
+    for (let minutes = 11 * 60; minutes <= 21 * 60; minutes += 30) {
+      const hour = String(Math.floor(minutes / 60)).padStart(2, '0');
+      const minute = String(minutes % 60).padStart(2, '0');
+      const startAt = new Date(`${filters.date}T${hour}:${minute}:00+08:00`);
+      const endAt = new Date(startAt.getTime() + duration * 60_000);
+      if (startAt <= new Date(Date.now() + 2 * 60 * 60_000)) continue;
+      if (minutes + duration > 22 * 60) continue;
+      for (const tableCapacity of [2, 4, 6, 8, 10].filter((capacity) => capacity >= guestCount)) {
+        const tableId = `mock-${restaurant.id}-${tableCapacity}`;
+        const overlaps = reservationRecords.some((reservation) => (
+          String(reservation.restaurant_id) === String(restaurantId)
+          && String(reservation.table_id) === tableId
+          && ['pending', 'confirmed'].includes(reservation.statusCode)
+          && reservation.start_at
+          && new Date(reservation.start_at) < endAt
+          && new Date(reservation.end_at) > startAt
+        ));
+        if (overlaps) continue;
+        candidates.push({
+          table_id: tableId,
+          table_number: `Table ${tableCapacity}`,
+          capacity: tableCapacity,
+          area: 'Main dining area',
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          duration_minutes: duration,
+          guest_count: guestCount,
+        });
+        break;
+      }
+    }
+    return candidates;
+  },
+
+  async getReservation(id) {
+    if (!config.useMock) {
+      const reservation = await apiRequest(`/customer/reservations/${encodeURIComponent(id)}`);
+      return normalizeCustomerReservation(reservation);
+    }
+    await wait(150);
+    reservationRecords = readStoredCustomerReservations();
+    const reservation = reservationRecords.find((item) => String(item.id) === String(id));
+    return reservation ? normalizeCustomerReservation(reservation) : null;
   },
 
   async createReservation(details) {
+    if (!config.useMock) {
+      const reservation = await apiRequest('/customer/reservations', { method: 'POST', body: details });
+      return normalizeCustomerReservation(reservation);
+    }
     await wait(config.mockDelay);
-    const reservation = { ...details, id: `RES-${nextReservationNumber++}`, status: mockOrderFlow.initialReservationStatus };
+    reservationRecords = readStoredCustomerReservations();
+    const restaurant = restaurants.find((item) => String(item.id) === String(details.restaurant_id));
+    const reservation = normalizeCustomerReservation({
+      ...details,
+      id: `RES-${Date.now()}-${nextReservationNumber++}`,
+      reference_code: `MOCK-${Date.now()}`,
+      restaurant_id: String(details.restaurant_id),
+      restaurant: { name: restaurant?.name || '' },
+      end_at: new Date(new Date(details.start_at).getTime() + Number(details.duration_minutes) * 60_000).toISOString(),
+      status: mockOrderFlow.initialReservationStatus.toLowerCase(),
+      can_cancel: true,
+    });
     reservationRecords = [reservation, ...reservationRecords];
+    saveCustomerReservations(reservationRecords);
     return reservation;
   },
 
-  async cancelReservation(id) {
+  async cancelReservation(id, reason = null) {
+    if (!config.useMock) {
+      const reservation = await apiRequest(`/customer/reservations/${encodeURIComponent(id)}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      });
+      return normalizeCustomerReservation(reservation);
+    }
     await wait(250);
+    reservationRecords = readStoredCustomerReservations();
     const reservation = reservationRecords.find((item) => item.id === id);
-    if (!reservation || !['Pending', 'Confirmed'].includes(reservation.status)) return null;
-    reservationRecords = reservationRecords.map((item) => item.id === id ? { ...item, status: 'Cancelled' } : item);
+    if (!reservation || !['pending', 'confirmed'].includes(reservation.statusCode) || !reservation.can_cancel) return null;
+    reservationRecords = reservationRecords.map((item) => item.id === id
+      ? { ...item, status: 'Cancelled', statusCode: 'cancelled', can_cancel: false, cancel_reason: reason }
+      : item);
+    saveCustomerReservations(reservationRecords);
     return reservationRecords.find((item) => item.id === id);
   },
 
