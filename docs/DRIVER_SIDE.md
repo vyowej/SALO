@@ -1,7 +1,7 @@
 # SALO Driver (Rider) Side
 
-**Status:** D0 audit and design only. No rider implementation was changed, no
-test or migration was run, and no database was queried. The owner states that
+**Status:** D0 audit and F2 guarded schema-loader dry run. No rider implementation
+was changed, no test or migration was run. The owner states that
 the live MariaDB 10.11 database `salo` is connected and was imported from the
 root schema. This document treats that as an operating constraint, not as a
 claim that D0 independently verified the connection.
@@ -11,9 +11,8 @@ claim that D0 independently verified the connection.
 Read together for this audit:
 
 - [Driver-side implementation prompt](./driver-side-v2.md)
-- The owner-supplied rider addendum (the separate `docs/prompts/driver-side-addendum.md`
-  path was not present in this checkout; its full text was supplied in the
-  conversation and is applied here as controlling where it differs)
+- [Driver-side addendum](./prompts/driver-side-addendum.md) (its content was
+  supplied in the conversation; the file itself was not found in this checkout)
 - [SALO Plan v2](./SALO_PLAN_v2.md)
 - [Authoritative root SQL](../database/salo_db.sql)
 - [Customer-side documentation](./CUSTOMER_SIDE.md)
@@ -37,6 +36,9 @@ These database rules apply to every rider phase:
   or destructive SQL against `salo`. Do not edit `database/salo_db.sql`.
 - Any schema change is a numbered SQL proposal in this document and is for the
   owner to apply. No proposal is applied by the application.
+- Recurring zone/shift membership uses `rider_shift_assignments`. The owner
+  declined date-specific shift rosters; no rider feature currently requires
+  that schema addition.
 - Tests use only the separately guarded `salo_test` database and a fake file
   disk. Before any test touches a database, both the configured database name
   and `SELECT DATABASE()` must end in `_test`; a mismatch must fail closed.
@@ -46,8 +48,9 @@ These database rules apply to every rider phase:
 
 ## 2. D0 prerequisite audit
 
-This is a repository/source audit. No live database, mail server, browser
-device mode, or phone was used during D0.
+This is a repository/source audit. F2 performed only the guarded loader's
+read-only database preflight; it did not inspect rider data or execute SQL
+statements. No mail server, browser device mode, or phone was used.
 
 | Prerequisite | What exists in source | D0 finding |
 |---|---|---|
@@ -107,57 +110,18 @@ repositories.
    the currently defined flow. Profile photos remain private; do not add a
    public avatar.
 3. **Settings:** `rider_ack_seconds`, `rider_share_percent`,
-   `delivery_proof_retention_days`, and `max_zone_distance_km` are present in
-   root SQL starter settings. No settings/schema proposal is needed.
-4. **Date-specific shifts [VERIFY]:** current tables represent recurring
-   rider-to-zone/shift assignment, not a date-specific roster. The rider
-   prompt does not require one-off dates or days off, so this audit does not
-   treat that as a required schema change. If the owner expects a calendar of
-   dated shifts, approve this separate proposal before implementing that
-   behavior:
-
-   **Proposal 1 (conditional): add `rider_shift_rosters` for date-specific
-   schedules.** Needed only if shifts must be scheduled/cancelled per calendar
-   date rather than treated as recurring standing assignments. The service
-   would enforce daily zone/shift capacity transactionally by locking the
-   existing `zone_shift_capacities` row and counting active assignments for
-   that date. Do not apply without approval.
-
-   ```sql
-   CREATE TABLE rider_shift_rosters (
-     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-     rider_id            BIGINT UNSIGNED NOT NULL,
-     zone_id             BIGINT UNSIGNED NULL,
-     shift_id            BIGINT UNSIGNED NOT NULL,
-     shift_date          DATE NOT NULL,
-     status              ENUM('assigned','waitlisted','cancelled') NOT NULL,
-     assigned_by         ENUM('system','admin') NOT NULL DEFAULT 'system',
-     assigned_by_user_id BIGINT UNSIGNED NULL,
-     reason              VARCHAR(255) NULL,
-     created_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-     updated_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
-                         ON UPDATE CURRENT_TIMESTAMP,
-     PRIMARY KEY (id),
-     UNIQUE KEY uq_roster_rider_shift_date (rider_id, shift_id, shift_date),
-     KEY idx_roster_capacity (zone_id, shift_id, shift_date, status),
-     CONSTRAINT chk_roster_zone
-       CHECK (status <> 'assigned' OR zone_id IS NOT NULL),
-     CONSTRAINT fk_roster_rider
-       FOREIGN KEY (rider_id) REFERENCES rider_profiles (id),
-     CONSTRAINT fk_roster_zone
-       FOREIGN KEY (zone_id) REFERENCES zones (id),
-     CONSTRAINT fk_roster_shift
-       FOREIGN KEY (shift_id) REFERENCES shifts (id),
-     CONSTRAINT fk_roster_assigned_by
-       FOREIGN KEY (assigned_by_user_id) REFERENCES users (id)
-   ) ENGINE=InnoDB;
-   ```
-
+   `delivery_proof_retention_days`, `rejected_doc_retention_days`,
+   `max_zone_distance_km`, and `rider_reapply_cooldown_days` are present in the
+   root SQL or were added to live platform settings by the owner. Application
+   code reads the live settings; D0 did not run inserts. No settings/schema
+   proposal is needed.
+4. **Recurring shifts:** use `rider_shift_assignments` keyed by rider and
+   shift. The owner declined date-specific rosters; no rider feature currently
+   requires a schema addition.
 5. **Proof timestamp:** `deliveries.delivered_at` supplies the server-side
    delivery/proof timestamp; `proof_lat` and `proof_lng` store the submitted
    rider coordinates. D5 must set these only after file validation and
-   successful private storage. No additional capture-time column is required
-   by the current prompt.
+   successful private storage. No additional capture-time column is required.
 
 ## 4. File storage, privacy, and local setup
 
@@ -635,16 +599,103 @@ phone over HTTPS or localhost to grant camera and geolocation permissions,
 then verify denied-permission and offline fallbacks. Do not claim real-device
 coverage from desktop simulation.
 
-## 10. D0 exit checklist
+## 10. F2 guarded schema-loader status
+
+The loader is [LoadTestSchema.php](../backend/app/Console/Commands/LoadTestSchema.php)
+and is invoked from `backend/` as:
+
+```powershell
+php artisan salo:test-schema-load --dry-run
+```
+
+It reads the root SQL and selects exactly 50 `CREATE TABLE` statements and
+the two seed `INSERT`s for `platform_settings` and `shifts`. It skips
+`DROP DATABASE`, `CREATE DATABASE`, `USE`, and `SET` statements, and refuses
+unexpected SQL. Before it connects, it requires `APP_ENV=testing`, MySQL or
+MariaDB, and `DB_DATABASE` and Laravel's configured database both equal to
+`salo_test`. It then checks `SELECT DATABASE()` is also `salo_test` and that
+the database has no tables. Applying requires `--apply` and interactive
+confirmation. `phpunit.xml` and tests remain unchanged.
+
+Dry-run result: the read-only preflight confirmed `DB_DATABASE =
+SELECT DATABASE() = salo_test` and found zero tables. It printed the 52
+allowlisted statement names, skipped the destructive database/setup
+statements, and exited successfully. **No table DDL or seed INSERT was
+executed.** The owner-reported settings added to live `salo` were not queried
+or modified.
+
+Exact statement list printed:
+
+```text
+01. CREATE TABLE users
+02. CREATE TABLE platform_admins
+03. CREATE TABLE auth_tokens
+04. CREATE TABLE psgc_locations
+05. CREATE TABLE platform_settings
+06. CREATE TABLE cuisine_types
+07. CREATE TABLE restaurants
+08. CREATE TABLE audit_logs
+09. CREATE TABLE notifications
+10. CREATE TABLE restaurant_applications
+11. CREATE TABLE application_documents
+12. CREATE TABLE restaurant_photos
+13. CREATE TABLE restaurant_staff
+14. CREATE TABLE invitations
+15. CREATE TABLE restaurant_cuisines
+16. CREATE TABLE operating_hours
+17. CREATE TABLE closure_dates
+18. CREATE TABLE reservation_settings
+19. CREATE TABLE menu_categories
+20. CREATE TABLE menu_items
+21. CREATE TABLE dietary_tags
+22. CREATE TABLE menu_item_dietary_tags
+23. CREATE TABLE user_addresses
+24. CREATE TABLE carts
+25. CREATE TABLE cart_items
+26. CREATE TABLE checkout_groups
+27. CREATE TABLE orders
+28. CREATE TABLE order_items
+29. CREATE TABLE order_status_histories
+30. CREATE TABLE payments
+31. CREATE TABLE discounts
+32. CREATE TABLE discount_redemptions
+33. CREATE TABLE restaurant_tables
+34. CREATE TABLE reservations
+35. CREATE TABLE restaurant_reviews
+36. CREATE TABLE favorite_restaurants
+37. CREATE TABLE favorite_menu_items
+38. CREATE TABLE support_tickets
+39. CREATE TABLE ticket_messages
+40. CREATE TABLE zones
+41. CREATE TABLE shifts
+42. CREATE TABLE zone_shift_capacities
+43. CREATE TABLE rider_profiles
+44. CREATE TABLE rider_documents
+45. CREATE TABLE rider_preferred_shifts
+46. CREATE TABLE rider_shift_assignments
+47. CREATE TABLE deliveries
+48. CREATE TABLE delivery_offers
+49. CREATE TABLE rider_reviews
+50. CREATE TABLE co_owner_requests
+51. INSERT INTO platform_settings
+52. INSERT INTO shifts
+Skipped: DROP DATABASE, CREATE DATABASE, USE, and SET statements.
+Preflight passed: DB_DATABASE and SELECT DATABASE() are salo_test; the database is empty.
+Dry run complete. No SQL statements were executed.
+```
+
+The only warning was that the local PHP CLI loads the OpenSSL module twice;
+the dry run still exited successfully.
+
+## 11. D0/F2 exit checklist
 
 - [x] Read the driver prompt, supplied addendum text, Plan v2, and root SQL.
 - [x] Audit auth/OTP/modes, permissions, Admin rider queue, zones/shifts,
   orders/tracking, notifications, email support, local storage, and test
   configuration from source.
-- [x] Record rider schema fit and conditional schema proposal without applying
-  changes.
+- [x] Record rider schema fit; recurring shifts use the existing schema.
 - [x] Document rider flows, endpoint contract, cache keys, scheduler jobs,
   private file design/setup, sample command plan, and responsive layouts.
-- [x] No code changes, migrations, tests, live database connections, or sample
-  data operations were performed.
+- [x] Implement the guarded `salo_test` schema loader.
+- [x] Run only its dry run; no DDL, seed INSERT, migration, or test was run.
 - [ ] Stop for owner review before D1.
