@@ -50,12 +50,40 @@ class AddressService
             ?? $attributes['psgc_code']
             ?? $current['psgc_code']
             ?? null;
-        if (! is_string($barangayCode) || $barangayCode === '') {
-            $this->invalid('barangay_code', 'Choose a valid PSGC barangay.');
-        }
         if (isset($attributes['barangay_code'], $attributes['psgc_code'])
             && $attributes['barangay_code'] !== $attributes['psgc_code']) {
             $this->invalid('barangay_code', 'The barangay code fields must identify the same location.');
+        }
+
+        $street = $merged['street'] ?? null;
+        if (! is_string($street) || trim($street) === '') {
+            $this->invalid('street', 'Street is required.');
+        }
+
+        if (! is_string($barangayCode) || $barangayCode === '') {
+            $normalized = $attributes;
+            unset(
+                $normalized['province_code'],
+                $normalized['city_code'],
+                $normalized['barangay_code'],
+                $normalized['country_code'],
+                $normalized['formatted_address'],
+            );
+            $normalized['psgc_code'] = null;
+            $normalized['country_code'] = 'PH';
+            $normalized['street'] = trim($street);
+            [$label, $addressType] = $this->labelMapping($merged);
+            $customLabel = $label === 'Other'
+                ? trim((string) ($merged['custom_label'] ?? ''))
+                : '';
+            if ($label === 'Other' && $customLabel === '') {
+                $this->invalid('custom_label', 'Enter a custom label for an Other address.');
+            }
+            $normalized['label'] = $label;
+            $normalized['address_type'] = $addressType;
+            $normalized['custom_label'] = $label === 'Other' ? $customLabel : null;
+
+            return $normalized;
         }
 
         $hierarchy = $this->locations->hierarchyForCode($barangayCode);
@@ -148,7 +176,7 @@ class AddressService
         }
 
         if (is_string($type) && $type !== $mapping[1]) {
-            $this->invalid('address_type', 'The address type does not match the selected label.');
+            $type = $mapping[1];
         }
 
         return $mapping;
