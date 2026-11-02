@@ -24,6 +24,7 @@ const ForgotPasswordPage = lazy(() => import('./pages/ForgotPassword/ForgotPassw
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmail/VerifyEmailPage'));
 const ProfilePage = lazy(() => import('./pages/Profile/ProfilePage'));
 const SettingsPage = lazy(() => import('./pages/Settings/SettingsPage'));
+const SupportPage = lazy(() => import('./pages/Support/SupportPage'));
 const PartnerApplyPage = lazy(() => import('./pages/PartnerApply/PartnerApplyPage'));
 const RiderApplyPage = lazy(() => import('./pages/RiderApply/RiderApplyPage'));
 const BusinessPage = lazy(() => import('./pages/Business/BusinessPage'));
@@ -117,6 +118,7 @@ function App() {
               <Route path="/verify-email" element={<Layout><VerifyEmailPage /></Layout>} />
               <Route path="/profile" element={<Layout><GuestFeatureRoute><ProfilePage /></GuestFeatureRoute></Layout>} />
               <Route path="/settings" element={<Layout><GuestFeatureRoute><SettingsPage /></GuestFeatureRoute></Layout>} />
+              <Route path="/support" element={<Layout><GuestFeatureRoute><SupportPage /></GuestFeatureRoute></Layout>} />
               <Route path="/partner/apply" element={<Layout><PartnerApplyPage /></Layout>} />
               <Route path="/rider/apply" element={<Layout><RiderApplyPage /></Layout>} />
               <Route path="/dashboard" element={<RequireCapability capability={USER_ROLES.RESTAURANT_OWNER}><Navigate to="/business" replace /></RequireCapability>} />

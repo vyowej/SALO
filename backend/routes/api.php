@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\Customer\CustomerCheckoutController;
 use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerOrderController;
 use App\Http\Controllers\Api\V1\Customer\CustomerReservationController;
+use App\Http\Controllers\Api\V1\Customer\CustomerSupportTicketController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use App\Http\Controllers\Api\V1\Customer\RestaurantDiscoveryController;
 use App\Http\Controllers\Api\V1\Customer\SettingsController;
@@ -124,6 +125,12 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::get('/notifications', [CustomerNotificationController::class, 'index']);
             Route::patch('/notifications/{notification}/read', [CustomerNotificationController::class, 'markRead'])
                 ->whereNumber('notification');
+            Route::get('/support/tickets', [CustomerSupportTicketController::class, 'index']);
+            Route::post('/support/tickets', [CustomerSupportTicketController::class, 'store']);
+            Route::get('/support/tickets/{ticket}/messages', [CustomerSupportTicketController::class, 'messages'])
+                ->whereNumber('ticket');
+            Route::post('/support/tickets/{ticket}/messages', [CustomerSupportTicketController::class, 'reply'])
+                ->whereNumber('ticket');
             Route::post('/discounts/validate', [CustomerCheckoutController::class, 'validateDiscount'])
                 ->middleware('throttle:30,1');
             Route::get('/favorites', [CustomerFavoriteController::class, 'index']);
