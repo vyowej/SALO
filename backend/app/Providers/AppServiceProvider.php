@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Restaurant;
+use App\Models\SupportTicket;
 use App\Models\UserAddress;
 use App\Models\Cart;
 use App\Models\CustomerNotification;
@@ -15,6 +16,7 @@ use App\Policies\CustomerReservationPolicy;
 use App\Models\PsgcLocation;
 use App\Policies\PsgcLocationPolicy;
 use App\Policies\RestaurantPagePolicy;
+use App\Policies\SupportTicketPolicy;
 use App\Policies\UserAddressPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -44,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Cart::class, CustomerCartPolicy::class);
         Gate::policy(Order::class, CustomerOrderPolicy::class);
         Gate::policy(CustomerNotification::class, CustomerNotificationPolicy::class);
+        Gate::policy(SupportTicket::class, SupportTicketPolicy::class);
         Gate::policy(Reservation::class, CustomerReservationPolicy::class);
 
         RateLimiter::for('auth-login', function (Request $request) {
