@@ -206,13 +206,20 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
 
             $details = $locked->draft_details ?? [];
             $street = trim((string) ($details['street'] ?? ''));
-            $location = PsgcLocation::query()
-                ->with('parent.parent.parent.parent')
-                ->find($details['psgc_code'] ?? null);
-            if ($location === null || $street === '') {
-                throw ValidationException::withMessages([
-                    'draft_details.psgc_code' => ['Choose a valid PSGC location and street address before approval.'],
-                ]);
+            $location = null;
+            $psgcCode = $details['psgc_code'] ?? null;
+            if (is_string($psgcCode) && $psgcCode !== '') {
+                $location = PsgcLocation::query()
+                    ->with('parent.parent.parent.parent')
+                    ->find($psgcCode);
+                if ($location === null && $street !== '') {
+                    throw ValidationException::withMessages([
+                        'draft_details.psgc_code' => ['Choose a valid PSGC location and street address before approval.'],
+                    ]);
+                }
+            }
+            if ($location !== null && $street === '') {
+                $street = '';
             }
             $houseNumber = trim((string) ($details['house_no'] ?? ''));
 
@@ -224,16 +231,18 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'business_email' => $details['business_email'],
                 'business_email_verified_at' => $details['business_email_verified_at'] ?? null,
                 'country_code' => 'PH',
-                'psgc_code' => $details['psgc_code'],
-                'street' => $street,
+                'psgc_code' => $location?->getKey() ?? null,
+                'street' => $street !== '' ? $street : null,
                 'house_no' => $houseNumber !== '' ? $houseNumber : null,
-                'formatted_address' => $this->addressFormatter->format(
-                    $location,
-                    $street,
-                    $houseNumber !== '' ? $houseNumber : null,
-                ),
-                'latitude' => $details['latitude'],
-                'longitude' => $details['longitude'],
+                'formatted_address' => $location !== null && $street !== ''
+                    ? $this->addressFormatter->format(
+                        $location,
+                        $street,
+                        $houseNumber !== '' ? $houseNumber : null,
+                    )
+                    : null,
+                'latitude' => $details['latitude'] ?? null,
+                'longitude' => $details['longitude'] ?? null,
                 'logo_path' => $details['logo_path'] ?? null,
                 'cover_path' => $details['cover_path'] ?? null,
                 'is_24_7' => (bool) ($details['is_24_7'] ?? false),
