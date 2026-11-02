@@ -8,10 +8,13 @@ use App\Models\Restaurant;
 use App\Models\RestaurantStaff;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class TeamAndAuditTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -117,10 +120,8 @@ class TeamAndAuditTest extends TestCase
     {
         [$firstOwner, $firstRestaurant] = $this->createOwnerAndRestaurant();
         $secondOwner = $this->createUser('second.owner@example.test');
-        $secondRestaurant = Restaurant::query()->create([
-            'owner_user_id' => $secondOwner->getKey(),
+        $secondRestaurant = $this->createAuthoritativeRestaurant($secondOwner, [
             'name' => 'Second Team Restaurant',
-            'status' => 'approved',
         ]);
         $email = 'multi.restaurant@example.test';
         $firstInvite = $this->businessRequest($firstOwner, $firstRestaurant)
@@ -159,7 +160,6 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $manager->getKey(),
             'staff_role' => 'manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $staffMember = $this->createUser('staff-'.uniqid().'@example.test');
         $staffMembership = RestaurantStaff::query()->create([
@@ -167,7 +167,6 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $staffMember->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $this->businessRequest($manager, $restaurant)
             ->getJson($this->path($restaurant, '/team'))
@@ -214,7 +213,6 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
 
         $this->businessRequest($owner, $restaurant)
@@ -302,7 +300,6 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $manager->getKey(),
             'staff_role' => 'manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
 
         $this->businessRequest($owner, $restaurant)
@@ -345,7 +342,6 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $manager->getKey(),
             'staff_role' => 'manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $admin = $this->createUser('admin@example.test');
         PlatformAdmin::query()->create([
@@ -374,26 +370,20 @@ class TeamAndAuditTest extends TestCase
             'user_id' => $member->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $this->assertTrue($member->hasRestaurantMembership($restaurant));
-        $secondRestaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $secondRestaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Another Restaurant',
-            'status' => 'approved',
         ]);
         $multiRoleOwner = $this->createUser('multi-role-owner@example.test');
-        $ownedRestaurant = Restaurant::query()->create([
-            'owner_user_id' => $multiRoleOwner->getKey(),
+        $ownedRestaurant = $this->createAuthoritativeRestaurant($multiRoleOwner, [
             'name' => 'Owned Restaurant',
-            'status' => 'approved',
         ]);
         RestaurantStaff::query()->create([
             'restaurant_id' => $secondRestaurant->getKey(),
             'user_id' => $multiRoleOwner->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
 
         $this->businessRequest($owner, $restaurant)
@@ -454,10 +444,8 @@ class TeamAndAuditTest extends TestCase
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Team Test Restaurant',
-            'status' => 'approved',
         ]);
 
         return [$owner, $restaurant];

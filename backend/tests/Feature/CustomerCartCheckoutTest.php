@@ -7,21 +7,19 @@ use App\Models\MenuItem;
 use App\Models\CheckoutGroup;
 use App\Models\Discount;
 use App\Models\Order;
-use App\Models\PlatformSetting;
 use App\Models\Restaurant;
 use App\Models\User;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class CustomerCartCheckoutTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->createCartTables();
-        $this->seedCheckoutSettings();
     }
 
     public function test_cart_items_are_persisted_and_expiration_is_refreshed(): void
@@ -91,7 +89,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_checkout_places_atomically_and_replays_the_same_idempotency_key(): void
     {
-        $this->createRootOrderTables();
         $customer = $this->createCustomer(true);
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $item->forceFill([
@@ -145,7 +142,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_checkout_rejects_an_unavailable_item_without_creating_orders(): void
     {
-        $this->createRootOrderTables();
         $customer = $this->createCustomer(true);
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $item->forceFill([
@@ -177,8 +173,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_customer_order_history_is_owned_and_cancel_restores_stock(): void
     {
-        $this->createRootOrderTables();
-        $this->createCustomerOrderTables();
         $customer = $this->createCustomer();
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $item->forceFill(['daily_quantity' => 5, 'quantity_left' => 1])->save();
@@ -219,8 +213,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_customer_receipt_confirmation_and_restaurant_review_are_single_use(): void
     {
-        $this->createRootOrderTables();
-        $this->createCustomerOrderTables();
         $customer = $this->createCustomer();
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $order = $this->createCustomerOrder($customer, $restaurant, $item, 'delivered');
@@ -254,7 +246,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_customer_notifications_are_scoped_and_can_be_marked_read(): void
     {
-        $this->createCustomerOrderTables();
         $customer = $this->createCustomer();
         $otherCustomer = $this->createCustomer();
         $notificationId = DB::table('notifications')->insertGetId([
@@ -289,7 +280,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_checkout_uses_a_current_database_discount_and_records_its_redemption(): void
     {
-        $this->createRootOrderTables();
         $customer = $this->createCustomer(true);
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $this->actingAs($customer, 'sanctum')
@@ -339,7 +329,6 @@ class CustomerCartCheckoutTest extends TestCase
 
     public function test_first_order_discount_is_fixed_value_and_rejected_after_a_prior_order(): void
     {
-        $this->createRootOrderTables();
         $customer = $this->createCustomer(true);
         [$restaurant, $item] = $this->createRestaurantAndItem();
         $discount = Discount::query()->create([
@@ -398,165 +387,6 @@ class CustomerCartCheckoutTest extends TestCase
         ]);
     }
 
-    private function createCartTables(): void
-    {
-        Schema::create('carts', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('restaurant_id');
-            $table->dateTime('expires_at')->nullable();
-            $table->timestamp('updated_at')->nullable();
-            $table->unique(['user_id', 'restaurant_id']);
-        });
-        Schema::create('cart_items', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('cart_id');
-            $table->unsignedBigInteger('item_id');
-            $table->unsignedSmallInteger('quantity');
-            $table->string('note', 255)->nullable();
-            $table->unique(['cart_id', 'item_id']);
-        });
-    }
-
-    private function createRootOrderTables(): void
-    {
-        Schema::disableForeignKeyConstraints();
-        foreach (['payments', 'discount_redemptions', 'discounts', 'order_status_histories', 'order_items', 'orders', 'checkout_groups'] as $table) {
-            Schema::dropIfExists($table);
-        }
-        Schema::enableForeignKeyConstraints();
-
-        Schema::create('checkout_groups', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->char('reference_code', 12)->unique();
-            $table->string('idempotency_key', 64);
-            $table->dateTime('placed_at');
-            $table->unique(['user_id', 'idempotency_key']);
-        });
-        Schema::create('discounts', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('restaurant_id')->nullable();
-            $table->unsignedBigInteger('created_by');
-            $table->string('funded_by');
-            $table->string('code', 40);
-            $table->string('name', 120);
-            $table->string('type', 30);
-            $table->decimal('value', 10, 2)->default(0);
-            $table->decimal('min_order_amount', 10, 2)->default(0);
-            $table->decimal('max_discount', 10, 2)->nullable();
-            $table->dateTime('starts_at');
-            $table->dateTime('ends_at');
-            $table->unsignedInteger('usage_limit')->nullable();
-            $table->unsignedInteger('per_customer_limit')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
-        Schema::create('orders', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('checkout_id');
-            $table->unsignedBigInteger('restaurant_id');
-            $table->unsignedBigInteger('delivery_address_id')->nullable();
-            $table->char('reference_code', 12)->unique();
-            $table->string('order_type', 20);
-            $table->dateTime('scheduled_for')->nullable();
-            $table->string('status', 30);
-            $table->string('recipient_name', 120);
-            $table->string('recipient_phone', 20);
-            $table->string('delivery_address_text', 300)->nullable();
-            $table->char('delivery_country_code', 2)->nullable();
-            $table->decimal('delivery_lat', 9, 6)->nullable();
-            $table->decimal('delivery_lng', 9, 6)->nullable();
-            $table->decimal('subtotal', 10, 2);
-            $table->decimal('delivery_fee', 10, 2);
-            $table->decimal('service_fee', 10, 2);
-            $table->decimal('discount_amount', 10, 2);
-            $table->decimal('total_amount', 10, 2);
-            $table->string('cancelled_by_type')->nullable();
-            $table->unsignedBigInteger('cancelled_by_user_id')->nullable();
-            $table->string('cancel_reason')->nullable();
-            $table->dateTime('placed_at');
-            $table->dateTime('completed_at')->nullable();
-            $table->dateTime('customer_confirmed_at')->nullable();
-            $table->string('confirmation_method')->nullable();
-            $table->timestamps();
-        });
-        Schema::create('order_items', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('order_id');
-            $table->unsignedBigInteger('item_id');
-            $table->string('item_name_snapshot', 120);
-            $table->decimal('unit_price_snapshot', 10, 2);
-            $table->unsignedSmallInteger('quantity');
-            $table->string('note', 255)->nullable();
-        });
-        Schema::create('order_status_histories', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('order_id');
-            $table->unsignedBigInteger('changed_by')->nullable();
-            $table->string('from_status', 20)->nullable();
-            $table->string('to_status', 20);
-            $table->string('reason', 255)->nullable();
-            $table->dateTime('changed_at');
-        });
-        Schema::create('payments', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('order_id');
-            $table->string('method', 30);
-            $table->string('status', 20);
-            $table->decimal('amount', 10, 2);
-            $table->string('provider', 40)->nullable();
-            $table->string('provider_reference', 100)->nullable();
-            $table->dateTime('paid_at')->nullable();
-            $table->timestamps();
-        });
-        Schema::create('discount_redemptions', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('discount_id');
-            $table->unsignedBigInteger('order_id')->unique();
-            $table->unsignedBigInteger('user_id');
-            $table->decimal('amount_applied', 10, 2);
-            $table->string('status', 20)->default('applied');
-            $table->timestamps();
-        });
-    }
-
-    private function createCustomerOrderTables(): void
-    {
-        if (!Schema::hasTable('restaurant_reviews')) {
-            Schema::create('restaurant_reviews', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('order_id')->unique();
-                $table->unsignedBigInteger('user_id');
-                $table->unsignedTinyInteger('rating');
-                $table->string('comment', 500)->nullable();
-                $table->string('reply', 500)->nullable();
-                $table->dateTime('replied_at')->nullable();
-                $table->boolean('is_hidden')->default(false);
-                $table->timestamp('created_at')->nullable();
-            });
-        }
-        if (!Schema::hasTable('notifications')) {
-            Schema::create('notifications', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('user_id');
-                $table->string('type', 60);
-                $table->string('message', 255);
-                $table->string('related_reference', 60)->nullable();
-                $table->dateTime('read_at')->nullable();
-                $table->dateTime('created_at')->nullable();
-            });
-        }
-        if (!Schema::hasTable('restaurant_staff')) {
-            Schema::create('restaurant_staff', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('restaurant_id');
-                $table->unsignedBigInteger('user_id');
-                $table->string('status', 20);
-            });
-        }
-    }
-
     private function createCustomerOrder(User $customer, Restaurant $restaurant, MenuItem $item, string $status, int $quantity = 1): Order
     {
         $checkoutGroup = CheckoutGroup::query()->create([
@@ -596,24 +426,6 @@ class CustomerCartCheckoutTest extends TestCase
         return $order->fresh();
     }
 
-    private function seedCheckoutSettings(): void
-    {
-        foreach ([
-            'delivery_base_fee' => '35',
-            'delivery_free_km' => '2',
-            'delivery_fee_per_km' => '10',
-            'service_fee_percent' => '5',
-            'max_delivery_radius_km' => '10',
-            'default_prep_minutes' => '20',
-            'handoff_buffer_minutes' => '3',
-            'avg_speed_kmh' => '20',
-            'detour_factor' => '1.3',
-            'cart_expiry_days' => '7',
-        ] as $key => $value) {
-            PlatformSetting::query()->create(['setting_key' => $key, 'value' => $value]);
-        }
-    }
-
     private function createCustomer(bool $verified = false): User
     {
         return User::query()->create([
@@ -630,12 +442,9 @@ class CustomerCartCheckoutTest extends TestCase
     private function createRestaurantAndItem(): array
     {
         $owner = $this->createCustomer();
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'C3 Test Restaurant',
-            'status' => 'approved',
             'is_published' => true,
-            'is_24_7' => true,
             'latitude' => 14.6,
             'longitude' => 121.0,
             'delivery_radius_km' => 10,

@@ -10,10 +10,13 @@ use App\Models\User;
 use App\Models\ClosureDate;
 use App\Models\OperatingHour;
 use Illuminate\Support\Carbon;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class CustomerReservationTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     public function test_verified_customer_can_check_slots_and_create_a_manual_reservation(): void
     {
         $customer = $this->createCustomer();
@@ -198,12 +201,9 @@ class CustomerReservationTest extends TestCase
     private function createRestaurant(string $confirmMode = 'manual'): array
     {
         $owner = $this->createCustomer();
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Customer Reservation Test',
-            'status' => 'approved',
             'is_published' => true,
-            'is_24_7' => true,
         ]);
         ReservationSetting::query()->create([
             'restaurant_id' => $restaurant->getKey(),

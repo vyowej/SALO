@@ -7,14 +7,15 @@ use App\Models\MenuCategory;
 use App\Models\MenuItem;
 use App\Models\Restaurant;
 use App\Models\User;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class RestaurantDiscoveryTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -38,11 +39,11 @@ class RestaurantDiscoveryTest extends TestCase
     {
         $customer = $this->createUser();
         $published = $this->createRestaurant('Visible Restaurant', 'approved', true);
-        $pending = $this->createRestaurant('Pending Restaurant', 'pending', true);
+        $inactive = $this->createRestaurant('Inactive Restaurant', 'inactive', true);
         $unpublished = $this->createRestaurant('Unpublished Restaurant', 'approved', false);
         $cuisine = CuisineType::query()->create(['name' => 'Filipino', 'is_filipino' => true]);
         $published->cuisines()->attach($cuisine->getKey());
-        $pending->cuisines()->attach($cuisine->getKey());
+        $inactive->cuisines()->attach($cuisine->getKey());
         $unpublished->cuisines()->attach($cuisine->getKey());
 
         $this->actingAs($customer, 'sanctum')
@@ -146,19 +147,6 @@ class RestaurantDiscoveryTest extends TestCase
 
     public function test_customer_favorites_are_persisted_and_scoped_to_the_authenticated_user(): void
     {
-        Schema::create('favorite_restaurants', function (Blueprint $table): void {
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('restaurant_id');
-            $table->timestamp('created_at')->nullable();
-            $table->primary(['user_id', 'restaurant_id']);
-        });
-        Schema::create('favorite_menu_items', function (Blueprint $table): void {
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('item_id');
-            $table->timestamp('created_at')->nullable();
-            $table->primary(['user_id', 'item_id']);
-        });
-
         $customer = $this->createUser();
         $otherCustomer = $this->createUser();
         $restaurant = $this->createRestaurant('Favorite Restaurant', 'approved', true);
@@ -218,12 +206,10 @@ class RestaurantDiscoveryTest extends TestCase
     {
         $owner = $this->createUser();
 
-        return Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        return $this->createAuthoritativeRestaurant($owner, [
             'name' => $name,
             'status' => $status,
             'is_published' => $published,
-            'is_24_7' => true,
         ]);
     }
 }

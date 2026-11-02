@@ -8,10 +8,13 @@ use App\Models\RestaurantApplication;
 use App\Models\RestaurantStaff;
 use App\Models\User;
 use App\Models\PlatformAdmin;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class RestaurantPageTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -102,7 +105,6 @@ class RestaurantPageTest extends TestCase
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $restaurant->forceFill(['is_published' => true])->save();
 
@@ -218,12 +220,9 @@ class RestaurantPageTest extends TestCase
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner-'.uniqid().'@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Test Restaurant',
             'legal_name' => 'Original Legal Name',
-            'status' => 'approved',
-            'is_24_7' => true,
         ]);
 
         return [$owner, $restaurant];

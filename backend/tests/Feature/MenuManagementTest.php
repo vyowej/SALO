@@ -13,9 +13,12 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\AuthoritativeFixtures;
 
 class MenuManagementTest extends \Tests\TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -102,7 +105,6 @@ class MenuManagementTest extends \Tests\TestCase
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $manager = $this->createUser('manager-'.uniqid().'@example.test');
         RestaurantStaff::query()->create([
@@ -110,7 +112,6 @@ class MenuManagementTest extends \Tests\TestCase
             'user_id' => $manager->getKey(),
             'staff_role' => 'manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
 
         $this->businessRequest($manager, $restaurant)
@@ -389,11 +390,8 @@ class MenuManagementTest extends \Tests\TestCase
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner-'.uniqid().'@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Test Restaurant',
-            'status' => 'approved',
-            'is_24_7' => true,
         ]);
 
         return [$owner, $restaurant];
