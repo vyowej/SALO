@@ -38,9 +38,9 @@ class AddressRequest extends FormRequest
         return [
             'country_code' => ['sometimes', 'in:PH'],
             'province_code' => ['sometimes', 'nullable', 'string', 'max:12'],
-            'city_code' => [$legacyLeafOnly ? 'sometimes' : 'required_with:barangay_code', 'nullable', 'string', 'max:12'],
-            'barangay_code' => [$this->isMethod('post') && ! $legacyLeafOnly ? 'required' : 'sometimes', 'string', 'max:12'],
-            'psgc_code' => [$this->isMethod('post') && $legacyLeafOnly ? 'required' : 'sometimes', 'string', 'max:12'],
+            'city_code' => ['sometimes', 'nullable', 'string', 'max:12'],
+            'barangay_code' => ['sometimes', 'nullable', 'string', 'max:12'],
+            'psgc_code' => ['sometimes', 'nullable', 'string', 'max:12'],
             'label' => ['sometimes', 'string', 'in:Home,Work,Church,School,Other'],
             'address_type' => ['sometimes', 'in:home,work,church,other'],
             'custom_label' => ['sometimes', 'nullable', 'string', 'max:60'],
