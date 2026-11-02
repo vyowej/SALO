@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
         $middleware->alias([
+            'auth' => \App\Http\Middleware\Authenticate::class,
             'force.json' => ForceJson::class,
             'capability' => EnsurePlatformCapability::class,
             'restaurant.access' => EnsureRestaurantMembership::class,
