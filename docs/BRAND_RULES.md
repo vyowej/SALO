@@ -9,4 +9,3 @@
 - The tagline is part of the supplied artwork. At the smallest header size it may be difficult to read; do not edit the artwork to compensate. Request a no-tagline variant if needed.
 - Use `salo_logo_final.png` in light mode and `salo_logo_dm_final.png` in dark mode. Keep both originals unchanged in `branding-originals/`; generated theme variants belong in `src/assets/brand/`.
 - Keep the original supplied PNGs unchanged in `branding-originals/`. Trimmed masters and display-density variants belong in `src/assets/brand/`.
-- The one-time asset preparation utility is `scripts/prepare_brand_assets.py`. It requires Pillow and is not part of the frontend runtime.
