@@ -20,6 +20,17 @@ class AuthService
         private readonly SessionRepository $sessions,
     ) {}
 
+    private function ensureSession(Request $request): void
+    {
+        if ($request->hasSession()) {
+            return;
+        }
+
+        $session = app('session')->driver();
+        $session->start();
+        $request->setLaravelSession($session);
+    }
+
     public function register(array $data, Request $request): User
     {
         $email = Str::lower(trim($data['email']));
@@ -45,6 +56,7 @@ class AuthService
         }
 
         $this->tokens->sendEmailVerification($user);
+        $this->ensureSession($request);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
         $request->session()->put('salo.active_mode', 'customer');
@@ -62,6 +74,7 @@ class AuthService
         }
 
         $user = $this->users->update($user, ['last_login_at' => now()]);
+        $this->ensureSession($request);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
         $request->session()->put('salo.active_mode', 'customer');
@@ -72,6 +85,7 @@ class AuthService
 
     public function logout(Request $request): void
     {
+        $this->ensureSession($request);
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
