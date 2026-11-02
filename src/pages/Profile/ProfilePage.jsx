@@ -78,7 +78,13 @@ export default function ProfilePage() {
   const saveMainAddress = async () => {
     setSaveError('');
     setSavedMessage('');
-    if (!addressDraft.psgc_code || !addressDraft.region || !addressDraft.city_municipality || !addressDraft.barangay || !addressDraft.street.trim()) {
+    const hasPartialAddressLocation = Boolean(addressDraft.psgc_code || addressDraft.region || addressDraft.city_municipality || addressDraft.barangay);
+    const hasCompleteAddressLocation = Boolean(addressDraft.psgc_code || (addressDraft.region && addressDraft.city_municipality && addressDraft.barangay));
+    if (!addressDraft.street.trim()) {
+      setSaveError('Enter a street for this address before saving.');
+      return;
+    }
+    if (hasPartialAddressLocation && !hasCompleteAddressLocation) {
       setSaveError('Choose a barangay and complete the city, region, and street before saving.');
       return;
     }
