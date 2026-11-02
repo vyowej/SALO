@@ -196,7 +196,7 @@ export const restaurantService = {
 
   async getAllRestaurants() {
     if (!config.useMock) {
-      const response = await apiRequest('/restaurants?per_page=100', { preserveEnvelope: true });
+      const response = await apiRequest('/restaurants?per_page=30', { preserveEnvelope: true });
       return (response?.data || []).map(normalizeCustomerRestaurant);
     }
     await wait(config.mockDelay + 150);
