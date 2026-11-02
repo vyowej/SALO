@@ -18,8 +18,11 @@ return new class extends Migration
             $table->string('contact_number', 40)->nullable();
             $table->string('business_email', 254)->nullable();
             $table->timestamp('business_email_verified_at')->nullable();
+            $table->char('country_code', 2)->default('PH');
             $table->string('psgc_code', 10)->nullable();
             $table->string('street', 255)->nullable();
+            $table->string('house_no', 40)->nullable();
+            $table->string('formatted_address', 300)->nullable();
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             $table->string('logo_path', 255)->nullable();
