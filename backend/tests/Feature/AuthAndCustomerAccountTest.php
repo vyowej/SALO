@@ -15,10 +15,13 @@ use App\Repositories\Stub\InMemoryAddressRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class AuthAndCustomerAccountTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -81,10 +84,8 @@ class AuthAndCustomerAccountTest extends TestCase
     {
         $user = $this->createUser('multi-capability@example.test');
         $restaurantOwner = $this->createUser('restaurant-owner@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $restaurantOwner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($restaurantOwner, [
             'name' => 'Membership Restaurant',
-            'status' => 'approved',
         ]);
         RestaurantStaff::query()->create([
             'restaurant_id' => $restaurant->getKey(),

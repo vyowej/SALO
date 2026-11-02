@@ -12,9 +12,12 @@ use App\Models\User;
 use App\Services\ReservationAvailabilityService;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Tests\Support\AuthoritativeFixtures;
 
 class BusinessReservationManagementTest extends \Tests\TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -86,7 +89,6 @@ class BusinessReservationManagementTest extends \Tests\TestCase
             'user_id' => $staff->getKey(),
             'staff_role' => 'staff',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $this->businessRequest($staff, $restaurant)
             ->getJson($this->tablePath($restaurant))
@@ -98,7 +100,6 @@ class BusinessReservationManagementTest extends \Tests\TestCase
             'user_id' => $reservationManager->getKey(),
             'staff_role' => 'reservation_manager',
             'status' => 'active',
-            'joined_at' => now(),
         ]);
         $this->businessRequest($reservationManager, $restaurant)
             ->getJson($this->tablePath($restaurant))
@@ -224,11 +225,8 @@ class BusinessReservationManagementTest extends \Tests\TestCase
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner-'.uniqid().'@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Test Restaurant',
-            'status' => 'approved',
-            'is_24_7' => true,
         ]);
 
         return [$owner, $restaurant];

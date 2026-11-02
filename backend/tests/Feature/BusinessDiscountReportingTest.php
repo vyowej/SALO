@@ -11,9 +11,12 @@ use App\Models\RestaurantTable;
 use App\Models\User;
 use App\Repositories\Contracts\RestaurantPageRepository;
 use Illuminate\Support\Carbon;
+use Tests\Support\AuthoritativeFixtures;
 
 class BusinessDiscountReportingTest extends \Tests\TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -196,11 +199,8 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
     private function createOwnerAndRestaurant(): array
     {
         $owner = $this->createUser('owner-'.uniqid().'@example.test');
-        $restaurant = Restaurant::query()->create([
-            'owner_user_id' => $owner->getKey(),
+        $restaurant = $this->createAuthoritativeRestaurant($owner, [
             'name' => 'Test Restaurant',
-            'status' => 'approved',
-            'is_24_7' => true,
         ]);
 
         return [$owner, $restaurant];
