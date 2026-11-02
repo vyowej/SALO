@@ -32,6 +32,7 @@ const formatApiAddress = (address) => ({
   province: address.province,
   city_municipality: address.city_municipality,
   barangay: address.barangay,
+  psgc_code: address.psgc_code || null,
   street: address.street,
   house_no: address.house_no || null,
   latitude: address.latitude,
