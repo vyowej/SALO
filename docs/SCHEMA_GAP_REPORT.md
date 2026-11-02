@@ -6,8 +6,8 @@
 
 ## F1 findings
 
-- The root SQL declares **49 tables**, with **49 distinct names**; no duplicate `CREATE TABLE` declarations were found.
-- All 49 declared tables exist in the configured live MariaDB 10.11.16 database `salo`.
+- The checked-in root SQL currently declares **50 tables**, with **50 distinct names**; no duplicate `CREATE TABLE` declarations were found. The earlier F1 live comparison recorded 49 tables in `salo`, so the current `co_owner_requests` declaration has not been verified against the live database by this F2 work.
+- The prior F1 report recorded that all 49 then-compared declarations existed in the configured live MariaDB 10.11.16 database `salo`. F2 did not connect to or inspect live `salo`.
 - Read-only `SHOW COLUMNS` comparison found matching column names, types, and nullability for all 49 tables. MariaDB's display normalization accounts for JSON (`LONGTEXT`) and equivalent timestamp/numeric defaults. **No column differences were found.**
 - The comparison was limited to `SHOW COLUMNS`; exhaustive parity for every index, foreign key, check constraint, trigger, and table option is not claimed.
 - The Laravel migration-history table was absent. No migration was applied.
@@ -28,8 +28,61 @@ These database constraints do not validate that a PSGC value is barangay-level o
 
 ## Known product/schema gap
 
-The approved product rule permits several Owners per restaurant: an Owner cannot transfer ownership but can add another Owner; a Manager may request an ownership change that waits for an Owner's confirmation. The root schema currently has one required `restaurants.owner_user_id`, no Owner value in `restaurant_staff.staff_role`, no owner-invitation relation, and no ownership-request representation. Do not implement or enable these workflows until the schema owner decides how to represent them. Do not silently use legacy transfer behavior.
+An earlier F1 review identified a multiple-Owner representation gap. The
+current checked-in root SQL now includes `owner` in `restaurant_staff.staff_role`
+and `invitations.staff_role`, plus the `co_owner_requests` table. This F2 work
+did not query live `salo`; the earlier live comparison covered 49 tables and
+does not establish whether the current `co_owner_requests` declaration is
+present there. Do not infer live-schema support from the root file alone.
+
+## Rider schema proposals
+
+### Proposal 1 — [DECLINED] Date-specific rider shift rosters
+
+**Status:** Declined by the owner on 2026-11-02. Do not apply this SQL.
+
+**Reason:** Rider shifts remain recurring assignments in the existing
+`rider_shift_assignments` table, keyed by rider and shift. The approved rider
+features do not require date-specific roster rows.
+
+**Feature:** Would only have been needed for one-off calendar-date shift
+scheduling, cancellations, or days off. No current rider feature requires it.
+
+Exact SQL preserved for the declined proposal:
+
+```sql
+CREATE TABLE rider_shift_rosters (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  rider_id            BIGINT UNSIGNED NOT NULL,
+  zone_id             BIGINT UNSIGNED NULL,
+  shift_id            BIGINT UNSIGNED NOT NULL,
+  shift_date          DATE NOT NULL,
+  status              ENUM('assigned','waitlisted','cancelled') NOT NULL,
+  assigned_by         ENUM('system','admin') NOT NULL DEFAULT 'system',
+  assigned_by_user_id BIGINT UNSIGNED NULL,
+  reason              VARCHAR(255) NULL,
+  created_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+                      ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_roster_rider_shift_date (rider_id, shift_id, shift_date),
+  KEY idx_roster_capacity (zone_id, shift_id, shift_date, status),
+  CONSTRAINT chk_roster_zone
+    CHECK (status <> 'assigned' OR zone_id IS NOT NULL),
+  CONSTRAINT fk_roster_rider
+    FOREIGN KEY (rider_id) REFERENCES rider_profiles (id),
+  CONSTRAINT fk_roster_zone
+    FOREIGN KEY (zone_id) REFERENCES zones (id),
+  CONSTRAINT fk_roster_shift
+    FOREIGN KEY (shift_id) REFERENCES shifts (id),
+  CONSTRAINT fk_roster_assigned_by
+    FOREIGN KEY (assigned_by_user_id) REFERENCES users (id)
+) ENGINE=InnoDB;
+```
 
 ## Next-step boundary
 
-F1 is documentation and read-only verification only. The dedicated `salo_test` proposal belongs to F2 and has not been applied. Do not start F2 or later steps until separately approved.
+F1 was documentation and read-only verification. F2 added a guarded test-schema
+loader and successfully ran its dry run against the empty `salo_test`; no DDL
+or seed INSERT was executed. `backend/phpunit.xml` remains unchanged. Do not
+apply the printed statements or start D1 until separately approved.
