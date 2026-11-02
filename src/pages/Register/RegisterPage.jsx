@@ -88,6 +88,9 @@ export default function RegisterPage() {
 
   const updateUser = (field, value) => setUser((current) => ({ ...current, [field]: value }));
 
+  const hasPartialAddressLocation = (target) => Boolean(target.psgc_code || target.region || target.city_municipality || target.barangay);
+  const hasCompleteAddressLocation = (target) => Boolean(target.psgc_code || (target.region && target.city_municipality && target.barangay));
+
   const validateStep = async () => {
     setError('');
     if (step === 0) {
@@ -98,7 +101,13 @@ export default function RegisterPage() {
       }
     }
     if (step === 1) {
-      if (!address.psgc_code || !address.region || !address.city_municipality || !address.barangay || !address.street.trim()) {
+      if (!address.street.trim()) {
+        return 'Enter a street for this address.';
+      }
+      if (!address.psgc_code) {
+        return 'Select a valid barangay before continuing.';
+      }
+      if (hasPartialAddressLocation(address) && !hasCompleteAddressLocation(address)) {
         return 'Choose a barangay and complete your city, region, and street.';
       }
       if (address.label === 'Other' && !String(address.custom_label || '').trim()) return 'Enter a custom label for this address.';
