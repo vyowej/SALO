@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL shown in the terminal. Use `npm run build` for a production build and `npm run lint` for ESLint.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173) so the browser uses the same loopback hostname as the API; see [docs/LOCAL_DEVELOPMENT.md](./docs/LOCAL_DEVELOPMENT.md). Use `npm run build` for a production build, `npm run lint` for ESLint, and `npm test` for frontend tests.
 
 ## Main routes
 

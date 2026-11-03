@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { authService } from '../services/authService';
 import { addressService } from '../services/addressService';
 import { setApiRequestContext } from '../services/apiClient';
@@ -79,34 +79,50 @@ const readStoredAuth = () => {
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => config.useMock ? readStoredAuth() : emptyAuth);
   const [authLoading, setAuthLoading] = useState(!config.useMock);
+  const [authConfirmed, setAuthConfirmed] = useState(config.useMock);
   const [authError, setAuthError] = useState('');
+  const authCheckId = useRef(0);
+
+  const checkCurrentUser = useCallback(async () => {
+    if (config.useMock) return;
+    const requestId = ++authCheckId.current;
+    setAuth(emptyAuth);
+    setAuthConfirmed(false);
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      const user = await authService.getCurrentUser();
+      if (requestId !== authCheckId.current) return;
+      setApiRequestContext(user.active_mode, user.selected_restaurant_id);
+      setAuth(authForApiUser(user));
+      setAuthConfirmed(true);
+    } catch (error) {
+      if (requestId !== authCheckId.current) return;
+      setAuth(emptyAuth);
+      setApiRequestContext('customer');
+      if (error?.status === 401) {
+        setAuthConfirmed(true);
+      } else {
+        console.error('Unable to verify the current account.', error);
+        setAuthError('unreachable');
+      }
+    } finally {
+      if (requestId === authCheckId.current) setAuthLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (config.useMock) return undefined;
-    let active = true;
-    authService.getCurrentUser()
-      .then((user) => {
-        if (!active) return;
-        setApiRequestContext(user.active_mode, user.selected_restaurant_id);
-        setAuth(authForApiUser(user));
-        setAuthError('');
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (error.status === 401) {
-          setAuth(emptyAuth);
-          setAuthError('');
-        } else {
-          console.error('Unable to verify the current account.', error);
-          setAuthError('We couldn’t verify your account. Check your connection and try again.');
-        }
-      })
-      .finally(() => { if (active) setAuthLoading(false); });
-    return () => { active = false; };
-  }, []);
+    void Promise.resolve().then(checkCurrentUser);
+    return () => { authCheckId.current += 1; };
+  }, [checkCurrentUser]);
 
   const persistAuth = useCallback((nextAuth) => {
+    authCheckId.current += 1;
     setAuth(nextAuth);
+    setAuthConfirmed(true);
+    setAuthLoading(false);
     setAuthError('');
     if (!config.useMock && nextAuth.user) {
       setApiRequestContext(nextAuth.user.active_mode, nextAuth.user.selected_restaurant_id);
@@ -239,10 +255,16 @@ export function AuthProvider({ children }) {
   }, [auth, persistAuth]);
 
   const clearAuth = useCallback(() => {
+    authCheckId.current += 1;
     if (config.useMock) window.localStorage.removeItem(AUTH_STORAGE_KEY);
     setApiRequestContext('customer');
     setAuth(emptyAuth);
+    setAuthConfirmed(true);
+    setAuthLoading(false);
+    setAuthError('');
   }, []);
+
+  const dismissAuthError = useCallback(() => setAuthError(''), []);
 
   const logout = useCallback(async () => {
     await authService.logout();
@@ -259,10 +281,13 @@ export function AuthProvider({ children }) {
     capabilities: auth.capabilities,
     userRole: auth.activeView,
     activeView: auth.activeView,
-    isLoggedIn: Boolean(auth.user),
+    isLoggedIn: authConfirmed && Boolean(auth.user),
     emailVerified: auth.emailVerified,
     authLoading,
+    authConfirmed,
     authError,
+    checkCurrentUser,
+    dismissAuthError,
     login,
     register,
     verifyEmail,
@@ -274,7 +299,7 @@ export function AuthProvider({ children }) {
     switchView,
     switchRestaurant,
     USER_ROLES,
-  }), [auth, authLoading, authError, login, register, verifyEmail, sendVerificationEmail, updateUser, refreshUser, logout, deactivateAccount, switchView, switchRestaurant]);
+  }), [auth, authConfirmed, authLoading, authError, checkCurrentUser, dismissAuthError, login, register, verifyEmail, sendVerificationEmail, updateUser, refreshUser, logout, deactivateAccount, switchView, switchRestaurant]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

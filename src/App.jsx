@@ -7,6 +7,7 @@ import { LocationProvider } from './context/LocationContext';
 import { useAuth, USER_ROLES } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ROLE_PATHS } from './constants/navigation';
+import AuthStatusBanner from './components/layout/AuthStatusBanner';
 const LandingPage = lazy(() => import('./pages/Landing/Landing'));
 const CustomerHomePage = lazy(() => import('./pages/CustomerHome/CustomerHomePage'));
 const RestaurantsPage = lazy(() => import('./pages/Restaurants/RestaurantsPage'));
@@ -35,7 +36,7 @@ const FeatureGatePage = lazy(() => import('./pages/FeatureGate/FeatureGatePage')
 const AdminPage = lazy(() => import('./pages/Admin/AdminPage'));
 
 function HomeGate() {
-  const { isLoggedIn, userRole, authLoading, authError, USER_ROLES: roles } = useAuth();
+  const { isLoggedIn, userRole, USER_ROLES: roles } = useAuth();
   const location = useLocation();
   const [accessChanged] = useState(() => (
     location.state?.businessAccessChanged
@@ -44,8 +45,6 @@ function HomeGate() {
   useEffect(() => {
     if (accessChanged) window.sessionStorage.removeItem('salo.business.accessChanged');
   }, [accessChanged]);
-  if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
-  if (authError) return <div className="section-shell" role="alert">{authError}</div>;
   if (!isLoggedIn) {
     return location.hash === '#how-it-works' ? <FeatureGatePage /> : <LandingPage />;
   }
@@ -64,29 +63,27 @@ function HomeGate() {
 }
 
 function GuestFeatureRoute({ children }) {
-  const { isLoggedIn, authLoading, authError } = useAuth();
-  if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
-  if (authError) return <div className="section-shell" role="alert">{authError}</div>;
+  const { isLoggedIn } = useAuth();
   return isLoggedIn ? children : <FeatureGatePage />;
 }
 
 function ReservationBookingRoute() {
-  const { isLoggedIn, userRole, authLoading, authError } = useAuth();
+  const { isLoggedIn, userRole, authLoading, authConfirmed } = useAuth();
   if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
-  if (authError) return <div className="section-shell" role="alert">{authError}</div>;
+  if (!authConfirmed) return null;
   if (!isLoggedIn) return <Navigate to="/login?returnTo=%2Freservations%2Fnew" replace />;
   if (userRole !== USER_ROLES.CUSTOMER) return <Navigate to={ROLE_PATHS[userRole] || '/'} replace />;
   return <Layout><ReservationBookingPage /></Layout>;
 }
 
 function RequireCapability({ capability, children }) {
-  const { isLoggedIn, capabilities, userRole, authLoading, authError } = useAuth();
+  const { isLoggedIn, capabilities, userRole, authLoading, authConfirmed } = useAuth();
   const location = useLocation();
   const allowed = capabilities.includes(capability);
 
   // These client-side guards only improve navigation UX; enforce access in backend Policies.
   if (authLoading) return <div className="section-shell"><div className="skeleton-card" /></div>;
-  if (authError) return <div className="section-shell" role="alert">{authError}</div>;
+  if (!authConfirmed) return null;
   if (!isLoggedIn) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!allowed) return <Navigate to={ROLE_PATHS[userRole] || '/'} replace />;
   return children;
@@ -99,10 +96,11 @@ function App() {
         <AuthProvider>
           <CartProvider>
             <LocationProvider>
+              <AuthStatusBanner />
               <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}>
                 <Routes>
               <Route path="/" element={<Layout><HomeGate /></Layout>} />
-              <Route path="/restaurants" element={<Layout><GuestFeatureRoute><RestaurantsPage /></GuestFeatureRoute></Layout>} />
+              <Route path="/restaurants" element={<Layout><RestaurantsPage /></Layout>} />
               <Route path="/restaurants/:id" element={<Layout><GuestFeatureRoute><RestaurantDetailPage /></GuestFeatureRoute></Layout>} />
               <Route path="/cart" element={<Layout><GuestFeatureRoute><CartPage /></GuestFeatureRoute></Layout>} />
               <Route path="/checkout" element={<Layout><GuestFeatureRoute><CheckoutPage /></GuestFeatureRoute></Layout>} />

@@ -15,14 +15,7 @@ const stepIcons = [
 ];
 
 export default function ReservePage() {
-  const { isLoggedIn, authLoading, authError } = useAuth();
-
-  if (authLoading) {
-    return <div className="reserve-promo section-shell"><div className="skeleton skeleton--block" aria-label={RESERVATION_PROMO_LABELS.loading} /></div>;
-  }
-  if (authError) {
-    return <div className="reserve-promo section-shell"><p className="reserve-promo__error" role="alert">{authError}</p></div>;
-  }
+  const { isLoggedIn } = useAuth();
   if (isLoggedIn) return <Navigate to="/reservations/new" replace />;
 
   return (
