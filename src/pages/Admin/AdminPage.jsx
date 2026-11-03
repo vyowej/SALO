@@ -33,6 +33,7 @@ import './AdminPage.css';
 
 const AdminChartCard = lazy(() => import('../../components/admin/AdminChartCard'));
 const AdminScheduleCalendar = lazy(() => import('../../components/admin/AdminScheduleCalendar'));
+const RiderApplicationsAdminPage = lazy(() => import('./RiderApplicationsAdminPage'));
 
 const resourceForPage = {
   users: 'users',
@@ -313,6 +314,9 @@ function RecordDetails({ record, resource, onPhoto, onDocument }) {
 
 function AdminPage() {
   const location = useLocation();
+  if (location.pathname === '/admin/applications/riders') {
+    return <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><RiderApplicationsAdminPage /></Suspense>;
+  }
   const pageKey = location.pathname === '/admin' ? 'dashboard' : location.pathname.split('/')[2] || 'dashboard';
   return <AdminWorkspace key={pageKey} pageKey={pageKey} />;
 }

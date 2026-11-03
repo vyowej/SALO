@@ -1,0 +1,207 @@
+.admin-rider-applications {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.admin-rider-applications__header,
+.admin-rider-applications__detail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.admin-rider-applications__header h2,
+.admin-rider-applications__detail-heading h3,
+.admin-rider-applications__queue h3 {
+  margin: 0;
+}
+
+.admin-rider-applications__header p,
+.admin-rider-applications__detail-heading p {
+  margin: 0 0 var(--space-1);
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.admin-rider-applications__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.admin-rider-applications__queue,
+.admin-rider-applications__detail {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.admin-rider-applications__queue ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-rider-applications__queue li button {
+  display: grid;
+  width: 100%;
+  min-height: 3rem;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.admin-rider-applications__queue li button.is-selected {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary-soft);
+}
+
+.admin-rider-applications__queue li span,
+.admin-rider-applications__queue li small,
+.admin-rider-applications__detail-heading span {
+  color: var(--muted);
+}
+
+.admin-rider-applications__summary {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.admin-rider-applications__summary > div {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-rider-applications__summary dt {
+  color: var(--muted);
+}
+
+.admin-rider-applications__summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-rider-applications__documents {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-rider-applications__documents h4 {
+  margin: 0;
+}
+
+.admin-rider-applications__document {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.admin-rider-applications__document > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.admin-rider-applications__document small {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.admin-rider-applications__document img {
+  display: block;
+  width: min(100%, 20rem);
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.admin-rider-applications__actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-rider-applications__actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-rider-applications__alert,
+.admin-rider-applications__message,
+.admin-rider-applications__note {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.admin-rider-applications__alert {
+  border-color: var(--status-danger);
+  color: var(--danger);
+}
+
+.admin-rider-applications :focus-visible,
+.admin-rider-applications button {
+  touch-action: manipulation;
+}
+
+.admin-rider-applications :focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 48rem) {
+  .admin-rider-applications {
+    padding: var(--space-6);
+  }
+
+  .admin-rider-applications__layout {
+    grid-template-columns: minmax(16rem, 0.8fr) minmax(0, 1.6fr);
+  }
+
+  .admin-rider-applications__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-rider-applications__document {
+    grid-template-columns: minmax(12rem, 0.75fr) minmax(0, 1.25fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .admin-rider-applications__queue,
+  .admin-rider-applications__detail {
+    padding: var(--space-5);
+  }
+}
+
+@media (min-width: 80rem) {
+  .admin-rider-applications__layout {
+    grid-template-columns: minmax(20rem, 0.7fr) minmax(0, 1.7fr);
+  }
+}

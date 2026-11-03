@@ -66,3 +66,10 @@ export const RIDER_APPLICATION_CONSTRAINTS = {
   availabilityMaxLength: 120,
   motivationMaxLength: 500,
 };
+
+export const RIDER_APPLICATION_VEHICLES = [
+  { value: 'motorcycle', label: 'Motorcycle' },
+  { value: 'bicycle', label: 'Bicycle' },
+  { value: 'e_scooter', label: 'E-scooter' },
+  { value: 'walker', label: 'Walker' },
+];
