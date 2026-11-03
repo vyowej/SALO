@@ -7,8 +7,11 @@ use App\Http\Requests\Admin\AdminActionRequest;
 use App\Http\Requests\Admin\AdminListRequest;
 use App\Http\Resources\AdminCollection;
 use App\Http\Resources\AdminResource;
+use App\Http\Resources\RiderProfileResource;
 use App\Models\RestaurantApplication;
+use App\Models\RiderProfile;
 use App\Services\AdminService;
+use App\Services\RiderApplicationService;
 use App\Services\ScheduleGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,10 +23,20 @@ class AdminController extends Controller
         return AdminResource::make($service->dashboard());
     }
 
-    public function index(AdminListRequest $request, AdminService $service): AdminCollection
+    public function index(
+        AdminListRequest $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+    ): AdminCollection
     {
         $resource = (string) $request->route('resource');
         if ($resource === 'applications') {
+            if ($request->validated('type') === 'rider') {
+                $this->authorize('review', RiderProfile::class);
+                $result = $riders->adminList($request->validated());
+
+                return new AdminCollection($result['data'], $result['meta']);
+            }
             $this->authorize('viewAny', RestaurantApplication::class);
         }
         $result = $service->list($resource, $request->validated());
@@ -31,10 +44,15 @@ class AdminController extends Controller
         return new AdminCollection($result['data'], $result['meta']);
     }
 
-    public function show(Request $request, AdminService $service): AdminResource
+    public function show(Request $request, AdminService $service, RiderApplicationService $riders): mixed
     {
         $resource = (string) $request->route('resource');
         if ($resource === 'applications') {
+            if ((string) $request->route('type') === 'rider') {
+                $this->authorize('review', RiderProfile::class);
+
+                return RiderProfileResource::make($riders->findForReview((int) $request->route('id')));
+            }
             $this->authorize('viewAny', RestaurantApplication::class);
         }
         $record = $service->find($resource, (string) $request->route('id'));
@@ -80,22 +98,65 @@ class AdminController extends Controller
         return AdminResource::make($service->setRestaurantStatus((string) $request->route('id'), $request->validated('status'), $request->user(), $request->validated('note')));
     }
 
-    public function applicationApprove(AdminActionRequest $request, AdminService $service): AdminResource
+    public function applicationApprove(
+        AdminActionRequest $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+    ): mixed
     {
+        if ((string) $request->route('type') === 'rider') {
+            $this->authorize('review', RiderProfile::class);
+            $result = $riders->approve(
+                (int) $request->route('id'),
+                $request->user(),
+                $request->validated('note'),
+            );
+
+            return response()->json(['data' => [
+                'profile' => RiderProfileResource::make($result['profile'])->resolve($request),
+                'email_delivery' => $result['email_delivery'],
+            ]]);
+        }
         $this->authorize('review', RestaurantApplication::class);
 
         return AdminResource::make($service->decideApplication((string) $request->route('type'), (string) $request->route('id'), true, $request->validated('note'), $request->user()));
     }
 
-    public function applicationReject(AdminActionRequest $request, AdminService $service): AdminResource
+    public function applicationReject(
+        AdminActionRequest $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+    ): mixed
     {
+        if ((string) $request->route('type') === 'rider') {
+            $this->authorize('review', RiderProfile::class);
+
+            return RiderProfileResource::make($riders->reject(
+                (int) $request->route('id'),
+                $request->user(),
+                $request->validated('note'),
+            ));
+        }
         $this->authorize('review', RestaurantApplication::class);
 
         return AdminResource::make($service->decideApplication((string) $request->route('type'), (string) $request->route('id'), false, $request->validated('note'), $request->user()));
     }
 
-    public function applicationRequestRevision(AdminActionRequest $request, AdminService $service): AdminResource
+    public function applicationRequestRevision(
+        AdminActionRequest $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+    ): mixed
     {
+        if ((string) $request->route('type') === 'rider') {
+            $this->authorize('review', RiderProfile::class);
+
+            return RiderProfileResource::make($riders->requestRevision(
+                (int) $request->route('id'),
+                $request->user(),
+                $request->validated('note'),
+            ));
+        }
         $this->authorize('review', RestaurantApplication::class);
 
         return AdminResource::make($service->requestApplicationRevision(
@@ -106,8 +167,21 @@ class AdminController extends Controller
         ));
     }
 
-    public function applicationStartReview(AdminActionRequest $request, AdminService $service): AdminResource
+    public function applicationStartReview(
+        AdminActionRequest $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+    ): mixed
     {
+        if ((string) $request->route('type') === 'rider') {
+            $this->authorize('review', RiderProfile::class);
+
+            return RiderProfileResource::make($riders->startReview(
+                (int) $request->route('id'),
+                $request->user(),
+                $request->validated('note'),
+            ));
+        }
         $this->authorize('review', RestaurantApplication::class);
 
         return AdminResource::make($service->startApplicationReview(
@@ -130,6 +204,18 @@ class AdminController extends Controller
         $paged['data'] = array_map(fn ($proof) => array_diff_key($proof, ['rider_id' => true]), $paged['data']);
 
         return new AdminCollection($paged['data'], $paged['meta']);
+    }
+
+    public function riderDocumentUrl(Request $request, RiderApplicationService $riders): JsonResponse
+    {
+        $this->authorize('review', RiderProfile::class);
+        $url = $riders->createDocumentDownloadUrl(
+            $request->user(),
+            (int) $request->route('rider'),
+            (int) $request->route('document'),
+        );
+
+        return response()->json(['data' => ['url' => $url, 'expires_in_seconds' => 300]]);
     }
 
     public function cancelOrder(AdminActionRequest $request, AdminService $service): AdminResource
