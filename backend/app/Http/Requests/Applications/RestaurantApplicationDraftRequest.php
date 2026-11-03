@@ -33,7 +33,7 @@ class RestaurantApplicationDraftRequest extends FormRequest
         return [
             'draft_details' => [
                 'required',
-                'array:restaurant_name,cuisine,category,description,contact_number,business_email,region_code,province_code,city_code,barangay_code,psgc_code,street,house_no,latitude,longitude,pin_confirmed,hours,is_24_7,declared_bir_2303,current_step',
+                'array:restaurant_name,cuisine,category,description,contact_number,business_email,region_code,province_code,city_code,barangay_code,psgc_code,street,formatted_address,house_no,latitude,longitude,pin_confirmed,hours,is_24_7,declared_bir_2303,current_step',
             ],
             'draft_details.restaurant_name' => ['sometimes', 'required', 'string', 'max:120'],
             'draft_details.cuisine' => ['sometimes', 'nullable', 'string', 'max:60'],
@@ -47,6 +47,7 @@ class RestaurantApplicationDraftRequest extends FormRequest
             'draft_details.barangay_code' => ['sometimes', 'nullable', 'string', 'max:12', 'exists:psgc_locations,code'],
             'draft_details.psgc_code' => ['sometimes', 'nullable', 'string', 'max:12', 'exists:psgc_locations,code'],
             'draft_details.street' => ['sometimes', 'required', 'string', 'max:190'],
+            'draft_details.formatted_address' => ['sometimes', 'nullable', 'string', 'max:300'],
             'draft_details.house_no' => ['sometimes', 'nullable', 'string', 'max:40'],
             'draft_details.latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'draft_details.longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
