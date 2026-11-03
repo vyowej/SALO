@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\AuditLog;
+use App\Repositories\Contracts\RiderApplicationRepository;
 use App\Notifications\EmailVerificationNotification;
 use App\Notifications\PasswordResetNotification;
 use App\Repositories\Contracts\AuthTokenRepository;
@@ -29,6 +31,7 @@ class AuthTokenService
         private readonly AuthTokenRepository $tokens,
         private readonly PlatformSettingsRepository $settings,
         private readonly SessionRepository $sessions,
+        private readonly RiderApplicationRepository $riders,
     ) {}
 
     public function sendPasswordReset(string $email): void
@@ -114,6 +117,57 @@ class AuthTokenService
         }
 
         $this->consumeOtp($user, $purpose, $code, mb_strtolower(trim($targetEmail)));
+    }
+
+    public function verifyRiderActivation(User $user, int $riderId, string $code): void
+    {
+        $valid = DB::transaction(function () use ($user, $riderId, $code): bool {
+            $profile = $this->riders->profiles()
+                ->whereKey($riderId)
+                ->where('user_id', $user->getKey())
+                ->lockForUpdate()
+                ->first();
+            if ($profile === null
+                || $profile->application_status !== 'approved'
+                || $profile->status !== 'pending_activation') {
+                return false;
+            }
+
+            $record = $this->tokens->lockActive(
+                (int) $user->getAuthIdentifier(),
+                'rider_activation',
+                mb_strtolower(trim($user->email)),
+            );
+            if ($record === null || $record->attempts >= $this->setting('otp_max_attempts', 5)) {
+                return false;
+            }
+            if (! Hash::check($code, $record->token_hash)) {
+                $this->tokens->incrementAttempts($record);
+
+                return false;
+            }
+
+            $this->tokens->consume($record);
+            $beforeStatus = $profile->status;
+            $profile->forceFill(['status' => 'active'])->save();
+            AuditLog::query()->create([
+                'actor_user_id' => $user->getKey(),
+                'action' => 'rider_activation_verified',
+                'entity_type' => 'rider_profile',
+                'entity_id' => $profile->getKey(),
+                'before_value' => ['status' => $beforeStatus],
+                'after_value' => ['status' => 'active'],
+                'created_at' => Carbon::now(),
+            ]);
+
+            return true;
+        });
+
+        if (! $valid) {
+            throw ValidationException::withMessages([
+                'code' => ['This activation code is invalid or has expired.'],
+            ]);
+        }
     }
 
     public function issueOtp(User $user, string $purpose, ?string $targetEmail = null): string

@@ -16,6 +16,7 @@ use App\Policies\CustomerReservationPolicy;
 use App\Models\PsgcLocation;
 use App\Policies\PsgcLocationPolicy;
 use App\Policies\RestaurantPagePolicy;
+use App\Policies\RiderProfilePolicy;
 use App\Policies\SupportTicketPolicy;
 use App\Policies\UserAddressPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -42,6 +43,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(PsgcLocation::class, PsgcLocationPolicy::class);
         Gate::policy(Restaurant::class, RestaurantPagePolicy::class);
+        Gate::policy(\App\Models\RiderProfile::class, RiderProfilePolicy::class);
         Gate::policy(UserAddress::class, UserAddressPolicy::class);
         Gate::policy(Cart::class, CustomerCartPolicy::class);
         Gate::policy(Order::class, CustomerOrderPolicy::class);

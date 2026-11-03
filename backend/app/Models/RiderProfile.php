@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class RiderProfile extends Model
 {
@@ -55,5 +57,15 @@ class RiderProfile extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(PsgcLocation::class, 'psgc_code', 'code');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(RiderDocument::class, 'rider_id');
+    }
+
+    public function preferredShifts(): BelongsToMany
+    {
+        return $this->belongsToMany(Shift::class, 'rider_preferred_shifts', 'rider_id', 'shift_id');
     }
 }
