@@ -260,17 +260,15 @@ class DatabaseRestaurantDiscoveryRepository implements RestaurantDiscoveryReposi
             return;
         }
 
-        [$itemColumn, $tagColumn] = $this->dietaryPivotColumns($pivotTable);
-
-        $query->whereHas('menuCategories', function (Builder $categories) use ($tag, $pivotTable, $itemColumn, $tagColumn): void {
+        $query->whereHas('menuCategories', function (Builder $categories) use ($tag, $pivotTable): void {
             $categories->where('menu_categories.status', 'active')
-                ->whereHas('items', function (Builder $items) use ($tag, $pivotTable, $itemColumn, $tagColumn): void {
+                ->whereHas('items', function (Builder $items) use ($tag, $pivotTable): void {
                     $items->where('menu_items.lifecycle_status', 'published')
-                        ->whereExists(function ($subquery) use ($tag, $pivotTable, $itemColumn, $tagColumn): void {
+                        ->whereExists(function ($subquery) use ($tag, $pivotTable): void {
                             $subquery->selectRaw('1')
                                 ->from($pivotTable.' as item_tags')
-                                ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.'.$tagColumn)
-                                ->whereColumn('item_tags.'.$itemColumn, 'menu_items.id')
+                                ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.tag_id')
+                                ->whereColumn('item_tags.item_id', 'menu_items.id')
                                 ->where('tags.name', $tag);
                         });
                 });
@@ -285,23 +283,13 @@ class DatabaseRestaurantDiscoveryRepository implements RestaurantDiscoveryReposi
             return;
         }
 
-        [$itemColumn, $tagColumn] = $this->dietaryPivotColumns($pivotTable);
-        $items->whereExists(function ($subquery) use ($tag, $pivotTable, $itemColumn, $tagColumn): void {
+        $items->whereExists(function ($subquery) use ($tag, $pivotTable): void {
             $subquery->selectRaw('1')
                 ->from($pivotTable.' as item_tags')
-                ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.'.$tagColumn)
-                ->whereColumn('item_tags.'.$itemColumn, 'menu_items.id')
+                ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.tag_id')
+                ->whereColumn('item_tags.item_id', 'menu_items.id')
                 ->where('tags.name', $tag);
         });
-    }
-
-    private function dietaryPivotColumns(string $pivotTable): array
-    {
-        $columns = Schema::getColumnListing($pivotTable);
-        return [
-            in_array('item_id', $columns, true) ? 'item_id' : 'menu_item_id',
-            in_array('tag_id', $columns, true) ? 'tag_id' : 'dietary_tag_id',
-        ];
     }
 
     private function applySort(Builder $query, array $filters): void
@@ -406,15 +394,11 @@ class DatabaseRestaurantDiscoveryRepository implements RestaurantDiscoveryReposi
             return [];
         }
 
-        $columns = Schema::getColumnListing('menu_item_dietary_tags');
-        $itemColumn = in_array('item_id', $columns, true) ? 'item_id' : 'menu_item_id';
-        $tagColumn = in_array('tag_id', $columns, true) ? 'tag_id' : 'dietary_tag_id';
-
         return DB::table('menu_item_dietary_tags as item_tags')
-            ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.'.$tagColumn)
-            ->whereIn('item_tags.'.$itemColumn, $itemIds)
+            ->join('dietary_tags as tags', 'tags.id', '=', 'item_tags.tag_id')
+            ->whereIn('item_tags.item_id', $itemIds)
             ->orderBy('tags.name')
-            ->get(['item_tags.'.$itemColumn.' as item_id', 'tags.name', 'tags.tag_type'])
+            ->get(['item_tags.item_id', 'tags.name', 'tags.tag_type'])
             ->groupBy('item_id')
             ->map(fn (SupportCollection $tags): array => $tags->map(fn ($tag): array => [
                 'name' => $tag->name,
