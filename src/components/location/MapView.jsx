@@ -25,8 +25,8 @@ const validCoordinates = (candidate) => {
 const markerIcon = L.divIcon({
   className: 'map-view__marker-icon',
   html: '<span aria-hidden="true"></span>',
-  iconSize: [28, 36],
-  iconAnchor: [14, 34],
+  iconSize: [44, 44],
+  iconAnchor: [22, 42],
 });
 
 export function MapView({
@@ -68,11 +68,13 @@ export function MapView({
   ]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !containerRef.current) return undefined;
+    if (!containerRef.current) return undefined;
 
     let map;
     let resizeTimer;
     let errorTimer;
+    let resizeObserver;
+    const invalidateSize = () => map?.invalidateSize({ pan: false });
     try {
       const initialCenter = validCoordinates(centerRef.current) || locationService.getDefaultMapCenter();
       const initialPin = validCoordinates(pinRef.current) || initialCenter;
@@ -125,7 +127,13 @@ export function MapView({
       mapRef.current = map;
       pinMarkerRef.current = marker;
       markersLayerRef.current = L.layerGroup().addTo(map);
-      resizeTimer = window.setTimeout(() => map.invalidateSize(), 0);
+      resizeTimer = window.setTimeout(invalidateSize, 0);
+      window.addEventListener('resize', invalidateSize, { passive: true });
+      window.addEventListener('orientationchange', invalidateSize, { passive: true });
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(invalidateSize);
+        resizeObserver.observe(containerRef.current);
+      }
     } catch (error) {
       console.error('Unable to initialize the Leaflet map.', error);
       errorTimer = window.setTimeout(() => {
@@ -137,6 +145,9 @@ export function MapView({
     return () => {
       window.clearTimeout(resizeTimer);
       window.clearTimeout(errorTimer);
+      window.removeEventListener('resize', invalidateSize);
+      window.removeEventListener('orientationchange', invalidateSize);
+      resizeObserver?.disconnect();
       map?.remove();
       mapRef.current = null;
       pinMarkerRef.current = null;
@@ -184,21 +195,15 @@ export function MapView({
 
   return (
     <div className="map-view">
-      {import.meta.env.DEV ? (
-        <div
-          ref={containerRef}
-          className="map-view__canvas"
-          role="region"
-          aria-label="Interactive address map"
-          aria-roledescription="map"
-        />
-      ) : (
-        <div className="map-view__unavailable" role="status">
-          The interactive map is available in development only.
-        </div>
-      )}
+      <div
+        ref={containerRef}
+        className="map-view__canvas"
+        role="region"
+        aria-label="Interactive address map"
+        aria-roledescription="map"
+      />
       {mapError ? <p className="map-view__message" role="status">{mapError}</p> : null}
-      {import.meta.env.DEV ? <span className="map-view__caption">Drag the pin to adjust your location</span> : null}
+      <span className="map-view__caption">Drag the pin to adjust your location</span>
     </div>
   );
 }

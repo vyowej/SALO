@@ -41,7 +41,9 @@ const icons = {
 
 function routeKey(pathname) {
   if (pathname === '/admin') return 'dashboard';
-  return ADMIN_NAV_ITEMS.find((item) => item.path !== '/admin' && pathname.startsWith(item.path))?.key || 'dashboard';
+  return [...ADMIN_NAV_ITEMS]
+    .filter((item) => item.path !== '/admin' && pathname.startsWith(item.path))
+    .sort((left, right) => right.path.length - left.path.length)[0]?.key || 'dashboard';
 }
 
 export function AdminShell({ children }) {

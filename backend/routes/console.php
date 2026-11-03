@@ -14,3 +14,4 @@ Schedule::command('salo:reset-menu-quantities')->everyMinute()->onOneServer()->w
 Schedule::command('salo:cancel-unanswered-orders')->everyMinute()->onOneServer()->withoutOverlapping(1);
 Schedule::command('salo:expire-pending-reservations')->everyMinute()->onOneServer()->withoutOverlapping(1);
 Schedule::command('salo:expire-customer-carts')->daily()->onOneServer()->withoutOverlapping(1);
+Schedule::command('salo:prune-rider-documents')->daily()->onOneServer()->withoutOverlapping(60);

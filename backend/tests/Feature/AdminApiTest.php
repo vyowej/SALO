@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\RestaurantApplication;
 use App\Models\Restaurant;
+use App\Notifications\RiderActivationNotification;
 use App\Repositories\Contracts\AdminRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Stub\AdminFixtures;
@@ -12,7 +13,9 @@ use App\Services\AdminService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\AuthoritativeFixtures;
+use Tests\Support\RiderApplicationFixtures;
 use Tests\TestCase;
+use Illuminate\Support\Facades\Notification;
 
 class AdminApiTest extends TestCase
 {
@@ -157,20 +160,19 @@ class AdminApiTest extends TestCase
         $this->assertStringContainsString('Fixture Barangay', $restaurant->formatted_address);
     }
 
-    public function test_rider_application_approval_grants_driver_capability_and_rejects_owner_conflict(): void
+    public function test_rider_application_approval_uses_database_profile_and_defers_driver_capability_until_otp(): void
     {
         $this->asAdmin();
-        $repository = app(AdminRepository::class);
-        $applicantId = AdminFixtures::id(112);
-        $applicant = $repository->find('users', $applicantId);
-        $repository->update('users', $applicantId, ['memberships' => [['restaurant_id' => AdminFixtures::id(201), 'role' => 'owner', 'status' => 'active']]]);
-        $this->postJson('/api/v1/admin/applications/rider/'.AdminFixtures::id(304).'/approve', [])
-            ->assertUnprocessable();
-        $repository->update('users', $applicantId, ['memberships' => []]);
-        $this->postJson('/api/v1/admin/applications/rider/'.AdminFixtures::id(304).'/approve', [])
-            ->assertOk()->assertJsonPath('data.status', 'approved');
-        self::assertContains('driver', $repository->find('users', $applicantId)['capabilities']);
-        self::assertNotNull($applicant);
+        Notification::fake();
+        $applicant = RiderApplicationFixtures::user('admin-api-rider@example.test');
+        $profile = RiderApplicationFixtures::submittedApplication($applicant);
+        $this->postJson('/api/v1/admin/applications/rider/'.$profile->getKey().'/approve', [])
+            ->assertOk()
+            ->assertJsonPath('data.profile.application_status', 'approved')
+            ->assertJsonPath('data.profile.status', 'pending_activation');
+        self::assertNotContains('driver', $applicant->fresh()->capabilities);
+        self::assertSame('pending_activation', $profile->fresh()->status);
+        Notification::assertSentTo($applicant, RiderActivationNotification::class);
     }
 
     public function test_rider_status_and_proofs_endpoints_work_and_validate_status(): void

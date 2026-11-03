@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
+use App\Http\Controllers\Api\V1\Applications\RiderApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
 use App\Http\Controllers\Api\V1\Business\BusinessDiscountController;
 use App\Http\Controllers\Api\V1\Business\BusinessReportController;
@@ -69,6 +70,9 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         Route::get('/private-documents/{document}', [ApplicationDocumentController::class, 'download'])
             ->middleware('signed')
             ->name('api.v1.private-documents.download');
+        Route::get('/private/rider-documents/{document}', [RiderApplicationController::class, 'download'])
+            ->middleware('signed')
+            ->name('api.v1.private-rider-documents.download');
         Route::post('/auth/email/verification/send', [EmailVerificationController::class, 'send'])
             ->middleware('throttle:auth-otp');
         Route::post('/auth/email/verification/verify', [EmailVerificationController::class, 'verify'])
@@ -87,6 +91,27 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::delete('/{application}/documents/{document}', [RestaurantApplicationController::class, 'deleteDocument']);
             Route::post('/{application}/photos', [RestaurantApplicationController::class, 'uploadPhoto']);
             Route::post('/{application}/submit', [RestaurantApplicationController::class, 'submit']);
+        });
+
+        Route::middleware('capability:customer')->prefix('applications/riders')->group(function (): void {
+            Route::post('/', [RiderApplicationController::class, 'store']);
+            Route::get('/mine', [RiderApplicationController::class, 'mine']);
+            Route::get('/{rider}', [RiderApplicationController::class, 'show'])->whereNumber('rider');
+            Route::patch('/{rider}', [RiderApplicationController::class, 'update'])->whereNumber('rider');
+            Route::post('/{rider}/documents', [RiderApplicationController::class, 'uploadDocument'])->whereNumber('rider');
+            Route::delete('/{rider}/documents/{document}', [RiderApplicationController::class, 'deleteDocument'])
+                ->whereNumber('rider')
+                ->whereNumber('document');
+            Route::get('/{rider}/documents/{document}/download-url', [RiderApplicationController::class, 'documentUrl'])
+                ->whereNumber('rider')
+                ->whereNumber('document');
+            Route::post('/{rider}/submit', [RiderApplicationController::class, 'submit'])->whereNumber('rider');
+            Route::post('/{rider}/activation/otp', [RiderApplicationController::class, 'sendActivationOtp'])
+                ->whereNumber('rider')
+                ->middleware('throttle:auth-otp');
+            Route::post('/{rider}/activation/verify', [RiderApplicationController::class, 'verifyActivation'])
+                ->whereNumber('rider')
+                ->middleware('throttle:auth-otp');
         });
 
         Route::middleware('capability:customer')->prefix('customer')->group(function (): void {
@@ -192,6 +217,9 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::post('/applications/{type}/{id}/start-review', [AdminController::class, 'applicationStartReview']);
             Route::patch('/riders/{id}/status', [AdminController::class, 'riderStatus']);
             Route::get('/riders/{id}/proofs', [AdminController::class, 'riderProofs']);
+            Route::get('/riders/{rider}/documents/{document}/download-url', [AdminController::class, 'riderDocumentUrl'])
+                ->whereNumber('rider')
+                ->whereNumber('document');
             Route::post('/orders/{id}/cancel', [AdminController::class, 'cancelOrder']);
             Route::patch('/reservations/{id}/status', [AdminController::class, 'reservationStatus']);
             Route::get('/reports/{report}', [AdminController::class, 'report'])->whereIn('report', ['sales', 'orders-by-status', 'restaurant-ranking', 'rider-performance']);

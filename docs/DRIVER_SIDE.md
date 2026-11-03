@@ -1,7 +1,8 @@
 # SALO Driver (Rider) Side
 
-**Status:** D0 audit and F2 guarded schema-loader dry run. No rider implementation
-was changed, no test or migration was run. The owner states that
+**Status:** D0 was approved; D1 application and activation implementation is
+complete, with verification recorded in Section 12. D1 changes use the
+guarded `salo_test` database only; no migration or schema edit was made. The owner states that
 the live MariaDB 10.11 database `salo` is connected and was imported from the
 root schema. This document treats that as an operating constraint, not as a
 claim that D0 independently verified the connection.
@@ -44,7 +45,8 @@ These database rules apply to every rider phase:
   and `SELECT DATABASE()` must end in `_test`; a mismatch must fail closed.
 - Files uploaded by riders are private local-disk files. Do not put an image,
   file data URL, or image blob in browser `localStorage`.
-- D0 is audit and documentation only. Stop for review after this phase.
+- D0 is complete and approved. Each subsequent phase remains separately gated;
+  D1 completion does not authorize starting D2.
 
 ## 2. D0 prerequisite audit
 
@@ -298,6 +300,34 @@ or phone check that was not run.
 8. Reject new applications from Business mode, active applications, or a
    resigned rider still inside the configured cooling-off period.
 
+### D1 implementation record
+
+- Implemented the API-backed applicant wizard, database-backed draft resume,
+  Admin rider review actions, email OTP approval/activation, and private
+  document access. All changes use existing tables; no schema proposal was
+  needed or applied.
+- Motorcycle-only license, OR/CR, and plate fields are enforced. The server
+  calculates the submitted formatted address from a barangay-level PSGC code,
+  street, and optional house number.
+- Zone/shift assignment is intentionally not run by D1. The approval flow
+  leaves assignment to D2, as authorized by the phase boundary.
+- The signed document endpoint authorizes the rider owner or an active Admin
+  before issuing a five-minute URL, then repeats the policy check while
+  streaming. Private paths are never returned by applicant or Admin resources.
+- Draft progress is inferred from server-persisted fields and uploaded
+  document metadata. Only unsent text drafts may use browser storage; images
+  and document contents remain on Laravel's private local disk.
+- The wizard compresses and resizes images in the browser, previews selected
+  files, reports upload progress, and supports replace/retake and camera or
+  file-picker input. The API validates file content and stores server-generated
+  private paths.
+- Responsive checklist: the signed-out `/rider/apply` route was checked with
+  integrated-browser viewport emulation at 360x640, 390x844, 412x915,
+  768x1024 portrait, 1024x768 landscape, 1280x800, and 1920x1080. No
+  horizontal overflow was observed at those viewports. The authenticated
+  wizard, upload/camera overlay, and Admin review detail were not available
+  in that browser session and are not claimed as verified.
+
 ### D2 — Zones, shifts, and automatic scheduling
 
 - Reuse Admin zone, shift, and capacity pages where they are database-backed;
@@ -411,42 +441,42 @@ desktop checks. Final report maps every route to its policy, every plan rule
 to service and test, scheduler jobs, cache keys, pending schema proposals,
 assumptions, and deferred work.
 
-## 7. Proposed rider API contract
+## 7. Rider API contract
 
-All paths below are under `/api/v1`. The D0 audit found no database-backed
-rider API. Except where marked **Existing route, not rider-complete**, these
-are proposed contracts for later phases, not implemented endpoints. JSON keys
-are `snake_case`; normal success is `{ "data": ... }`, paginated responses add
-`meta`, and validation uses the Laravel JSON validation envelope. Do not
-accept `user_id`, `rider_id`, file paths, order totals, or role/capability
-values as authority from the client.
+All paths below are under `/api/v1`. Applicant, activation, Admin-review, and
+private rider-document rows are implemented in D1; later-phase rider APIs
+remain proposed. JSON keys are `snake_case`; success uses `{ "data": ... }`,
+paginated responses add `meta`, and validation uses the API error envelope.
+Never accept `user_id`, `rider_id`, file paths, order totals, or
+role/capability values as authority from the client.
 
 ### Applicant and activation
 
 | Method and URL | Request -> response | Who may call and rules |
 |---|---|---|
-| `POST /applications/riders` | Empty or initial draft fields -> `201` own rider-profile draft resource | Authenticated Customer mode only. Create/reuse the caller's single draft; reject Business mode, active application, active rider, and cooling-off Resigned rider. Never create a second account. |
-| `GET /applications/riders/mine` | Optional pagination -> own rider application and current status | Authenticated applicant only; return no other applicant data. |
-| `GET /applications/riders/{rider}` | None -> own draft/review/status resource, including applicant-visible notes | Authenticated owner of that RiderProfile only. |
-| `PATCH /applications/riders/{rider}` | Allowed draft/revision fields -> updated own draft | Applicant only while `draft` or `needs_revision`. Validate vehicle-dependent fields, age, shifts, PH home address, declarations, and status. |
-| `POST /applications/riders/{rider}/documents` | Multipart `file`, `doc_type` -> document metadata only | Applicant owns a draft/revision profile. Permit only `profile_photo`, `id_photo`, `drivers_license`, `or_cr`; enforce vehicle rules and private upload policy. Never return private path or public URL. |
-| `DELETE /applications/riders/{rider}/documents/{document}` | None -> `204` | Applicant owns editable application; document must belong to that profile. Delete only the targeted stored file after DB delete succeeds. |
-| `GET /applications/riders/{rider}/documents/{document}/download-url` | None -> short-lived signed URL | Applicant may access own file; Admin can access via Admin policy. Authorize before signing. |
-| `POST /applications/riders/{rider}/submit` | Confirmation/declaration -> submitted resource | Applicant only; server validates all required fields/files, 18+, motorcycle requirements, and switches status atomically to `submitted`. |
-| `POST /admin/applications/rider/{rider}/start-review` | Optional note -> under-review resource | Admin capability only; record audit. Reuse queue behavior, but persist against rider profile rather than restaurant application repository. |
-| `POST /admin/applications/rider/{rider}/approve` | Optional note -> approved profile with `pending_activation` and assignment result | Admin only; transactionally approve, assign/waitlist shifts, audit, issue OTP, and trigger mail. If mail fails, retain valid pending activation and surface/retry the send failure; do not expose secrets. |
-| `POST /admin/applications/rider/{rider}/reject` | Required `note` -> rejected application resource | Admin only; audit and schedule private documents for 30-day deletion. |
-| `POST /admin/applications/rider/{rider}/request-revision` | Required `note` -> needs-revision resource | Admin only; audit and make allowed fields/documents editable to applicant. |
-| `POST /applications/riders/{rider}/activation/otp` | None -> generic sent response | Authenticated owner with `pending_activation`; rate-limit, bind OTP to rider/user email, follow platform settings. Return local-only copy helper only in local environment. |
-| `POST /applications/riders/{rider}/activation/verify` | `{ "code": "000000" }` -> active rider capability/profile | Authenticated owner with `pending_activation`; verify hashed, single-use `rider_activation` OTP, expiry, attempt count, and target; atomically activate and audit. |
+| `POST /applications/riders` | Empty body -> `201` new or `200` existing own draft resource | Authenticated Customer mode; create/reuse the caller's single profile, enforce cooldown on rejected/resigned applicants. |
+| `GET /applications/riders/mine` | None -> own application resource | Authenticated applicant only. |
+| `GET /applications/riders/{rider}` | None -> own profile, address, shifts, document metadata, and review notes | Authenticated owner only; another rider's ID returns `404`. |
+| `PATCH /applications/riders/{rider}` | Draft fields (`vehicle_type`, applicant name/birthday/mobile, `preferred_shift_ids`, `psgc_code`, street/house, map coordinates, plate, e-wallet name, declaration) -> updated resource | Applicant only in `draft` or `needs_revision`; birthday must be 18+, PSGC code must resolve to a barangay, and shifts must exist. |
+| `POST /applications/riders/{rider}/documents` | Multipart `doc_type` and `file` -> document metadata only | Applicant owns an editable profile. Allow only rider document types; motorcycle-only documents require motorcycle. Check 2 MB, real MIME and matching extension; re-encode image uploads to JPEG on private disk. |
+| `DELETE /applications/riders/{rider}/documents/{document}` | None -> `204` | Applicant owns editable application; the document must belong to that rider. |
+| `GET /applications/riders/{rider}/documents/{document}/download-url` | None -> five-minute signed URL | Applicant owner only; authorize before signing. |
+| `GET /private/rider-documents/{document}` | Signed URL -> private stream | Requires valid, unexpired signature and a fresh owner/Admin authorization check. |
+| `POST /applications/riders/{rider}/submit` | `{ "terms_accepted": true }` -> submitted resource | Applicant only; validate required fields/files and motorcycle requirements, format address server-side, then save status and audit atomically. |
+| `GET /admin/applications?type=rider` and `GET /admin/applications/rider/{id}` | Filters/detail -> queue or rider resource | Active Admin only. |
+| `GET /admin/riders/{rider}/documents/{document}/download-url` | None -> five-minute signed URL | Active Admin only; document must belong to rider. |
+| `POST /admin/applications/rider/{rider}/start-review` | Optional `note` -> under-review resource | Active Admin only; record audit. |
+| `POST /admin/applications/rider/{rider}/approve` | Optional `note` -> `{ "profile": ..., "email_delivery": ... }` | Active Admin only; transactionally approve, audit, issue the activation OTP, and attempt notification. Zone/shift assignment is deferred to D2. |
+| `POST /admin/applications/rider/{rider}/reject` | Required `note` -> rejected resource | Active Admin only; audit; private files are pruned after the configured retention period. |
+| `POST /admin/applications/rider/{rider}/request-revision` | Required `note` -> needs-revision resource | Active Admin only; audit and allow applicant edits/resubmission. |
+| `POST /applications/riders/{rider}/activation/otp` | None -> sent/result message, local-only copy code in local environment | Authenticated owner in `pending_activation`; throttle, cooldown, and bind to the account email. |
+| `POST /applications/riders/{rider}/activation/verify` | `{ "code": "000000" }` -> active rider resource | Authenticated owner in `pending_activation`; verify hashed, single-use OTP, expiry, and attempt limit; activate and audit atomically. |
 
-Admin list/detail use the existing route shapes
-`GET /admin/applications?type=rider` and
-`GET /admin/applications/rider/{id}`. The current generic Admin application
-implementation is not a persistent rider review workflow; later work must
-authorize and load RiderProfile/documents directly. Existing application
-document signed routes are for application documents and are not sufficient
-to authorize rider document paths.
+Admin list/detail and review actions reuse the existing generic Admin route
+shapes, but rider records are loaded from the rider repository and checked by
+the rider review policy. Approval returns `email_delivery.sent=false` and a
+logged error message when mail fails; OTP secrets are never logged or returned
+outside local development. No D1 route returns a raw private path.
 
 ### Active rider, dispatch, and delivery
 
@@ -698,4 +728,57 @@ the dry run still exited successfully.
   private file design/setup, sample command plan, and responsive layouts.
 - [x] Implement the guarded `salo_test` schema loader.
 - [x] Run only its dry run; no DDL, seed INSERT, migration, or test was run.
-- [ ] Stop for owner review before D1.
+- [x] Stop for owner review before D1; D0 was approved before implementation.
+
+## 12. D1 verification and hand-test checklist
+
+### Automated validation
+
+- Full guarded PHPUnit suite: **144 tests, 956 assertions, all passed**, in
+  34.626 seconds. No failures, errors, or skipped tests.
+- PHP syntax checks passed for all changed PHP files.
+- `npm run lint` passed.
+- `npm run build` passed.
+- The CLI emitted a pre-existing duplicate OpenSSL-module warning. Tests were
+  run with GD enabled in the same PHP process. No migration, loader, schema
+  edit, or live-`salo` database write was performed.
+
+### Responsive verification limits
+
+The viewport checks used the integrated browser's viewport emulation against
+the local Vite app, with no authenticated user. Exact viewports checked:
+360x640, 390x844, 412x915, 768x1024 portrait, 1024x768 landscape, 1280x800,
+and 1920x1080. The signed-out application route had no horizontal overflow.
+The authenticated wizard and Admin review UI were not visually verified;
+neither was a real phone, camera, GPS, permissions-denied, offline, or
+orientation-change interaction. The viewport checks do not replace D7's
+real-device verification.
+
+### Suggested manual checks
+
+Use a local frontend/API configuration connected only to `salo_test` and a
+disposable test account. Do not point the app at live `salo`; no sample user
+or sample rows were created by D1.
+
+1. Sign in as a Customer and open `/rider/apply`. Complete the wizard with a
+   valid barangay-level PSGC code and street; try motorcycle and non-motorcycle
+   document paths, save/resume a text draft, and confirm submitted data is
+   locked pending review.
+2. On a phone, test camera capture and file-picker fallback. Check image
+   orientation, resize/compression, preview, progress, replace/retake, the
+   2 MB limit, invalid/fake file errors, and that no image appears in browser
+   `localStorage`.
+3. As Admin, review the application, inspect private document previews, and
+   approve, request revision, and reject with a reason. Verify a non-owner
+   cannot read another rider's application, profile, or documents.
+4. As the rider, request/resend the activation OTP, try a wrong and an expired
+   code, then verify the valid single-use code. Confirm Driver capability is
+   absent before verification and enabled only afterward.
+5. Confirm files are under `storage/app/private`, document links expire after
+   five minutes, and access is denied after ownership/authorization changes.
+6. Repeat the authenticated wizard and Admin checks at the listed viewport
+   sizes and on a real phone over HTTPS or localhost; test safe areas,
+   camera/GPS permission denial, offline recovery, reduced motion, and
+   orientation changes.
+
+**D1 is complete. Stop here for review; D2 has not started.**
