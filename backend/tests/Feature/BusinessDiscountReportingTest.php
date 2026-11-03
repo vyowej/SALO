@@ -61,6 +61,27 @@ class BusinessDiscountReportingTest extends \Tests\TestCase
             ->assertNotFound();
     }
 
+    public function test_discount_child_from_another_restaurant_is_not_accessible(): void
+    {
+        [$ownerA, $restaurantA] = $this->createOwnerAndRestaurant();
+        [$ownerB, $restaurantB] = $this->createOwnerAndRestaurant();
+        $attributes = $this->discountData(['code' => 'OTHER', 'created_by' => $ownerB->getKey()]);
+        unset($attributes['first_order_only']);
+        $discount = Discount::query()->create(array_merge($attributes, [
+            'restaurant_id' => $restaurantB->getKey(),
+        ]));
+
+        $this->businessRequest($ownerA, $restaurantA)
+            ->deleteJson($this->discountPath($restaurantA, '/'.$discount->getKey()))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('discounts', [
+            'id' => $discount->getKey(),
+            'restaurant_id' => $restaurantB->getKey(),
+            'is_active' => true,
+        ]);
+    }
+
     public function test_discount_management_requires_the_management_permission(): void
     {
         [, $restaurant] = $this->createOwnerAndRestaurant();

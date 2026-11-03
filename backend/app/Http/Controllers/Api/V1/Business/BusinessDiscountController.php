@@ -41,12 +41,12 @@ class BusinessDiscountController extends Controller
 
     public function update(
         BusinessDiscountRequest $request,
-        string $discount,
         BusinessDiscountService $service,
     ): BusinessDiscountResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageDiscounts', $restaurant);
-        abort_unless(ctype_digit($discount), 404);
+        $discount = $request->route('discount');
+        abort_unless(is_string($discount) && ctype_digit($discount), 404);
         $actor = $request->user();
         abort_unless($actor instanceof User, 401);
 
@@ -58,11 +58,12 @@ class BusinessDiscountController extends Controller
         ));
     }
 
-    public function destroy(Request $request, string $discount, BusinessDiscountService $service): Response
+    public function destroy(Request $request, BusinessDiscountService $service): Response
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageDiscounts', $restaurant);
-        abort_unless(ctype_digit($discount), 404);
+        $discount = $request->route('discount');
+        abort_unless(is_string($discount) && ctype_digit($discount), 404);
         $actor = $request->user();
         abort_unless($actor instanceof User, 401);
         $service->deactivate($restaurant, $actor, (int) $discount);

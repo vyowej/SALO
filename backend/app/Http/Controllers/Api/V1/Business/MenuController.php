@@ -37,22 +37,24 @@ class MenuController extends Controller
         return MenuResource::make(['category' => $service->createCategory($restaurant, $this->user($request), $request->validated())]);
     }
 
-    public function updateCategory(MenuCategoryRequest $request, string $category, MenuService $service): MenuResource
+    public function updateCategory(MenuCategoryRequest $request, MenuService $service): MenuResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
-        abort_unless(ctype_digit($category), 404);
+        $category = $request->route('category');
+        abort_unless(is_string($category) && ctype_digit($category), 404);
 
         return MenuResource::make([
             'category' => $service->updateCategory($restaurant, $this->user($request), (int) $category, $request->validated()),
         ]);
     }
 
-    public function archiveCategory(BusinessWorkspaceRequest $request, string $category, MenuService $service): JsonResponse
+    public function archiveCategory(BusinessWorkspaceRequest $request, MenuService $service): JsonResponse
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
-        abort_unless(ctype_digit($category), 404);
+        $category = $request->route('category');
+        abort_unless(is_string($category) && ctype_digit($category), 404);
         $service->updateCategory($restaurant, $this->user($request), (int) $category, ['status' => 'archived']);
 
         return response()->json([], 204);
@@ -73,22 +75,24 @@ class MenuController extends Controller
         ]);
     }
 
-    public function updateItem(MenuItemUpdateRequest $request, string $item, MenuService $service): MenuResource
+    public function updateItem(MenuItemUpdateRequest $request, MenuService $service): MenuResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
-        abort_unless(ctype_digit($item), 404);
+        $item = $request->route('item');
+        abort_unless(is_string($item) && ctype_digit($item), 404);
 
         return MenuResource::make([
             'item' => $service->updateItem($restaurant, $this->user($request), (int) $item, $request->validated()),
         ]);
     }
 
-    public function archiveItem(BusinessWorkspaceRequest $request, string $item, MenuService $service): JsonResponse
+    public function archiveItem(BusinessWorkspaceRequest $request, MenuService $service): JsonResponse
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
-        abort_unless(ctype_digit($item), 404);
+        $item = $request->route('item');
+        abort_unless(is_string($item) && ctype_digit($item), 404);
         $service->archiveItem($restaurant, $this->user($request), (int) $item);
 
         return response()->json([], 204);
@@ -106,11 +110,12 @@ class MenuController extends Controller
         ));
     }
 
-    public function availability(MenuAvailabilityRequest $request, string $item, MenuService $service): MenuResource
+    public function availability(MenuAvailabilityRequest $request, MenuService $service): MenuResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenuAvailability', $restaurant);
-        abort_unless(ctype_digit($item), 404);
+        $item = $request->route('item');
+        abort_unless(is_string($item) && ctype_digit($item), 404);
         $data = $request->validated();
 
         return MenuResource::make([
@@ -123,11 +128,12 @@ class MenuController extends Controller
         ]);
     }
 
-    public function uploadPhoto(MenuPhotoUploadRequest $request, string $item, MenuService $service): MenuResource
+    public function uploadPhoto(MenuPhotoUploadRequest $request, MenuService $service): MenuResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageMenu', $restaurant);
-        abort_unless(ctype_digit($item), 404);
+        $item = $request->route('item');
+        abort_unless(is_string($item) && ctype_digit($item), 404);
 
         return MenuResource::make([
             'item' => $service->uploadPhoto($restaurant, $this->user($request), (int) $item, $request->file('file')),

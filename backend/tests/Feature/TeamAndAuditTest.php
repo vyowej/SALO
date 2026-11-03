@@ -40,6 +40,8 @@ class TeamAndAuditTest extends TestCase
 
         $invitation = \App\Models\Invitation::query()->firstOrFail();
         $this->assertSame(hash('sha256', $token), $invitation->token_hash);
+        $this->assertNotNull($invitation->staff_id);
+        $this->assertSame((int) $invitation->staff_id, (int) $invitation->staff->getKey());
         $this->assertEqualsWithDelta(now()->addHours(72)->timestamp, $invitation->expires_at->timestamp, 2);
         $this->assertDatabaseHas('users', [
             'email' => 'new.invitee@example.test',
@@ -70,6 +72,10 @@ class TeamAndAuditTest extends TestCase
         $this->assertSame('Alex Rivera', $invitee->name);
         $this->assertTrue(Hash::check('NewPass123', $invitee->getAuthPassword()));
         $this->assertDatabaseHas('invitations', ['id' => $invitation->getKey(), 'status' => 'accepted']);
+        $this->assertSame((int) $invitation->staff_id, (int) RestaurantStaff::query()
+            ->where('restaurant_id', $restaurant->getKey())
+            ->where('user_id', $invitee->getKey())
+            ->value('id'));
         $this->assertDatabaseHas('restaurant_staff', [
             'restaurant_id' => $restaurant->getKey(),
             'user_id' => $invitee->getKey(),
@@ -238,27 +244,42 @@ class TeamAndAuditTest extends TestCase
             ->postJson($this->path($restaurant, '/team/invitations'), $payload)
             ->assertOk();
         $invitationId = $response->json('data.id');
+        $invitation = \App\Models\Invitation::query()->findOrFail($invitationId);
         $invitee = User::query()->where('email', $payload['email'])->firstOrFail();
 
         $this->businessRequest($owner, $restaurant)
             ->deleteJson($this->path($restaurant, '/team/invitations/'.$invitationId))
             ->assertNoContent();
+        $this->businessRequest($owner, $restaurant)
+            ->deleteJson($this->path($restaurant, '/team/invitations/'.$invitationId))
+            ->assertNoContent();
 
         $this->assertDatabaseHas('invitations', ['id' => $invitationId, 'status' => 'cancelled']);
+        $this->assertSame((int) $invitation->staff_id, (int) RestaurantStaff::query()
+            ->where('restaurant_id', $restaurant->getKey())
+            ->where('user_id', $invitee->getKey())
+            ->value('id'));
         $this->assertDatabaseHas('restaurant_staff', [
             'restaurant_id' => $restaurant->getKey(),
             'user_id' => $invitee->getKey(),
             'status' => 'removed',
         ]);
 
-        $this->businessRequest($owner, $restaurant)
+        $secondResponse = $this->businessRequest($owner, $restaurant)
             ->postJson($this->path($restaurant, '/team/invitations'), $payload)
             ->assertOk();
+        $secondInvitation = \App\Models\Invitation::query()->findOrFail($secondResponse->json('data.id'));
+        $this->assertSame((int) $invitation->staff_id, (int) $secondInvitation->staff_id);
+        $this->assertSame('pending', $secondInvitation->status);
 
         $this->assertSame(1, RestaurantStaff::query()
             ->where('restaurant_id', $restaurant->getKey())
             ->where('user_id', $invitee->getKey())
             ->count());
+        $this->assertDatabaseHas('restaurant_staff', [
+            'id' => $secondInvitation->staff_id,
+            'status' => 'invited',
+        ]);
         $this->assertSame(2, \App\Models\Invitation::query()
             ->where('restaurant_id', $restaurant->getKey())
             ->where('user_id', $invitee->getKey())
@@ -284,11 +305,60 @@ class TeamAndAuditTest extends TestCase
             ->assertNotFound();
 
         $this->assertDatabaseHas('invitations', ['id' => $invitationId, 'status' => 'expired']);
+        $this->assertNotNull($invitation->staff_id);
         $this->assertDatabaseHas('restaurant_staff', [
             'restaurant_id' => $restaurant->getKey(),
             'user_id' => $invitation->user_id,
             'status' => 'removed',
         ]);
+        $this->assertSame((int) $invitation->staff_id, (int) RestaurantStaff::query()
+            ->where('restaurant_id', $restaurant->getKey())
+            ->where('user_id', $invitation->user_id)
+            ->value('id'));
+    }
+
+    public function test_cancelling_invitation_succeeds_when_membership_was_already_removed(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $response = $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/team/invitations'), [
+                'email' => 'removed.before.cancel@example.test',
+                'position' => 'staff',
+            ])
+            ->assertOk();
+        $invitationId = (int) $response->json('data.id');
+        $invitation = \App\Models\Invitation::query()->findOrFail($invitationId);
+        RestaurantStaff::query()->whereKey($invitation->staff_id)->update(['status' => 'removed']);
+
+        $this->businessRequest($owner, $restaurant)
+            ->deleteJson($this->path($restaurant, '/team/invitations/'.$invitationId))
+            ->assertNoContent();
+
+        $this->assertDatabaseHas('invitations', ['id' => $invitationId, 'status' => 'cancelled']);
+        $this->assertDatabaseHas('restaurant_staff', ['id' => $invitation->staff_id, 'status' => 'removed']);
+    }
+
+    public function test_expiring_invitation_succeeds_when_membership_was_already_removed(): void
+    {
+        [$owner, $restaurant] = $this->createOwnerAndRestaurant();
+        $response = $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/team/invitations'), [
+                'email' => 'removed.before.expire@example.test',
+                'position' => 'staff',
+            ])
+            ->assertOk();
+        $invitationId = (int) $response->json('data.id');
+        $invitation = \App\Models\Invitation::query()->findOrFail($invitationId);
+        RestaurantStaff::query()->whereKey($invitation->staff_id)->update(['status' => 'removed']);
+        $invitation->expires_at = now()->subMinute();
+        $invitation->save();
+
+        $this->businessRequest($owner, $restaurant)
+            ->postJson($this->path($restaurant, '/team/invitations/'.$invitationId.'/resend'))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('invitations', ['id' => $invitationId, 'status' => 'expired']);
+        $this->assertDatabaseHas('restaurant_staff', ['id' => $invitation->staff_id, 'status' => 'removed']);
     }
 
     public function test_owner_can_transfer_ownership_to_an_active_manager_atomically(): void

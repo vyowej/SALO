@@ -91,12 +91,12 @@ class RestaurantPageController extends Controller
 
     public function updatePhoto(
         RestaurantPhotoUpdateRequest $request,
-        string $photo,
         RestaurantPageService $service,
     ): BusinessWorkspaceResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('managePhotos', $restaurant);
-        abort_unless(ctype_digit($photo), 404);
+        $photo = $request->route('photo');
+        abort_unless(is_string($photo) && ctype_digit($photo), 404);
 
         return BusinessWorkspaceResource::make($service->updatePhoto(
             $restaurant,
@@ -106,10 +106,12 @@ class RestaurantPageController extends Controller
         ));
     }
 
-    public function deletePhoto(BusinessWorkspaceRequest $request, string $photo, RestaurantPageService $service): JsonResponse
+    public function deletePhoto(BusinessWorkspaceRequest $request, RestaurantPageService $service): JsonResponse
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('managePhotos', $restaurant);
+        $photo = $request->route('photo');
+        abort_unless(is_string($photo) && ctype_digit($photo), 404);
         $service->deletePhoto($restaurant, $this->user($request), $photo);
 
         return response()->json([], 204);
@@ -158,11 +160,13 @@ class RestaurantPageController extends Controller
         ]);
     }
 
-    public function deleteClosure(BusinessWorkspaceRequest $request, int $closure, RestaurantPageService $service): JsonResponse
+    public function deleteClosure(BusinessWorkspaceRequest $request, RestaurantPageService $service): JsonResponse
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageHours', $restaurant);
-        $service->deleteClosure($restaurant, $this->user($request), $closure);
+        $closure = $request->route('closure');
+        abort_unless(is_string($closure) && ctype_digit($closure), 404);
+        $service->deleteClosure($restaurant, $this->user($request), (int) $closure);
 
         return response()->json([], 204);
     }

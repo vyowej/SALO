@@ -35,12 +35,12 @@ class RestaurantTableController extends Controller
 
     public function update(
         RestaurantTableRequest $request,
-        string $table,
         BusinessReservationService $service,
     ): RestaurantTableResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageTables', $restaurant);
-        abort_unless(ctype_digit($table), 404);
+        $table = $request->route('table');
+        abort_unless(is_string($table) && ctype_digit($table), 404);
 
         return RestaurantTableResource::make($service->updateTable(
             $restaurant,
@@ -50,11 +50,12 @@ class RestaurantTableController extends Controller
         ));
     }
 
-    public function destroy(Request $request, string $table, BusinessReservationService $service): Response
+    public function destroy(Request $request, BusinessReservationService $service): Response
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageTables', $restaurant);
-        abort_unless(ctype_digit($table), 404);
+        $table = $request->route('table');
+        abort_unless(is_string($table) && ctype_digit($table), 404);
         $service->deleteTable($restaurant, $this->user($request), (int) $table);
 
         return response()->noContent();

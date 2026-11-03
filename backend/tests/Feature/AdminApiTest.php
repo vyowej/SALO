@@ -4,16 +4,20 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\RestaurantApplication;
+use App\Models\Restaurant;
 use App\Repositories\Contracts\AdminRepository;
 use App\Repositories\Contracts\UserRepository;
 use App\Repositories\Stub\AdminFixtures;
 use App\Services\AdminService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Tests\Support\AuthoritativeFixtures;
 use Tests\TestCase;
 
 class AdminApiTest extends TestCase
 {
+    use AuthoritativeFixtures;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,6 +74,7 @@ class AdminApiTest extends TestCase
         $this->asAdmin();
         $this->postJson('/api/v1/admin/restaurants', [])->assertUnprocessable();
         $applicant = $this->user(['customer']);
+        $barangay = $this->createAuthoritativeBarangayLocation();
         $application = RestaurantApplication::query()->create([
             'submitted_by' => $applicant->getKey(),
             'application_type' => 'initial',
@@ -77,8 +82,9 @@ class AdminApiTest extends TestCase
             'draft_details' => [
                 'restaurant_name' => 'Sample Business 1',
                 'business_email' => 'business@example.test',
-                'psgc_code' => null,
-                'street' => null,
+                'psgc_code' => $barangay->getKey(),
+                'street' => 'Fixture Street',
+                'formatted_address' => 'Fixture Street, Fixture Barangay, Fixture City, Fixture Province, Fixture Region, Philippines',
                 'latitude' => null,
                 'longitude' => null,
             ],
@@ -92,6 +98,63 @@ class AdminApiTest extends TestCase
             ->assertJsonFragment(['name' => 'Sample Restaurant 1', 'status' => 'active']);
         $this->postJson('/api/v1/admin/applications/rider/'.AdminFixtures::id(304).'/reject', [])
             ->assertUnprocessable();
+    }
+
+    public function test_initial_restaurant_application_approval_rejects_incomplete_address_without_creating_restaurant(): void
+    {
+        $this->asAdmin();
+        $applicant = $this->user(['customer']);
+        $barangay = $this->createAuthoritativeBarangayLocation();
+        $region = $barangay->parent->parent->parent;
+        $application = RestaurantApplication::query()->create([
+            'submitted_by' => $applicant->getKey(),
+            'application_type' => 'initial',
+            'status' => 'under_review',
+            'draft_details' => [
+                'restaurant_name' => 'Incomplete Address Business',
+                'business_email' => 'incomplete.address@example.test',
+                'psgc_code' => $region->getKey(),
+                'street' => ' ',
+            ],
+            'submitted_at' => now(),
+        ]);
+
+        $this->assertSame(0, Restaurant::query()->where('owner_user_id', $applicant->getKey())->count());
+        $this->postJson("/api/v1/admin/applications/partner/{$application->getKey()}/approve", [])
+            ->assertUnprocessable()
+            ->assertJsonStructure(['error' => ['fields' => [
+                'draft_details.psgc_code',
+                'draft_details.street',
+            ]]]);
+        $this->assertSame(0, Restaurant::query()->where('owner_user_id', $applicant->getKey())->count());
+    }
+
+    public function test_initial_restaurant_application_builds_address_when_draft_has_no_formatted_address(): void
+    {
+        $this->asAdmin();
+        $applicant = $this->user(['customer']);
+        $barangay = $this->createAuthoritativeBarangayLocation();
+        $application = RestaurantApplication::query()->create([
+            'submitted_by' => $applicant->getKey(),
+            'application_type' => 'initial',
+            'status' => 'under_review',
+            'draft_details' => [
+                'restaurant_name' => 'Backend Formatted Address Business',
+                'business_email' => 'backend.address@example.test',
+                'psgc_code' => $barangay->getKey(),
+                'street' => 'Main Road',
+            ],
+            'submitted_at' => now(),
+        ]);
+
+        $this->postJson("/api/v1/admin/applications/partner/{$application->getKey()}/approve", [])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $restaurant = Restaurant::query()->where('owner_user_id', $applicant->getKey())->firstOrFail();
+        $this->assertSame('Main Road', $restaurant->street);
+        $this->assertStringContainsString('Main Road', $restaurant->formatted_address);
+        $this->assertStringContainsString('Fixture Barangay', $restaurant->formatted_address);
     }
 
     public function test_rider_application_approval_grants_driver_capability_and_rejects_owner_conflict(): void

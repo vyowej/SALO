@@ -6,13 +6,11 @@ use App\Repositories\Database\DatabaseAddressRepository;
 use App\Repositories\Database\DatabasePsgcLocationRepository;
 use App\Services\AddressFormatter;
 use App\Services\AddressService;
-use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class CustomerAddressAuthoritativeSchemaTest extends TestCase
 {
@@ -31,11 +29,6 @@ class CustomerAddressAuthoritativeSchemaTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->loadEnvironmentFrom('.env.testing');
-        $app->make(Kernel::class)->bootstrap();
-        Facade::setFacadeApplication($app);
 
         $this->connectionName = (string) config('database.default');
         $connectionConfig = config("database.connections.{$this->connectionName}");
@@ -88,8 +81,6 @@ class CustomerAddressAuthoritativeSchemaTest extends TestCase
             DB::connection($this->connectionName)->rollBack();
         }
 
-        restore_error_handler();
-        restore_exception_handler();
         parent::tearDown();
     }
 

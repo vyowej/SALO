@@ -212,16 +212,12 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                     ->with('parent.parent.parent.parent')
                     ->find($psgcCode)
                 : null;
-            $formattedAddress = trim((string) ($details['formatted_address'] ?? ''));
             $addressErrors = [];
             if ($location === null || $location->level !== 'barangay') {
                 $addressErrors['draft_details.psgc_code'] = ['Choose a valid PSGC barangay before approval.'];
             }
             if ($street === '') {
                 $addressErrors['draft_details.street'] = ['Enter a street address before approval.'];
-            }
-            if ($formattedAddress === '') {
-                $addressErrors['draft_details.formatted_address'] = ['Provide a formatted address before approval.'];
             }
             if ($addressErrors !== []) {
                 throw ValidationException::withMessages($addressErrors);

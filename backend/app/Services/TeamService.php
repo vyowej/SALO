@@ -197,6 +197,7 @@ class TeamService
             $invitation = $this->team->createInvitation([
                 'restaurant_id' => $lockedRestaurant->getKey(),
                 'user_id' => $user->getKey(),
+                'staff_id' => $staff->getKey(),
                 'invited_by' => $actor->getKey(),
                 'invited_email' => $email,
                 'staff_role' => $role,
@@ -246,17 +247,22 @@ class TeamService
     {
         DB::transaction(function () use ($restaurant, $actor, $invitationId): void {
             $invitation = $this->team->invitationByIdForUpdate($restaurant, $invitationId);
-            abort_unless($invitation !== null && $invitation->status === 'pending', 404);
-            $invitation->status = 'cancelled';
-            $this->team->saveInvitation($invitation);
-            $staff = $this->team->staffByUserIdForUpdate($restaurant, (int) $invitation->user_id);
-            if ($staff !== null && $staff->status === 'invited') {
-                $staff->status = 'removed';
-                $staff->save();
+            abort_unless($invitation !== null && in_array($invitation->status, ['pending', 'cancelled'], true), 404);
+            $wasPending = $invitation->status === 'pending';
+            if ($invitation->staff_id !== null) {
+                $staff = $this->team->staffByIdForUpdate($restaurant, (int) $invitation->staff_id);
+                if ($staff !== null && $staff->status === 'invited') {
+                    $staff->status = 'removed';
+                    $staff->save();
+                }
             }
-            $this->record($actor, $restaurant, 'team.invitation_cancelled', 'invitation', (string) $invitation->getKey(), [
-                'status' => 'pending',
-            ], ['status' => 'cancelled']);
+            if ($wasPending) {
+                $invitation->status = 'cancelled';
+                $this->team->saveInvitation($invitation);
+                $this->record($actor, $restaurant, 'team.invitation_cancelled', 'invitation', (string) $invitation->getKey(), [
+                    'status' => 'pending',
+                ], ['status' => 'cancelled']);
+            }
         });
     }
 
@@ -317,7 +323,7 @@ class TeamService
             abort_unless($user->status === 'active', 403);
             $restaurant = $invitation->restaurant;
             abort_unless($restaurant !== null && $restaurant->status !== 'suspended', 403);
-            $staff = $this->team->staffByUserIdForUpdate($restaurant, (int) $user->getKey());
+            $staff = $this->team->staffByIdForUpdate($restaurant, (int) $invitation->staff_id);
             abort_unless($staff !== null && $staff->status === 'invited', 404);
             $staff->status = 'active';
             $staff->save();
@@ -359,7 +365,7 @@ class TeamService
             $restaurant = $invitation->restaurant;
             abort_unless($user !== null && $user->status === 'invited', 403);
             abort_unless($restaurant !== null && $restaurant->status !== 'suspended', 403);
-            $staff = $this->team->staffByUserIdForUpdate($restaurant, (int) $user->getKey());
+            $staff = $this->team->staffByIdForUpdate($restaurant, (int) $invitation->staff_id);
             abort_unless($staff !== null && $staff->status === 'invited', 404);
             $user->first_name = trim($data['first_name']);
             $user->last_name = trim($data['last_name']);
@@ -476,15 +482,16 @@ class TeamService
 
     private function expireInvitation(Invitation $invitation): void
     {
-        $invitation->status = 'expired';
-        $this->team->saveInvitation($invitation);
-        if ($invitation->restaurant !== null) {
-            $staff = $this->team->staffByUserIdForUpdate($invitation->restaurant, (int) $invitation->user_id);
+        $restaurant = $invitation->restaurant;
+        if ($restaurant !== null && $invitation->staff_id !== null) {
+            $staff = $this->team->staffByIdForUpdate($restaurant, (int) $invitation->staff_id);
             if ($staff !== null && $staff->status === 'invited') {
                 $staff->status = 'removed';
                 $staff->save();
             }
         }
+        $invitation->status = 'expired';
+        $this->team->saveInvitation($invitation);
     }
 
     private function positions(): array

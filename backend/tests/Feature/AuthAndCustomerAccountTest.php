@@ -93,11 +93,15 @@ class AuthAndCustomerAccountTest extends TestCase
             'staff_role' => 'manager',
             'status' => 'active',
         ]);
+        $barangay = $this->createAuthoritativeBarangayLocation();
         RiderProfile::query()->create([
             'user_id' => $user->getKey(),
             'application_status' => 'approved',
             'status' => 'active',
             'availability' => 'online',
+            'psgc_code' => $barangay->getKey(),
+            'street' => 'Fixture Street',
+            'formatted_address' => 'Fixture Street, Fixture Barangay, Fixture City, Fixture Province, Fixture Region, Philippines',
         ]);
         $this->actingAs($user, 'web');
 

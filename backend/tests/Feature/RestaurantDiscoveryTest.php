@@ -19,6 +19,7 @@ class RestaurantDiscoveryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->createAuthoritativeDietaryTag('vegetarian');
         $this->withHeaders([
             'Origin' => 'http://localhost:5173',
             'Referer' => 'http://localhost:5173',
@@ -94,6 +95,50 @@ class RestaurantDiscoveryTest extends TestCase
             ->assertJsonMissing(['name' => 'Hidden Draft']);
 
         $this->assertNotSame($vegetarian->getKey(), $draft->getKey());
+    }
+
+    public function test_menu_item_dietary_tags_use_authoritative_pivot_columns_for_relationship_operations(): void
+    {
+        $restaurant = $this->createRestaurant('Dietary Pivot Restaurant', 'approved', true);
+        $category = MenuCategory::query()->create([
+            'restaurant_id' => $restaurant->getKey(),
+            'name' => 'Mains',
+            'sort_order' => 1,
+            'status' => 'active',
+        ]);
+        $item = MenuItem::query()->create([
+            'category_id' => $category->getKey(),
+            'name' => 'Garden Bowl',
+            'price' => '125.00',
+            'lifecycle_status' => 'draft',
+            'is_available' => false,
+        ]);
+        $vegetarian = $this->createAuthoritativeDietaryTag('vegetarian');
+        $vegan = $this->createAuthoritativeDietaryTag('vegan');
+
+        $item->dietaryTags()->attach($vegetarian->getKey());
+        $this->assertDatabaseHas('menu_item_dietary_tags', [
+            'item_id' => $item->getKey(),
+            'tag_id' => $vegetarian->getKey(),
+        ]);
+        $this->assertSame(
+            [$vegetarian->getKey()],
+            $item->fresh()->load('dietaryTags')->dietaryTags->modelKeys(),
+        );
+        $this->assertTrue($vegetarian->items()->whereKey($item->getKey())->exists());
+
+        $item->dietaryTags()->sync([$vegan->getKey()]);
+        $this->assertDatabaseHas('menu_item_dietary_tags', [
+            'item_id' => $item->getKey(),
+            'tag_id' => $vegan->getKey(),
+        ]);
+        $this->assertDatabaseMissing('menu_item_dietary_tags', [
+            'item_id' => $item->getKey(),
+            'tag_id' => $vegetarian->getKey(),
+        ]);
+
+        $item->dietaryTags()->detach();
+        $this->assertDatabaseMissing('menu_item_dietary_tags', ['item_id' => $item->getKey()]);
     }
 
     public function test_nearest_sort_requires_coordinates_and_rejects_out_of_bounds_coordinates(): void

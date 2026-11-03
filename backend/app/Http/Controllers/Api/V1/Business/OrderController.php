@@ -27,11 +27,12 @@ class OrderController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $restaurantId, string $order, BusinessOrderService $service): OrderResource
+    public function show(Request $request, BusinessOrderService $service): OrderResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('viewOrders', $restaurant);
-        abort_unless(ctype_digit($order), 404);
+        $order = $request->route('order');
+        abort_unless(is_string($order) && ctype_digit($order), 404);
 
         return OrderResource::make($service->show(
             $restaurant,
@@ -42,13 +43,12 @@ class OrderController extends Controller
 
     public function updateStatus(
         OrderStatusRequest $request,
-        string $restaurantId,
-        string $order,
         BusinessOrderService $service,
     ): OrderResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('updateOrderStatus', $restaurant);
-        abort_unless(ctype_digit($order), 404);
+        $order = $request->route('order');
+        abort_unless(is_string($order) && ctype_digit($order), 404);
         $data = $request->validated();
         if (in_array($data['status'], ['rejected', 'cancelled'], true)) {
             $this->authorize('cancelOrder', $restaurant);

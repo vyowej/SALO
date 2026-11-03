@@ -27,11 +27,12 @@ class ReservationController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $reservation, BusinessReservationService $service): ReservationResource
+    public function show(Request $request, BusinessReservationService $service): ReservationResource
     {
         $restaurant = $this->restaurant($request);
         $this->authorize('viewReservations', $restaurant);
-        abort_unless(ctype_digit($reservation), 404);
+        $reservation = $request->route('reservation');
+        abort_unless(is_string($reservation) && ctype_digit($reservation), 404);
 
         return ReservationResource::make(
             $service->show($restaurant, (int) $reservation),
@@ -40,12 +41,12 @@ class ReservationController extends Controller
 
     public function updateStatus(
         ReservationStatusRequest $request,
-        string $reservation,
         BusinessReservationService $service,
     ): ReservationResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageReservations', $restaurant);
-        abort_unless(ctype_digit($reservation), 404);
+        $reservation = $request->route('reservation');
+        abort_unless(is_string($reservation) && ctype_digit($reservation), 404);
         $user = $request->user();
         abort_unless($user instanceof User, 401);
         $data = $request->validated();
@@ -61,12 +62,12 @@ class ReservationController extends Controller
 
     public function reschedule(
         ReservationRescheduleRequest $request,
-        string $reservation,
         BusinessReservationService $service,
     ): ReservationResource {
         $restaurant = $this->restaurant($request);
         $this->authorize('manageReservations', $restaurant);
-        abort_unless(ctype_digit($reservation), 404);
+        $reservation = $request->route('reservation');
+        abort_unless(is_string($reservation) && ctype_digit($reservation), 404);
         $user = $request->user();
         abort_unless($user instanceof User, 401);
 

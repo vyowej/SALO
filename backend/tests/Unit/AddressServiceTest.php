@@ -5,28 +5,11 @@ namespace Tests\Unit;
 use App\Repositories\Contracts\AddressRepository;
 use App\Repositories\Contracts\PsgcLocationRepository;
 use App\Services\AddressService;
-use Illuminate\Contracts\Console\Kernel;
-use Illuminate\Support\Facades\Facade;
 use Illuminate\Validation\ValidationException;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class AddressServiceTest extends TestCase
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(Kernel::class)->bootstrap();
-        Facade::setFacadeApplication($app);
-    }
-
-    protected function tearDown(): void
-    {
-        restore_error_handler();
-        restore_exception_handler();
-        parent::tearDown();
-    }
-
     public function test_rejects_non_barangay_location_codes(): void
     {
         $service = $this->service();

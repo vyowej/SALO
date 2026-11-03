@@ -23,6 +23,8 @@ class MenuManagementTest extends \Tests\TestCase
     {
         parent::setUp();
         $this->withHeaders(['Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173']);
+        $this->createAuthoritativeDietaryTag('vegetarian');
+        $this->createAuthoritativeDietaryTag('halal_certified', 'certification');
     }
 
     public function test_owner_can_manage_categories_and_items_and_price_change_requires_confirmation(): void

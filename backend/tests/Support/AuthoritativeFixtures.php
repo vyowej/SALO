@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Models\DietaryTag;
 use App\Models\PsgcLocation;
 use App\Models\Restaurant;
 use App\Models\User;
@@ -62,5 +63,13 @@ trait AuthoritativeFixtures
             'status' => 'approved',
             'is_24_7' => true,
         ], $attributes));
+    }
+
+    protected function createAuthoritativeDietaryTag(string $name, string $tagType = 'dietary'): DietaryTag
+    {
+        return DietaryTag::query()->firstOrCreate(
+            ['name' => $name],
+            ['tag_type' => $tagType],
+        );
     }
 }

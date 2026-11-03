@@ -79,6 +79,7 @@ class RestaurantApplicationIsolationTest extends TestCase
                 'business_email_verified_at' => now()->toISOString(),
                 'psgc_code' => $location->getKey(),
                 'street' => '1 Test Street',
+                'formatted_address' => '1 Test Street, Test Barangay, Test City, Test Province, Test Region, Philippines',
                 'house_no' => '1',
                 'latitude' => 14.5995,
                 'longitude' => 120.9842,
