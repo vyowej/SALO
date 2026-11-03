@@ -206,20 +206,25 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
 
             $details = $locked->draft_details ?? [];
             $street = trim((string) ($details['street'] ?? ''));
-            $location = null;
             $psgcCode = $details['psgc_code'] ?? null;
-            if (is_string($psgcCode) && $psgcCode !== '') {
-                $location = PsgcLocation::query()
+            $location = is_string($psgcCode) && $psgcCode !== ''
+                ? PsgcLocation::query()
                     ->with('parent.parent.parent.parent')
-                    ->find($psgcCode);
-                if ($location === null && $street !== '') {
-                    throw ValidationException::withMessages([
-                        'draft_details.psgc_code' => ['Choose a valid PSGC location and street address before approval.'],
-                    ]);
-                }
+                    ->find($psgcCode)
+                : null;
+            $formattedAddress = trim((string) ($details['formatted_address'] ?? ''));
+            $addressErrors = [];
+            if ($location === null || $location->level !== 'barangay') {
+                $addressErrors['draft_details.psgc_code'] = ['Choose a valid PSGC barangay before approval.'];
             }
-            if ($location !== null && $street === '') {
-                $street = '';
+            if ($street === '') {
+                $addressErrors['draft_details.street'] = ['Enter a street address before approval.'];
+            }
+            if ($formattedAddress === '') {
+                $addressErrors['draft_details.formatted_address'] = ['Provide a formatted address before approval.'];
+            }
+            if ($addressErrors !== []) {
+                throw ValidationException::withMessages($addressErrors);
             }
             $houseNumber = trim((string) ($details['house_no'] ?? ''));
 
@@ -234,13 +239,11 @@ class DatabaseRestaurantApplicationRepository implements RestaurantApplicationRe
                 'psgc_code' => $location?->getKey() ?? null,
                 'street' => $street !== '' ? $street : null,
                 'house_no' => $houseNumber !== '' ? $houseNumber : null,
-                'formatted_address' => $location !== null && $street !== ''
-                    ? $this->addressFormatter->format(
-                        $location,
-                        $street,
-                        $houseNumber !== '' ? $houseNumber : null,
-                    )
-                    : null,
+                'formatted_address' => $this->addressFormatter->format(
+                    $location,
+                    $street,
+                    $houseNumber !== '' ? $houseNumber : null,
+                ),
                 'latitude' => $details['latitude'] ?? null,
                 'longitude' => $details['longitude'] ?? null,
                 'logo_path' => $details['logo_path'] ?? null,
