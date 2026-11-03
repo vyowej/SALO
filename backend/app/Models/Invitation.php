@@ -10,6 +10,7 @@ class Invitation extends Model
     protected $fillable = [
         'restaurant_id',
         'user_id',
+        'staff_id',
         'invited_by',
         'invited_email',
         'staff_role',
@@ -35,6 +36,11 @@ class Invitation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(RestaurantStaff::class, 'staff_id');
     }
 
     public function inviter(): BelongsTo
