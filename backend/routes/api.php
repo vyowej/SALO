@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminController;
+use App\Http\Controllers\Api\V1\Admin\AdminAccountController;
 use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
+use App\Http\Controllers\Api\V1\Admin\RiderSchedulingController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Applications\RiderApplicationController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
@@ -195,6 +197,11 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         });
 
         Route::middleware('capability:admin')->prefix('admin')->group(function (): void {
+            Route::get('/admin-accounts', [AdminAccountController::class, 'index']);
+            Route::post('/admin-accounts', [AdminAccountController::class, 'store']);
+            Route::get('/admin-accounts/{user}', [AdminAccountController::class, 'show'])->whereNumber('user');
+            Route::put('/admin-accounts/{user}', [AdminAccountController::class, 'update'])->whereNumber('user');
+            Route::patch('/admin-accounts/{user}/status', [AdminAccountController::class, 'setStatus'])->whereNumber('user');
             Route::get('/dashboard', [AdminController::class, 'dashboard']);
             foreach (['users', 'restaurants', 'riders', 'orders', 'reservations', 'service-areas'] as $resource) {
                 Route::get('/'.$resource, [AdminController::class, 'index'])->defaults('resource', $resource);
@@ -216,6 +223,19 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::post('/applications/{type}/{id}/request-revision', [AdminController::class, 'applicationRequestRevision']);
             Route::post('/applications/{type}/{id}/start-review', [AdminController::class, 'applicationStartReview']);
             Route::patch('/riders/{id}/status', [AdminController::class, 'riderStatus']);
+            Route::get('/rider-scheduling', [RiderSchedulingController::class, 'overview']);
+            Route::get('/rider-scheduling/assignments', [RiderSchedulingController::class, 'assignments']);
+            Route::post('/rider-scheduling/zones', [RiderSchedulingController::class, 'storeZone']);
+            Route::put('/rider-scheduling/zones/{zone}', [RiderSchedulingController::class, 'updateZone'])
+                ->whereNumber('zone');
+            Route::put('/rider-scheduling/zones/{zone}/shifts/{shift}/capacity', [RiderSchedulingController::class, 'setCapacity'])
+                ->whereNumber('zone')
+                ->whereNumber('shift');
+            Route::post('/rider-scheduling/riders/{rider}/assignments/{assignment}/override', [RiderSchedulingController::class, 'override'])
+                ->whereNumber('rider')
+                ->whereNumber('assignment');
+            Route::patch('/rider-scheduling/riders/{rider}/status', [RiderSchedulingController::class, 'setRiderStatus'])
+                ->whereNumber('rider');
             Route::get('/riders/{id}/proofs', [AdminController::class, 'riderProofs']);
             Route::get('/riders/{rider}/documents/{document}/download-url', [AdminController::class, 'riderDocumentUrl'])
                 ->whereNumber('rider')

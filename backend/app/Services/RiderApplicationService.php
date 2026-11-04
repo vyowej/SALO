@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\RiderActivationNotification;
 use App\Repositories\Contracts\PlatformSettingsRepository;
 use App\Repositories\Contracts\RiderApplicationRepository;
+use App\Services\RiderSchedulingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -27,6 +28,7 @@ class RiderApplicationService
         private readonly AuthTokenService $tokens,
         private readonly RiderApplicationRepository $riders,
         private readonly PlatformSettingsRepository $settings,
+        private readonly RiderSchedulingService $scheduling,
     ) {}
 
     public function getOrCreate(User $user): RiderProfile
@@ -372,6 +374,7 @@ class RiderApplicationService
                 'status' => 'pending_activation',
                 'note' => $note,
             ]);
+            $this->scheduling->assignApprovedRider($locked);
 
             return $this->loadProfile($locked->getKey());
         });
