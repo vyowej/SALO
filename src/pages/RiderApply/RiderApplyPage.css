@@ -136,6 +136,56 @@
   box-shadow: var(--shadow-soft);
 }
 
+.rider-application__assignments {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+  text-align: left;
+}
+
+.rider-application__assignments h2 {
+  margin: 0;
+  font-size: clamp(1.1rem, 3vw, 1.35rem);
+}
+
+.rider-application__assignments > p {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.rider-application__assignments ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rider-application__assignments li {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.rider-application__assignments li > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.rider-application__assignments li p,
+.rider-application__assignments li small {
+  margin: 0;
+}
+
+.rider-application__assignments li small {
+  color: var(--ink-muted);
+}
+
 .rider-application__step-title {
   display: grid;
   gap: var(--space-1);
