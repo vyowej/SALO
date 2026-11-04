@@ -39,4 +39,9 @@ class RiderProfilePolicy
     {
         return $user->platformAdmin()->where('status', 'active')->exists();
     }
+
+    public function manageScheduling(User $user): bool
+    {
+        return $this->review($user);
+    }
 }

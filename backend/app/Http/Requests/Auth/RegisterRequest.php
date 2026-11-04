@@ -19,6 +19,8 @@ class RegisterRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:190'],
             'phone' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'string', 'confirmed', 'min:8', 'regex:/[A-Za-z]/', 'regex:/\d/'],
+            'capabilities' => ['prohibited'],
+            'role' => ['prohibited'],
             'address' => ['sometimes', 'nullable', 'array'],
             'address.country_code' => ['sometimes', 'in:PH'],
             'address.province_code' => ['sometimes', 'nullable', 'string', 'max:12'],

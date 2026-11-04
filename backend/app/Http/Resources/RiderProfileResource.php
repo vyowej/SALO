@@ -10,7 +10,14 @@ class RiderProfileResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $this->resource->loadMissing(['user', 'location.parent.parent.parent', 'documents', 'preferredShifts']);
+        $this->resource->loadMissing([
+            'user',
+            'location.parent.parent.parent',
+            'documents',
+            'preferredShifts',
+            'shiftAssignments.zone',
+            'shiftAssignments.shift',
+        ]);
         $user = $this->user;
         $location = $this->location;
         $hierarchy = collect();
@@ -62,6 +69,17 @@ class RiderProfileResource extends JsonResource
                 'name' => $shift->name,
                 'start_time' => substr((string) $shift->start_time, 0, 5),
                 'end_time' => substr((string) $shift->end_time, 0, 5),
+            ])->values(),
+            'shift_assignments' => $this->shiftAssignments->map(fn ($assignment): array => [
+                'id' => (string) $assignment->getKey(),
+                'shift_id' => (string) $assignment->shift_id,
+                'shift_name' => $assignment->shift?->name,
+                'start_time' => substr((string) $assignment->shift?->start_time, 0, 5),
+                'end_time' => substr((string) $assignment->shift?->end_time, 0, 5),
+                'zone_id' => $assignment->zone_id === null ? null : (string) $assignment->zone_id,
+                'zone_name' => $assignment->zone?->name,
+                'status' => $assignment->status,
+                'reason' => $assignment->reason,
             ])->values(),
             'available_shifts' => app(RiderApplicationRepository::class)->shifts()->orderBy('start_time')->get()
                 ->map(fn ($shift): array => [
