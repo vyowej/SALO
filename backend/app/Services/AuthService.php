@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\RiderDispatchService;
 
 class AuthService
 {
@@ -19,6 +20,7 @@ class AuthService
         private readonly AuthTokenService $tokens,
         private readonly SessionRepository $sessions,
         private readonly PlatformAdminProtection $adminProtection,
+        private readonly RiderDispatchService $riderDispatch,
     ) {}
 
     private function ensureSession(Request $request): void
@@ -87,6 +89,10 @@ class AuthService
     public function logout(Request $request): void
     {
         $this->ensureSession($request);
+        $user = $request->user();
+        if ($user instanceof User) {
+            $this->riderDispatch->forceOfflineForUser((int) $user->getKey(), 'Rider logged out');
+        }
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

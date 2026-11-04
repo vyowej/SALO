@@ -6,6 +6,7 @@ const delay = () => new Promise((resolve) => window.setTimeout(resolve, config.m
 const mockState = {
   availability: riderDashboardSeed.online ? 'online' : 'offline',
   current: null,
+  location: null,
 };
 
 function createMockOffer() {
@@ -51,7 +52,10 @@ export const riderService = {
       await delay();
       mockState.availability = availability;
       if (availability === 'online' && !mockState.current) mockState.current = createMockOffer();
-      if (availability === 'offline') mockState.current = null;
+      if (availability === 'offline') {
+        mockState.current = null;
+        mockState.location = null;
+      }
       return this.getHome();
     }
 
@@ -69,6 +73,12 @@ export const riderService = {
         && new Date(mockState.current.offer.expires_at).getTime() <= Date.now()) {
         mockState.current = null;
       }
+      if (mockState.current?.type === 'active_delivery') {
+        return {
+          ...mockState.current,
+          delivery: { ...mockState.current.delivery, location: mockState.location },
+        };
+      }
       return mockState.current;
     }
 
@@ -81,6 +91,7 @@ export const riderService = {
       await delay();
       if (mockState.current?.offer?.id !== offerId) return { status: 'unavailable' };
       if (accept) {
+        mockState.location = null;
         mockState.current = {
           type: 'active_delivery',
           delivery: {
@@ -111,6 +122,33 @@ export const riderService = {
     return apiRequest(`/driver/delivery-offers/${encodeURIComponent(offerId)}/${accept ? 'accept' : 'decline'}`, {
       method: 'POST',
       body: {},
+    });
+  },
+
+  async updateLocation(deliveryId, latitude, longitude) {
+    if (config.useMock) {
+      await delay();
+      mockState.location = { latitude, longitude, updated_at: new Date().toISOString() };
+      return { recorded_at: mockState.location.updated_at };
+    }
+
+    setDriverContext();
+    return apiRequest(`/driver/deliveries/${encodeURIComponent(deliveryId)}/location`, {
+      method: 'POST',
+      body: { latitude, longitude },
+    });
+  },
+
+  async clearLocation(deliveryId) {
+    if (config.useMock) {
+      await delay();
+      mockState.location = null;
+      return { cleared: true };
+    }
+
+    setDriverContext();
+    return apiRequest(`/driver/deliveries/${encodeURIComponent(deliveryId)}/location`, {
+      method: 'DELETE',
     });
   },
 };

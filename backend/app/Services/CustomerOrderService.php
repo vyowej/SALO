@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Repositories\Contracts\CustomerOrderRepository;
 use App\Repositories\Contracts\OrderRepository;
+use App\Services\RiderLocationCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,6 +15,7 @@ class CustomerOrderService
     public function __construct(
         private readonly CustomerOrderRepository $orders,
         private readonly OrderRepository $sharedOrders,
+        private readonly RiderLocationCache $locations,
     ) {}
 
     public function list(int $userId, array $filters): LengthAwarePaginator
@@ -32,6 +34,24 @@ class CustomerOrderService
     public function tracking(int $userId, int $orderId): array
     {
         $order = $this->find($userId, $orderId);
+        $delivery = $order->delivery()->with('rider.user')->first();
+        $activeDelivery = $delivery !== null
+            && in_array($delivery->status, ['accepted', 'picked_up'], true)
+            && $delivery->rider_id !== null;
+        $rider = $delivery?->rider;
+        $riderEligible = $activeDelivery
+            && $rider !== null
+            && $rider->application_status === 'approved'
+            && $rider->status === 'active'
+            && $rider->availability === 'busy'
+            && $rider->user?->status === 'active';
+        $liveLocation = $riderEligible
+            ? $this->locations->latest($delivery, (int) $delivery->rider_id)
+            : null;
+
+        if ($delivery !== null && $delivery->rider_id !== null && ! $riderEligible) {
+            $this->locations->forgetForRider((int) $delivery->rider_id, $delivery);
+        }
 
         return [
             'order_id' => (string) $order->getKey(),
@@ -56,9 +76,8 @@ class CustomerOrderService
                 'longitude' => $order->delivery_lng,
             ] : null,
             'estimated_arrival_at' => null,
-            'live_location' => null,
-            'live_location_unavailable' => $order->order_type === 'delivery'
-                && ! in_array($order->status, ['delivered', 'completed', 'cancelled', 'rejected'], true),
+            'live_location' => $liveLocation,
+            'live_location_unavailable' => $activeDelivery && $liveLocation === null,
         ];
     }
 

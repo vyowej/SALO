@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Rider;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Rider\RiderAvailabilityRequest;
+use App\Http\Requests\Rider\RiderLocationUpdateRequest;
 use App\Models\RiderProfile;
 use App\Models\User;
 use App\Services\RiderDispatchService;
@@ -42,6 +43,35 @@ class RiderDispatchController extends Controller
         $this->authorize('accessDispatch', $profile);
 
         return response()->json(['data' => $dispatch->currentFor($request->user())]);
+    }
+
+    public function updateLocation(
+        RiderLocationUpdateRequest $request,
+        RiderDispatchService $dispatch,
+        string $delivery,
+    ): JsonResponse {
+        $profile = $this->profile($request);
+        $this->authorize('accessDispatch', $profile);
+        $data = $request->validated();
+
+        return response()->json(['data' => $dispatch->updateDeliveryLocation(
+            $request->user(),
+            (int) $delivery,
+            (float) $data['latitude'],
+            (float) $data['longitude'],
+        )]);
+    }
+
+    public function clearLocation(
+        Request $request,
+        RiderDispatchService $dispatch,
+        string $delivery,
+    ): JsonResponse {
+        $profile = $this->profile($request);
+        $this->authorize('accessDispatch', $profile);
+        $dispatch->clearDeliveryLocation($request->user(), (int) $delivery);
+
+        return response()->json(['data' => ['cleared' => true]]);
     }
 
     public function accept(Request $request, RiderDispatchService $dispatch, string $offer): JsonResponse

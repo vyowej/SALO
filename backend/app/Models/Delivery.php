@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Delivery extends Model
 {
+    private ?int $terminalCleanupRiderId = null;
+
     protected $fillable = [
         'order_id',
         'rider_id',
@@ -32,6 +35,38 @@ class Delivery extends Model
             'delivered_at' => 'datetime',
             'cash_remitted' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (Delivery $delivery): void {
+            if (! $delivery->isDirty('status')
+                || ! in_array($delivery->status, ['delivered', 'failed', 'cancelled'], true)) {
+                return;
+            }
+
+            $previousRiderId = $delivery->getRawOriginal('rider_id');
+            $delivery->terminalCleanupRiderId = $previousRiderId === null
+                ? ($delivery->rider_id === null ? null : (int) $delivery->rider_id)
+                : (int) $previousRiderId;
+        });
+
+        static::updated(function (Delivery $delivery): void {
+            if (! $delivery->wasChanged('status')
+                || ! in_array($delivery->status, ['delivered', 'failed', 'cancelled'], true)) {
+                return;
+            }
+
+            $riderId = $delivery->terminalCleanupRiderId;
+            $delivery->terminalCleanupRiderId = null;
+            if ($riderId === null) {
+                return;
+            }
+
+            DB::afterCommit(
+                fn () => app(\App\Services\RiderLocationCache::class)->forgetForRider($riderId, $delivery),
+            );
+        });
     }
 
     public function order(): BelongsTo

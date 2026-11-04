@@ -430,26 +430,57 @@ or phone check that was not run.
 
 ### D4 — Map and live location
 
-- Lazy-load Leaflet and camera code. Use the approved OSM/Leaflet setup only
-  after verifying provider terms and attribution. Map contains rider,
-  restaurant, customer, route to current target, distance, ETA, directions,
-  and recenter control. Call `invalidateSize` on resize, orientation, and
-  sheet snap changes.
-- Keep only the latest rider point in Laravel cache, with a TTL of about two
-  minutes. Post every 5-10 seconds during an active delivery; pause for
-  hidden tabs, back off on errors, and clear the entry when delivery ends.
-- Use a backend routing adapter with timeouts, caching, and an explicitly
-  labeled straight-line estimate fallback. Provider keys stay in
-  `backend/.env`; verify provider terms/limits before use.
-- Handle denied/absent GPS and offline state with a clear retry and manual
-  status path. Reject out-of-Philippines coordinates using the agreed coarse
-  bounds setting.
-- Customer tracking is authorized to that order's customer, authorized
-  restaurant staff, and Admin. Display a stale-location notice when no point
-  is newer than two minutes.
-- D4 tests: unauthorized tracking 403, latest-point cache expiry and end of
-  delivery deletion, out-of-bounds rejection, hidden-tab pause, and provider
-  error fallback.
+- Reuse the existing Leaflet dependency and visible OpenStreetMap attribution;
+  no new map dependency, provider, or key was added. Both map surfaces use the
+  canonical `https://tile.openstreetmap.org/{z}/{x}/{y}.png` URL specified by
+  the current OSM Tile Usage Policy. OSM's public tile service is best-effort
+  without an availability SLA; production deployment must still preserve a
+  valid Referer and honor tile caching requirements, and has not been approved
+  or tested here. Keep the visible attribution. There is no in-app road router,
+  route geometry, distance, or ETA provider. The rider can hand off the
+  destination to Google Maps or Waze; do not treat the handoff as verified
+  route data.
+- The mobile active-delivery view uses the available map area with a draggable
+  details sheet that snaps collapsed, half, or full, plus one thumb-zone
+  navigation action. Tablet and desktop layouts put the map beside delivery
+  details. The D4 view does not add delivery-progress controls.
+- The rider browser starts `watchPosition` only in Driver mode for its own
+  `accepted` or `picked_up` delivery. Updates are throttled to no more than
+  one request per five seconds. Hidden tabs pause and clear the server point;
+  permission denial, unavailable GPS, upload errors, ineligibility, and retry
+  are visible. A 403/404 from the location endpoint stops the active watch,
+  blocks further submissions from queued callbacks, and clears local tracking
+  state; temporary network errors leave the watch active. No watch runs while
+  Online and idle.
+- `POST /api/v1/driver/deliveries/{delivery}/location` validates coordinate
+  ranges and requires the authenticated active rider to own the assigned
+  active delivery. It writes the latest coordinate and server timestamp to
+  Laravel cache only; it performs no coordinate database write.
+- Customer `GET /api/v1/customer/orders/{order}/tracking` is available only
+  through the existing owned-order lookup and policy. It returns a location
+  only while the order's delivery is accepted/picked-up and the assigned rider
+  remains active. Completed, cancelled, failed, unassigned, or ineligible
+  deliveries return no rider point. Customer response contains coordinates
+  and timestamp only, not rider contact or profile details.
+- Switching away from Driver mode, logging out, becoming ineligible, clearing
+  location, or cancelling an order clears the rider cache. A tracking read
+  also clears an ended/ineligible delivery's entry; the two-minute TTL is the
+  crash/recovery fallback. The existing dispatch snapshot and delivery-scoped
+  key contain the same latest point only; there is no location history.
+- D4 tests cover owner-only rider updates, invalid coordinates, customer
+  order ownership, latest-point replacement, cache expiry, terminal delivery
+  privacy, cache-only writes, logout cleanup, terminal cleanup with and without
+  a retained rider ID, ineligible GPS stop, temporary network errors, and
+  watcher retry without duplication. Focused backend tests passed (22 tests,
+  109 assertions); the full backend suite passed (191 tests, 1,234 assertions).
+  Configured frontend tests including Rider and Customer tracking passed (17
+  tests); lint and production build passed.
+- Mock-mode browser simulation covered 360x800, 390x844, 768x1024, and
+  1280x800. It verified the canonical tile request host, clearWatch on
+  ineligibility, no request from a queued GPS callback after stop, and one
+  fresh watcher on retry. OSM tile requests were aborted, so successful tile
+  rendering remains unverified. This simulation does not verify physical
+  device GPS permissions, background behavior, or production hosting policy.
 
 ### D5 — Delivery lifecycle, proof, and cash
 
@@ -551,7 +582,8 @@ outside local development. No D1 route returns a raw private path.
 | `POST /rider/offers/{offer}/decline` | `{ "reason"?: string }` -> declined state | Offered rider only; record response and start next dispatch attempt. |
 | `GET /rider/deliveries/current` | None -> current delivery with customer contact/address and order items | Active assigned rider only; return nothing if no active delivery. |
 | `GET /rider/deliveries/{delivery}` | None -> delivery/order detail | Assigned rider only while active. After completion, return history-safe detail without phone/exact address. |
-| `POST /rider/deliveries/{delivery}/location` | `{ "latitude", "longitude", "accuracy_m"?: number }` -> `{ "recorded_at", "expires_at" }` | Assigned rider for an active delivery only. Validate coarse PH bounds and finite coordinate ranges. Ignore client timestamp; write only latest point to cache with TTL; no DB row/history. |
+| `POST /api/v1/driver/deliveries/{delivery}/location` | `{ "latitude", "longitude" }` -> `{ "recorded_at", "expires_at" }` | Authenticated Driver-mode rider assigned to an `accepted` or `picked_up` delivery; validate coordinate ranges and write latest point only to cache. |
+| `DELETE /api/v1/driver/deliveries/{delivery}/location` | Empty -> `{ "cleared": true }` | The assigned rider; used when GPS is unavailable, the page is hidden, or tracking ends. |
 | `POST /rider/deliveries/{delivery}/picked-up` | Empty -> updated delivery and order status/history | Assigned rider with accepted delivery only; transition once to `picked_up` and order `out_for_delivery`. |
 | `POST /rider/deliveries/{delivery}/delivered` | Multipart image `proof`, `latitude`, `longitude` -> delivered status/history and proof metadata (not path) | Assigned rider with `picked_up` delivery only. Validate/re-encode/store private proof, use server timestamp, persist path/coordinates and order `delivered` transactionally, then trigger customer receipt flow. |
 | `POST /rider/deliveries/{delivery}/failed` | `{ "reason": "customer_unreachable" \| "wrong_address" \| ... }` -> failed state and dispatch/admin result | Assigned rider only; reason required, audit/history/notifications; protect customer location/contact after assignment ends. |
@@ -564,7 +596,7 @@ outside local development. No D1 route returns a raw private path.
 
 | Method and URL | Request -> response | Who may call and rules |
 |---|---|---|
-| `GET /customer/orders/{order}/tracking` | Existing route; return order status/timeline plus latest cached rider point, stale marker, route/ETA where available | **Existing route, not rider-complete.** Order's customer only; authorized restaurant staff and Admin may use their applicable tracking route/policy. Never return another order's location. |
+| `GET /api/v1/customer/orders/{order}/tracking` | Existing order status/timeline plus latest cached rider point when the assigned delivery is active | The order's customer only. Existing order ownership query and policy run before location access; no location is returned after delivery ends or the rider becomes ineligible. |
 | `GET /admin/riders/{rider}/proofs` | Existing route; paginated proof metadata | **Existing route, fixture-backed.** Admin only; later implementation loads the rider's private deliveries and authorizes each streamed/signed file. |
 | `PATCH /admin/riders/{rider}/status` | `{ "status": "suspended" \| "active", "reason"?: string }` -> updated profile | **Existing route, fixture-backed.** Admin only; audit. Suspension forces offline and safely returns any active delivery to dispatch. |
 | `GET /rider/documents/{document}/file` | Signed short-lived URL or streamed file | Rider owner or Admin only; controller rechecks authorization and path stays under private root. |
@@ -583,13 +615,15 @@ addresses outside active delivery audit requirements, or uploaded file bytes.
 
 ### Live-location cache
 
-- Key: `salo:rider:delivery-location:{delivery_id}`.
-- Value: `rider_id`, `latitude`, `longitude`, optional `accuracy_m`, and
-  server-generated `recorded_at` (ISO-8601 UTC). Do not store a location
-  history, user ID beyond the assigned rider reference, or a client timestamp.
-- TTL: 120 seconds (or the approved equivalent). Each accepted location
-  replaces the previous value. Delete immediately when delivery ends, is
-  cancelled, fails, is reassigned, or rider becomes ineligible.
+- Delivery-scoped key:
+  `rider:delivery:{delivery_id}:profile:{rider_id}:location`.
+- Value: `latitude`, `longitude`, and server-generated `updated_at`
+  (ISO-8601). A same-value latest-point mirror at
+  `rider:{rider_id}:dispatch-location` maintains D3 eligibility behavior.
+  Neither key stores history or a client timestamp.
+- TTL: exactly 120 seconds. Each accepted update replaces the previous point.
+  Clear both keys when delivery ends/cancels, location is explicitly stopped,
+  the rider logs out/switches mode, or the rider becomes ineligible.
 - The cache key is not itself access control. Resolve the delivery and apply
   the order/customer/restaurant/Admin policy before returning a value.
 - Current `config/cache.php` supports file/database/array stores; rider
@@ -887,5 +921,6 @@ Use an Admin account and rider test accounts against `salo_test` only.
    offline recovery, reduced-motion, reduced-transparency, safe-area, and offer
    countdown checks on a real phone.
 
-**D3 is implemented and verified as recorded above. Stop here for review;
-D4 has not started.**
+**D4 is implemented within the approved OSM/no-router boundary. In-app road
+routing, live browser/device verification, and the listed D4 viewport checks
+remain pending; do not start D5 without approval.**

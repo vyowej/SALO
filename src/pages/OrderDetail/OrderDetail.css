@@ -71,6 +71,28 @@
   font-size: 0.74rem;
 }
 
+.order-tracking__live-location {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-dense);
+}
+
+.order-tracking__live-location h2 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.order-tracking__live-location p,
+.order-tracking__location-message {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 .stepper {
   display: flex;
   gap: 0;

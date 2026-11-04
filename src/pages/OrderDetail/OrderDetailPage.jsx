@@ -7,6 +7,7 @@ import { formatPeso } from '../../utils/formatPeso';
 import { FILIPINO_VOICE } from '../../constants/voice';
 import { Stepper } from '../../components/ui/Stepper';
 import { Button } from '../../components/ui/Button';
+import DeliveryTrackingMap from '../../components/location/DeliveryTrackingMap';
 import '../Page.css';
 import './OrderDetail.css';
 import StarRating from '../../components/ui/StarRating';
@@ -17,6 +18,39 @@ const currentStep = (status) => {
   return orderSteps.indexOf(normalized);
 };
 const cancelReasons = ['I placed this order by mistake', 'The delivery address is incorrect', 'I need to change my order', 'Other'];
+
+function LiveDeliveryTracking({ tracking }) {
+  const [now, setNow] = useState(0);
+  const location = tracking?.live_location;
+
+  useEffect(() => {
+    const initialTick = window.setTimeout(() => setNow(Date.now()), 0);
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => {
+      window.clearTimeout(initialTick);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  if (!location) {
+    return tracking?.live_location_unavailable
+      ? <p className="order-tracking__location-message" role="status">Live rider location is currently unavailable.</p>
+      : null;
+  }
+
+  const updatedAt = new Date(location.updated_at).getTime();
+  if (!Number.isFinite(updatedAt) || now - updatedAt > 120_000) {
+    return <p className="order-tracking__location-message" role="status">Live rider location is stale or unavailable.</p>;
+  }
+
+  return (
+    <section className="order-tracking__live-location" aria-label="Live rider tracking">
+      <h2>Rider location</h2>
+      <p>Last updated {new Date(location.updated_at).toLocaleTimeString()}. Location sharing expires after two minutes without an update.</p>
+      <DeliveryTrackingMap rider={location} destination={tracking.delivery} />
+    </section>
+  );
+}
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -231,6 +265,7 @@ export default function OrderDetailPage() {
           <h2>Track your order</h2>
           {trackingError ? <p className="form-error" role="status">{trackingError}</p> : null}
           <Stepper steps={orderSteps} currentStep={currentStep(order.status)} />
+          <LiveDeliveryTracking tracking={tracking} />
           {(tracking?.timeline || order.status_history || []).length ? (
             <ol className="order-status-timeline" aria-label="Order status history">
               {(tracking?.timeline || order.status_history).map((entry, index) => (

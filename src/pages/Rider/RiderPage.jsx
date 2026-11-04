@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../context/AuthContext';
+import DeliveryTrackingMap from '../../components/location/DeliveryTrackingMap';
+import { USER_ROLES, useAuth } from '../../context/AuthContext';
 import { riderService } from '../../services/riderService';
 import './RiderPage.css';
 
@@ -95,7 +96,18 @@ function OfferCard({ offer, now, busy, onRespond }) {
   );
 }
 
-function CurrentDelivery({ delivery }) {
+function navigationUrl(latitude, longitude, provider) {
+  const coordinates = `${Number(latitude)},${Number(longitude)}`;
+  return provider === 'waze'
+    ? `https://waze.com/ul?ll=${encodeURIComponent(coordinates)}&navigate=yes`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinates)}`;
+}
+
+function CurrentDelivery({ delivery, riderPosition, locationStatus, now, onRetryLocation }) {
+  const [sheetSnap, setSheetSnap] = useState('half');
+  const touchStartY = useRef(null);
+  const sheetDragged = useRef(false);
+
   if (!delivery) {
     return (
       <section className="rider-dispatch__panel rider-dispatch__empty">
@@ -105,44 +117,158 @@ function CurrentDelivery({ delivery }) {
     );
   }
 
+  const destination = delivery.destination;
+  const destinationAvailable = destination
+    && destination.latitude !== null && destination.latitude !== undefined
+    && destination.longitude !== null && destination.longitude !== undefined
+    && Number.isFinite(Number(destination.latitude))
+    && Number.isFinite(Number(destination.longitude))
+    && Number(destination.latitude) >= -90 && Number(destination.latitude) <= 90
+    && Number(destination.longitude) >= -180 && Number(destination.longitude) <= 180;
+  const displayedLocation = riderPosition || delivery.location;
+  const updatedAt = displayedLocation?.updated_at
+    ? new Date(displayedLocation.updated_at).getTime()
+    : null;
+  const locationIsStale = updatedAt !== null && now !== null && now - updatedAt > 120_000;
+  const snapOrder = ['collapsed', 'half', 'full'];
+  const handleSheetPointerDown = (event) => {
+    touchStartY.current = event.clientY;
+    sheetDragged.current = false;
+  };
+  const handleSheetPointerUp = (event) => {
+    if (touchStartY.current === null) return;
+    const delta = touchStartY.current - event.clientY;
+    touchStartY.current = null;
+    if (Math.abs(delta) <= 36) return;
+    sheetDragged.current = true;
+    setSheetSnap((current) => {
+      const index = snapOrder.indexOf(current);
+      const offset = delta > 0 ? 1 : -1;
+      return snapOrder[Math.max(0, Math.min(snapOrder.length - 1, index + offset))];
+    });
+  };
+
   return (
-    <section className="rider-dispatch__panel">
+    <section className="rider-dispatch__panel rider-dispatch__current">
       <div className="rider-dispatch__panel-heading">
         <div><p className="rider-dispatch__eyebrow">Current delivery</p><h2>Order {delivery.reference_code}</h2></div>
         <span className="rider-dispatch__status">{delivery.status.replace('_', ' ')}</span>
       </div>
-      <div className="rider-dispatch__stops">
-        <article className="rider-dispatch__stop">
-          <span className="rider-dispatch__stop-marker" aria-hidden="true">1</span>
-          <div><p className="rider-dispatch__eyebrow">Pickup</p><h3>{delivery.pickup.name}</h3><p>{delivery.pickup.address}</p></div>
-        </article>
-        <article className="rider-dispatch__stop">
-          <span className="rider-dispatch__stop-marker" aria-hidden="true">2</span>
-          <div>
-            <p className="rider-dispatch__eyebrow">Customer drop-off</p>
-            <h3>{delivery.customer.name}</h3>
-            <p>{delivery.customer.address}</p>
-            {delivery.customer.delivery_note ? <p className="rider-dispatch__note">{delivery.customer.delivery_note}</p> : null}
-            <a className="rider-dispatch__phone" href={`tel:${delivery.customer.phone}`}>{delivery.customer.phone}</a>
+      <section className="rider-dispatch__location" aria-label="Live location sharing">
+        <div>
+          <p className="rider-dispatch__eyebrow">Live location</p>
+          <strong>
+            {locationStatus === 'tracking' && displayedLocation && !locationIsStale ? 'Sharing your current location' : null}
+            {locationStatus === 'tracking' && locationIsStale ? 'Your shared location is stale. Waiting for a fresh GPS update.' : null}
+            {locationStatus === 'starting' ? 'Waiting for GPS location…' : null}
+            {locationStatus === 'paused' ? 'Location sharing paused while this page is in the background.' : null}
+            {locationStatus === 'ineligible' ? 'Location sharing stopped because this delivery or rider is no longer eligible.' : null}
+            {locationStatus === 'permission-denied' ? 'Location permission is blocked. Allow it in your browser settings, then retry.' : null}
+            {locationStatus === 'unavailable' ? 'Your location is unavailable. Check GPS and retry.' : null}
+            {locationStatus === 'upload-error' ? 'Your location could not be shared. Check your connection and retry.' : null}
+            {locationStatus === 'idle' ? 'Live location is available during an accepted delivery.' : null}
+          </strong>
+          {displayedLocation?.updated_at ? (
+            <small>
+              {locationIsStale
+                ? 'Last location is stale.'
+                : `Last updated ${new Date(displayedLocation.updated_at).toLocaleTimeString()}`}
+            </small>
+          ) : null}
+        </div>
+        {['permission-denied', 'unavailable', 'upload-error', 'paused', 'ineligible'].includes(locationStatus) ? (
+          <Button variant="secondary" onClick={onRetryLocation}>Retry location</Button>
+        ) : null}
+      </section>
+      <DeliveryTrackingMap
+        className="rider-dispatch__map"
+        rider={displayedLocation}
+        destination={destination}
+      />
+      <section
+        className={`rider-dispatch__sheet rider-dispatch__sheet--${sheetSnap}`}
+        aria-label="Delivery details"
+      >
+        <button
+          type="button"
+          className="rider-dispatch__sheet-handle"
+          aria-expanded={sheetSnap !== 'collapsed'}
+          aria-label="Toggle delivery details"
+          onPointerDown={handleSheetPointerDown}
+          onPointerUp={handleSheetPointerUp}
+          onPointerCancel={() => { touchStartY.current = null; }}
+          onClick={() => {
+            if (sheetDragged.current) {
+              sheetDragged.current = false;
+              return;
+            }
+            setSheetSnap((current) => (
+              current === 'collapsed' ? 'half' : current === 'half' ? 'full' : 'collapsed'
+            ));
+          }}
+        >
+          <span aria-hidden="true" />
+          <strong>Delivery details</strong>
+          <small>Order {delivery.reference_code}</small>
+        </button>
+        <div className="rider-dispatch__sheet-content">
+          {destinationAvailable ? (
+            <div className="rider-dispatch__navigation-links">
+              <p>In-app road routing is not configured. Open your preferred navigation app for turn-by-turn directions.</p>
+              <a href={navigationUrl(destination.latitude, destination.longitude, 'google')} target="_blank" rel="noopener noreferrer">Open Google Maps</a>
+              <a href={navigationUrl(destination.latitude, destination.longitude, 'waze')} target="_blank" rel="noopener noreferrer">Open Waze</a>
+            </div>
+          ) : (
+            <p className="rider-dispatch__notice">Delivery destination coordinates are unavailable for map navigation.</p>
+          )}
+          <div className="rider-dispatch__stops">
+            <article className="rider-dispatch__stop">
+              <span className="rider-dispatch__stop-marker" aria-hidden="true">1</span>
+              <div><p className="rider-dispatch__eyebrow">Pickup</p><h3>{delivery.pickup.name}</h3><p>{delivery.pickup.address}</p></div>
+            </article>
+            <article className="rider-dispatch__stop">
+              <span className="rider-dispatch__stop-marker" aria-hidden="true">2</span>
+              <div>
+                <p className="rider-dispatch__eyebrow">Customer drop-off</p>
+                <h3>{delivery.customer.name}</h3>
+                <p>{delivery.customer.address}</p>
+                {delivery.customer.delivery_note ? <p className="rider-dispatch__note">{delivery.customer.delivery_note}</p> : null}
+                <a className="rider-dispatch__phone" href={`tel:${delivery.customer.phone}`}>{delivery.customer.phone}</a>
+              </div>
+            </article>
           </div>
-        </article>
+          <div className="rider-dispatch__items">
+            <h3>Order items</h3>
+            <ul>{delivery.items.map((item, index) => (
+              <li key={`${item.name}-${index}`}>
+                <span>{item.quantity} × {item.name}</span>
+                {item.note ? <small>{item.note}</small> : null}
+              </li>
+            ))}</ul>
+          </div>
+          <p className="rider-dispatch__notice">Delivery progress actions are part of a later phase.</p>
+        </div>
+      </section>
+      <div className="rider-dispatch__map-action">
+        {destinationAvailable ? (
+          <a
+            className="rider-dispatch__navigate-primary"
+            href={navigationUrl(destination.latitude, destination.longitude, 'google')}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open navigation
+          </a>
+        ) : (
+          <Button variant="primary" disabled>Navigation unavailable</Button>
+        )}
       </div>
-      <div className="rider-dispatch__items">
-        <h3>Order items</h3>
-        <ul>{delivery.items.map((item, index) => (
-          <li key={`${item.name}-${index}`}>
-            <span>{item.quantity} × {item.name}</span>
-            {item.note ? <small>{item.note}</small> : null}
-          </li>
-        ))}</ul>
-      </div>
-      <p className="rider-dispatch__notice">Delivery progress actions are part of a later phase.</p>
     </section>
   );
 }
 
 export default function RiderPage() {
-  const { user } = useAuth();
+  const { user, activeView } = useAuth();
   const [home, setHome] = useState(null);
   const [current, setCurrent] = useState(null);
   const [selectedTab, setSelectedTab] = useState('home');
@@ -154,6 +280,9 @@ export default function RiderPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [vibrationEnabled, setVibrationEnabled] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
+  const [riderPosition, setRiderPosition] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle');
+  const [locationRetry, setLocationRetry] = useState(0);
   const audioContext = useRef(null);
   const previousOffer = useRef(null);
 
@@ -165,13 +294,19 @@ export default function RiderPage() {
       ]);
       setHome(nextHome);
       setCurrent(nextCurrent);
+      if (activeView === USER_ROLES.RIDER && nextCurrent?.type === 'active_delivery') {
+        setRiderPosition(nextCurrent.delivery.location || null);
+      } else {
+        setRiderPosition(null);
+        setLocationStatus('idle');
+      }
       setError('');
     } catch (requestError) {
       setError(requestError.message || 'Unable to load Driver mode. Check your connection and retry.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeView]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => refresh(), 0);
@@ -186,6 +321,114 @@ export default function RiderPage() {
   }, [refresh]);
 
   const offer = current?.type === 'offer' ? current.offer : null;
+  const activeDelivery = current?.type === 'active_delivery' ? current.delivery : null;
+  useEffect(() => {
+    const deliveryId = activeDelivery?.id;
+    const deliveryStatus = activeDelivery?.status;
+    if (activeView !== USER_ROLES.RIDER || !deliveryId || !['accepted', 'picked_up'].includes(deliveryStatus)) {
+      return undefined;
+    }
+
+    let watchId = null;
+    let disposed = false;
+    let stoppedForIneligibility = false;
+    let sending = false;
+    let lastSentAt = 0;
+    const clearServerLocation = () => {
+      Promise.resolve(riderService.clearLocation(deliveryId))
+        .catch((clearError) => console.error('Unable to clear shared rider location.', clearError));
+    };
+    const stopWatch = () => {
+      if (watchId !== null) navigator.geolocation?.clearWatch(watchId);
+      watchId = null;
+    };
+    const handlePosition = ({ coords }) => {
+      if (disposed || stoppedForIneligibility) return;
+      const point = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        updated_at: new Date().toISOString(),
+      };
+      setRiderPosition(point);
+      if (sending || Date.now() - lastSentAt < 5000) return;
+      if (!navigator.onLine) {
+        setLocationStatus('upload-error');
+        return;
+      }
+
+      sending = true;
+      lastSentAt = Date.now();
+      riderService.updateLocation(deliveryId, point.latitude, point.longitude)
+        .then(() => {
+          if (!disposed) setLocationStatus('tracking');
+        })
+        .catch((locationError) => {
+          console.error('Unable to share the rider location.', locationError);
+          if (disposed) return;
+          if ([403, 404].includes(locationError?.status)) {
+            stoppedForIneligibility = true;
+            stopWatch();
+            setRiderPosition(null);
+            setLocationStatus('ineligible');
+            clearServerLocation();
+            return;
+          }
+          setLocationStatus('upload-error');
+        })
+        .finally(() => { sending = false; });
+    };
+    const handleLocationError = (locationError) => {
+      if (disposed) return;
+      stopWatch();
+      setRiderPosition(null);
+      setLocationStatus(locationError.code === locationError.PERMISSION_DENIED
+        ? 'permission-denied'
+        : 'unavailable');
+      clearServerLocation();
+    };
+    const startWatch = () => {
+      if (watchId !== null) return;
+      if (document.visibilityState === 'hidden') {
+        setLocationStatus('paused');
+        return;
+      }
+      if (!navigator.geolocation) {
+        handleLocationError({ code: 2, PERMISSION_DENIED: 1 });
+        return;
+      }
+      setLocationStatus('starting');
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          handlePosition,
+          handleLocationError,
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 15_000 },
+        );
+      } catch (locationError) {
+        console.error('Unable to start rider location tracking.', locationError);
+        handleLocationError({ code: 2, PERMISSION_DENIED: 1 });
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopWatch();
+        setRiderPosition(null);
+        setLocationStatus('paused');
+        clearServerLocation();
+      } else {
+        startWatch();
+      }
+    };
+
+    startWatch();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      disposed = true;
+      stopWatch();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearServerLocation();
+    };
+  }, [activeDelivery?.id, activeDelivery?.status, activeView, locationRetry]);
   useEffect(() => {
     if (!offer) return undefined;
     document.body.classList.add('rider-dispatch--overlay-open');
@@ -297,10 +540,9 @@ export default function RiderPage() {
   };
 
   const isOnline = home?.availability === 'online';
-  const activeDelivery = current?.type === 'active_delivery' ? current.delivery : null;
 
   return (
-    <main className="rider-dispatch">
+    <main className={`rider-dispatch${selectedTab === 'current' && activeDelivery ? ' rider-dispatch--current' : ''}`}>
       <header className="rider-dispatch__header">
         <div>
           <p className="rider-dispatch__eyebrow">Driver mode</p>
@@ -345,7 +587,15 @@ export default function RiderPage() {
               {activeDelivery ? <Button variant="primary" className="rider-dispatch__current-action" onClick={() => setSelectedTab('current')}>Open current delivery</Button> : null}
             </section>
           ) : null}
-          {selectedTab === 'current' ? <CurrentDelivery delivery={activeDelivery} /> : null}
+          {selectedTab === 'current' ? (
+            <CurrentDelivery
+              delivery={activeDelivery}
+              riderPosition={riderPosition}
+              locationStatus={locationStatus}
+              now={now}
+              onRetryLocation={() => setLocationRetry((attempt) => attempt + 1)}
+            />
+          ) : null}
           {selectedTab === 'earnings' || selectedTab === 'profile' ? (
             <section className="rider-dispatch__panel rider-dispatch__empty">
               <h2>{selectedTab === 'earnings' ? 'Earnings' : 'Rider profile'}</h2>

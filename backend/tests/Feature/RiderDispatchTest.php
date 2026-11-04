@@ -7,6 +7,7 @@ use App\Models\Delivery;
 use App\Models\DeliveryOffer;
 use App\Models\PlatformSetting;
 use App\Models\RiderProfile;
+use App\Models\User;
 use App\Services\RiderDispatchService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -339,6 +340,179 @@ class RiderDispatchTest extends TestCase
         $this->assertSame('online', $rider['profile']->fresh()->availability);
     }
 
+    public function test_active_rider_location_updates_are_cache_only_and_customer_sees_the_latest_point(): void
+    {
+        [$order, $rider, $delivery, , $customer] = $this->acceptedLocationScenario();
+        $originalUpdatedAt = $delivery->fresh()->updated_at->toISOString();
+        $uri = "/api/v1/driver/deliveries/{$delivery->getKey()}/location";
+
+        $this->riderRequest($rider['user'], 'POST', $uri, [
+            'latitude' => 14.6012,
+            'longitude' => 121.0112,
+        ])->assertOk()
+            ->assertJsonStructure(['data' => ['recorded_at', 'expires_at']]);
+
+        $this->riderRequest($rider['user'], 'POST', $uri, [
+            'latitude' => 14.6023,
+            'longitude' => 121.0123,
+        ])->assertOk();
+
+        $this->assertSame($originalUpdatedAt, $delivery->fresh()->updated_at->toISOString());
+        $this->customerRequest($customer, 'GET', "/api/v1/customer/orders/{$order->getKey()}/tracking")
+            ->assertOk()
+            ->assertJsonPath('data.live_location.latitude', 14.6023)
+            ->assertJsonPath('data.live_location.longitude', 121.0123)
+            ->assertJsonPath('data.live_location_unavailable', false);
+    }
+
+    public function test_rider_location_update_rejects_another_rider_and_invalid_coordinates(): void
+    {
+        [, $rider, $delivery, , , $zone, $shift] = $this->acceptedLocationScenario();
+        $otherRider = $this->dispatchRider('location-other-'.Str::random(10).'@example.test', $shift, $zone);
+        $uri = "/api/v1/driver/deliveries/{$delivery->getKey()}/location";
+
+        $this->riderRequest($otherRider['user'], 'POST', $uri, [
+            'latitude' => 14.6,
+            'longitude' => 121.0,
+        ])->assertNotFound();
+
+        $this->riderRequest($rider['user'], 'POST', $uri, [
+            'latitude' => 91,
+            'longitude' => 181,
+        ])->assertUnprocessable()
+            ->assertJsonPath('error.fields.latitude.0', 'The latitude field must be between -90 and 90.')
+            ->assertJsonPath('error.fields.longitude.0', 'The longitude field must be between -180 and 180.');
+    }
+
+    public function test_customer_tracking_is_owned_active_and_clears_location_after_delivery_ends(): void
+    {
+        [$order, $rider, $delivery, , $customer] = $this->acceptedLocationScenario();
+        $key = $this->deliveryLocationKey($delivery, $rider['profile']);
+        $this->riderRequest($rider['user'], 'POST', "/api/v1/driver/deliveries/{$delivery->getKey()}/location", [
+            'latitude' => 14.6012,
+            'longitude' => 121.0112,
+        ])->assertOk();
+        $this->dispatchLocationKeys[] = $key;
+
+        $otherCustomer = RiderApplicationFixtures::user('location-customer-'.Str::random(10).'@example.test');
+        $this->customerRequest($customer, 'GET', "/api/v1/customer/orders/{$order->getKey()}/tracking")
+            ->assertOk()
+            ->assertJsonPath('data.live_location.latitude', 14.6012);
+        $this->customerRequest($otherCustomer, 'GET', "/api/v1/customer/orders/{$order->getKey()}/tracking")
+            ->assertNotFound();
+
+        $delivery->forceFill(['status' => 'delivered'])->save();
+        $this->customerRequest($customer, 'GET', "/api/v1/customer/orders/{$order->getKey()}/tracking")
+            ->assertOk()
+            ->assertJsonPath('data.live_location', null)
+            ->assertJsonPath('data.live_location_unavailable', false);
+        $this->assertFalse(Cache::has($key));
+    }
+
+    public function test_customer_tracking_does_not_return_an_expired_location(): void
+    {
+        [$order, $rider, $delivery, , $customer] = $this->acceptedLocationScenario();
+        $key = $this->deliveryLocationKey($delivery, $rider['profile']);
+        $this->dispatchLocationKeys[] = $key;
+        $this->riderRequest($rider['user'], 'POST', "/api/v1/driver/deliveries/{$delivery->getKey()}/location", [
+            'latitude' => 14.6012,
+            'longitude' => 121.0112,
+        ])->assertOk();
+
+        try {
+            Carbon::setTestNow(now()->addSeconds(121));
+            $this->customerRequest($customer, 'GET', "/api/v1/customer/orders/{$order->getKey()}/tracking")
+                ->assertOk()
+                ->assertJsonPath('data.live_location', null)
+                ->assertJsonPath('data.live_location_unavailable', true);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_logout_clears_rider_location_and_releases_pre_pickup_assignment(): void
+    {
+        [, $rider, $delivery] = $this->acceptedLocationScenario();
+        $key = $this->deliveryLocationKey($delivery, $rider['profile']);
+        $this->dispatchLocationKeys[] = $key;
+        $this->riderRequest($rider['user'], 'POST', "/api/v1/driver/deliveries/{$delivery->getKey()}/location", [
+            'latitude' => 14.6012,
+            'longitude' => 121.0112,
+        ])->assertOk();
+
+        $this->riderRequest($rider['user'], 'POST', '/api/v1/auth/logout')->assertOk();
+
+        $this->assertFalse(Cache::has($key));
+        $this->assertFalse(Cache::has("rider:{$rider['profile']->getKey()}:dispatch-location"));
+        $this->assertSame('offline', $rider['profile']->fresh()->availability);
+        $this->assertNull($delivery->fresh()->rider_id);
+    }
+
+    public function test_terminal_delivery_completion_clears_both_location_keys_without_touching_another_rider(): void
+    {
+        [, $rider, $delivery] = $this->acceptedLocationScenario();
+        [, $otherRider, $otherDelivery] = $this->acceptedLocationScenario();
+        [$deliveryKey, $dispatchKey] = $this->seedDeliveryLocationKeys($delivery, $rider['profile']);
+        [$otherDeliveryKey, $otherDispatchKey] = $this->seedDeliveryLocationKeys(
+            $otherDelivery,
+            $otherRider['profile'],
+        );
+
+        DB::shouldReceive('afterCommit')
+            ->once()
+            ->andReturnUsing(static fn (callable $callback) => $callback());
+        $delivery->forceFill(['status' => 'delivered'])->save();
+
+        $this->assertFalse(Cache::has($deliveryKey));
+        $this->assertFalse(Cache::has($dispatchKey));
+        $this->assertTrue(Cache::has($otherDeliveryKey));
+        $this->assertTrue(Cache::has($otherDispatchKey));
+    }
+
+    public function test_terminal_delivery_failure_clears_both_location_keys(): void
+    {
+        [, $rider, $delivery] = $this->acceptedLocationScenario();
+        [$deliveryKey, $dispatchKey] = $this->seedDeliveryLocationKeys($delivery, $rider['profile']);
+
+        DB::shouldReceive('afterCommit')
+            ->once()
+            ->andReturnUsing(static fn (callable $callback) => $callback());
+        $delivery->forceFill(['status' => 'failed'])->save();
+
+        $this->assertFalse(Cache::has($deliveryKey));
+        $this->assertFalse(Cache::has($dispatchKey));
+    }
+
+    public function test_terminal_delivery_cleanup_uses_previous_rider_when_updated_rider_is_null(): void
+    {
+        [, $rider, $delivery] = $this->acceptedLocationScenario();
+        [$deliveryKey, $dispatchKey] = $this->seedDeliveryLocationKeys($delivery, $rider['profile']);
+
+        DB::shouldReceive('afterCommit')
+            ->once()
+            ->andReturnUsing(static fn (callable $callback) => $callback());
+        $delivery->forceFill(['status' => 'failed', 'rider_id' => null])->save();
+
+        $this->assertNull($delivery->fresh()->rider_id);
+        $this->assertFalse(Cache::has($deliveryKey));
+        $this->assertFalse(Cache::has($dispatchKey));
+    }
+
+    public function test_order_cancellation_clears_location_keys_when_it_unassigns_the_rider(): void
+    {
+        [$order, $rider, $delivery] = $this->dispatchScenario();
+        $dispatch = app(RiderDispatchService::class);
+        $dispatch->setAvailability($rider['user'], 'online', 14.6001, 121.0001);
+        $delivery = Delivery::query()->where('order_id', $order->getKey())->firstOrFail();
+        [$deliveryKey, $dispatchKey] = $this->seedDeliveryLocationKeys($delivery, $rider['profile']);
+
+        $dispatch->cancelForOrder((int) $order->getKey());
+
+        $this->assertNull($delivery->fresh()->rider_id);
+        $this->assertFalse(Cache::has($deliveryKey));
+        $this->assertFalse(Cache::has($dispatchKey));
+    }
+
     public function test_concurrent_ready_orders_do_not_assign_two_active_offers_to_one_rider(): void
     {
         $this->createCommittedConcurrentDispatchFixture();
@@ -419,6 +593,67 @@ class RiderDispatchTest extends TestCase
             : null;
 
         return [$order, $rider, $zone, $owner, $customer];
+    }
+
+    private function acceptedLocationScenario(): array
+    {
+        [$order, $rider, $zone, $owner, $customer] = $this->dispatchScenario();
+        $shift = $zone->assignments()->firstOrFail()->shift;
+        $dispatch = app(RiderDispatchService::class);
+        $dispatch->setAvailability($rider['user'], 'online', 14.6001, 121.0001);
+        $delivery = Delivery::query()->where('order_id', $order->getKey())->firstOrFail();
+        $offer = DeliveryOffer::query()->where('delivery_id', $delivery->getKey())->firstOrFail();
+        $dispatch->respondToOffer($rider['user'], (int) $offer->getKey(), true);
+        $this->dispatchLocationKeys[] = "rider:{$rider['profile']->getKey()}:dispatch-location";
+        $this->dispatchLocationKeys[] = $this->deliveryLocationKey($delivery, $rider['profile']);
+
+        return [$order, $rider, $delivery, $owner, $customer, $zone, $shift];
+    }
+
+    private function deliveryLocationKey(Delivery $delivery, RiderProfile $profile): string
+    {
+        return "rider:delivery:{$delivery->getKey()}:profile:{$profile->getKey()}:location";
+    }
+
+    private function seedDeliveryLocationKeys(Delivery $delivery, RiderProfile $profile): array
+    {
+        $deliveryKey = $this->deliveryLocationKey($delivery, $profile);
+        $dispatchKey = "rider:{$profile->getKey()}:dispatch-location";
+        $this->dispatchLocationKeys[] = $deliveryKey;
+        $this->dispatchLocationKeys[] = $dispatchKey;
+        $point = [
+            'latitude' => 14.6012,
+            'longitude' => 121.0112,
+            'updated_at' => now()->toIso8601String(),
+        ];
+        Cache::put($deliveryKey, $point, now()->addMinutes(2));
+        Cache::put($dispatchKey, $point, now()->addMinutes(2));
+
+        return [$deliveryKey, $dispatchKey];
+    }
+
+    private function riderRequest(User $user, string $method, string $uri, array $data = [])
+    {
+        return $this->actingAs($user, 'sanctum')
+            ->withSession(['salo.active_mode' => 'driver'])
+            ->withHeaders([
+                'Origin' => 'http://localhost:5173',
+                'Referer' => 'http://localhost:5173',
+                'X-SALO-Mode' => 'driver',
+            ])
+            ->json($method, $uri, $data);
+    }
+
+    private function customerRequest(User $user, string $method, string $uri, array $data = [])
+    {
+        return $this->actingAs($user, 'sanctum')
+            ->withSession(['salo.active_mode' => 'customer'])
+            ->withHeaders([
+                'Origin' => 'http://localhost:5173',
+                'Referer' => 'http://localhost:5173',
+                'X-SALO-Mode' => 'customer',
+            ])
+            ->json($method, $uri, $data);
     }
 
     private function createCommittedConcurrentDispatchFixture(): void

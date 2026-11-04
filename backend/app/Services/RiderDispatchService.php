@@ -25,6 +25,7 @@ class RiderDispatchService
     public function __construct(
         private readonly RiderDispatchRepository $dispatch,
         private readonly PlatformSettingsRepository $settings,
+        private readonly RiderLocationCache $locations,
     ) {}
 
     public function home(User $user): array
@@ -182,6 +183,11 @@ class RiderDispatchService
                     'address' => $order->delivery_address_text,
                     'delivery_note' => $order->deliveryAddress?->delivery_note,
                 ],
+                'destination' => [
+                    'latitude' => $order->delivery_lat,
+                    'longitude' => $order->delivery_lng,
+                ],
+                'location' => $this->locations->latest($delivery, $profileId),
                 'items' => $order->items()->get()->map(fn ($item): array => [
                     'name' => $item->item_name_snapshot,
                     'quantity' => (int) $item->quantity,
@@ -189,6 +195,45 @@ class RiderDispatchService
                 ])->values()->all(),
             ],
         ];
+    }
+
+    public function updateDeliveryLocation(
+        User $user,
+        int $deliveryId,
+        float $latitude,
+        float $longitude,
+    ): array {
+        $profileId = (int) $this->profileFor($user)->getKey();
+
+        return DB::transaction(function () use ($profileId, $deliveryId, $latitude, $longitude): array {
+            $profile = $this->dispatch->profiles()->with('user')->whereKey($profileId)->lockForUpdate()->firstOrFail();
+            $delivery = $this->dispatch->deliveries()->whereKey($deliveryId)->lockForUpdate()->first();
+            abort_unless(
+                $delivery !== null
+                    && (int) $delivery->rider_id === $profileId
+                    && in_array($delivery->status, ['accepted', 'picked_up'], true),
+                404,
+            );
+
+            if ($profile->application_status !== 'approved'
+                || $profile->status !== 'active'
+                || $profile->availability !== 'busy'
+                || $profile->user?->status !== 'active') {
+                $this->locations->forgetProfile($profileId);
+                abort(403);
+            }
+
+            return $this->locations->store($delivery, $profileId, $latitude, $longitude);
+        }, 3);
+    }
+
+    public function clearDeliveryLocation(User $user, int $deliveryId): void
+    {
+        $profileId = (int) $this->profileFor($user)->getKey();
+        $delivery = $this->dispatch->deliveries()->whereKey($deliveryId)->first();
+        abort_unless($delivery !== null && (int) $delivery->rider_id === $profileId, 404);
+
+        $this->locations->forgetForRider($profileId, $delivery);
     }
 
     public function respondToOffer(User $user, int $offerId, bool $accept): array
@@ -232,7 +277,7 @@ class RiderDispatchService
                     $profile->forceFill(['availability' => 'online'])->save();
                 } else {
                     $profile->forceFill(['availability' => 'offline'])->save();
-                    Cache::forget($this->locationKey($profileId));
+                    $this->locations->forgetProfile($profileId);
                 }
 
                 return ['status' => 'expired', 'order_id' => $orderId];
@@ -246,7 +291,7 @@ class RiderDispatchService
                     'accepted_at' => null,
                 ])->save();
                 $profile->forceFill(['availability' => 'offline'])->save();
-                Cache::forget($this->locationKey($profileId));
+                $this->locations->forgetProfile($profileId);
 
                 return ['status' => 'expired', 'order_id' => $orderId];
             }
@@ -429,7 +474,7 @@ class RiderDispatchService
                     return;
                 }
                 $profile->forceFill(['availability' => 'offline'])->save();
-                Cache::forget($this->locationKey($profileId));
+                $this->locations->forgetProfile($profileId);
                 if ($order === null || $delivery === null || $order->status !== 'ready'
                     || ! in_array($delivery->status, ['offered', 'accepted'], true)
                     || (int) $delivery->rider_id !== $profileId) {
@@ -466,7 +511,7 @@ class RiderDispatchService
             if ($profile !== null) {
                 $profile->forceFill(['availability' => 'offline'])->save();
             }
-            Cache::forget($this->locationKey($profileId));
+            $this->locations->forgetProfile($profileId);
         });
     }
 
@@ -478,6 +523,9 @@ class RiderDispatchService
         }
 
         $profileId = $delivery->rider_id === null ? null : (int) $delivery->rider_id;
+        if ($profileId !== null) {
+            $this->locations->forgetForRider($profileId, $delivery);
+        }
         $delivery->offers()
             ->whereNull('response')
             ->update(['response' => 'timeout', 'responded_at' => now()]);
@@ -527,7 +575,7 @@ class RiderDispatchService
                 $profile->forceFill(['availability' => 'online'])->save();
             } elseif ($profile !== null) {
                 $profile->forceFill(['availability' => 'offline'])->save();
-                Cache::forget($this->locationKey($profileId));
+                $this->locations->forgetProfile($profileId);
             }
 
             return $order->status === 'ready';

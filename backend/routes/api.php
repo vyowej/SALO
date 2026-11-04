@@ -125,6 +125,10 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::get('/home', [RiderDispatchController::class, 'home']);
             Route::patch('/availability', [RiderDispatchController::class, 'setAvailability']);
             Route::get('/current-delivery', [RiderDispatchController::class, 'current']);
+            Route::post('/deliveries/{delivery}/location', [RiderDispatchController::class, 'updateLocation'])
+                ->whereNumber('delivery');
+            Route::delete('/deliveries/{delivery}/location', [RiderDispatchController::class, 'clearLocation'])
+                ->whereNumber('delivery');
             Route::post('/delivery-offers/{offer}/accept', [RiderDispatchController::class, 'accept'])
                 ->whereNumber('offer');
             Route::post('/delivery-offers/{offer}/decline', [RiderDispatchController::class, 'decline'])
