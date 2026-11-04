@@ -1,7 +1,7 @@
 # SALO Driver (Rider) Side
 
-**Status:** D0 was approved; D1 application and activation implementation is
-complete, with verification recorded in Section 12. D1 changes use the
+**Status:** D0 through D3 have been implemented, with phase-specific
+verification recorded below. D1-D3 changes use the
 guarded `salo_test` database only; no migration or schema edit was made. The owner states that
 the live MariaDB 10.11 database `salo` is connected and was imported from the
 root schema. This document treats that as an operating constraint, not as a
@@ -45,8 +45,8 @@ These database rules apply to every rider phase:
   and `SELECT DATABASE()` must end in `_test`; a mismatch must fail closed.
 - Files uploaded by riders are private local-disk files. Do not put an image,
   file data URL, or image blob in browser `localStorage`.
-- D0 and D1 are complete. D2 implementation is recorded below; D3 and later
-  phases remain separately gated.
+- D0-D3 are complete as recorded below. D4 and later phases remain separately
+  gated.
 
 ## 2. D0 prerequisite audit
 
@@ -366,26 +366,61 @@ or phone check that was not run.
 
 ### D3 — Rider shell, availability, and automatic dispatch
 
-- Add Driver mode and a mobile-first shell with Home, Current delivery,
-  Earnings, and Profile.
-- Online is permitted only for an active rider, during an assigned shift, with
-  location permission and no active-delivery conflict. Explain disabled
-  reasons and support offline/retry states.
-- Dispatch automatically when an eligible order reaches Ready or the
-  configured earlier point. Select nearest eligible online/on-shift rider
-  without an active delivery, lock the rider row, create one delivery and an
-  offer attempt transactionally, and expose only a drop-off area before
-  acknowledgement.
-- Offer screen is full-screen, safe-area aware, and provides a countdown,
-  pickup name/distance, approximate drop-off area, earning estimate, sound/
-  vibration controls, and thumb-reachable Accept/Decline. Timeout/decline
-  moves to the next rider, then neighboring zone, then notifies restaurant,
-  customer, and Admin. No public job board.
-- After acceptance, reveal pickup details, customer name/phone, exact address,
-  delivery note, and order contents for that active delivery only.
-- D3 tests: nearest eligible rider, atomic one-active-delivery rule,
-  ineligible/busy riders skipped, timeout and decline retry, zone widening,
-  and no-rider notifications.
+- The database-backed Driver shell replaces the rider job-board mock with
+  Home, Current delivery, Earnings, and Profile navigation. Demo mode retains
+  an isolated in-memory offer; API mode uses the authenticated Driver routes.
+- Going Online requires an active, approved rider, a currently assigned zone
+  and shift, and one browser location snapshot. The latest coordinates live
+  only in Laravel cache for two minutes; they are not stored in the database
+  or updated continuously. Offline, mode exit, suspension, shift ineligibility,
+  or location expiry clears the cached point.
+- Only delivery orders with a COD payment are dispatched at `ready`. Active
+  zones matching the restaurant PSGC are prioritized; if none match, zones
+  containing the restaurant within their configured radius are prioritized.
+  Remaining active zones are widened in center-distance order, without an
+  additional distance cap. The nearest eligible rider is chosen by cached
+  rider-to-restaurant distance, then rider ID.
+- The order and rider rows are locked during offer creation. A rider cannot
+  hold two active offers/deliveries. Each rider is offered each delivery at
+  most once; timeout uses `rider_ack_seconds` (60 seconds), with no numeric
+  attempt cap. Declines and timeouts retry the next eligible rider and then
+  widen zones. Unassigned deliveries remain `offered`; the customer,
+  restaurant owner/staff, and active Admin are notified once per order and
+  dispatch retries when eligibility changes.
+- Before acceptance, the offer contains only pickup name/distance, estimated
+  earning, order reference, and an approximate drop-off area. The authenticated
+  rider who owns the current offer can accept or decline it. Exact pickup and
+  customer details are returned only for that rider's accepted/picked-up
+  delivery and are unavailable after it ends.
+- Cancellation, Driver-mode exit, suspension, loss of eligibility, and offer
+  timeout are integrated. Reassignment is limited to before `picked_up`;
+  post-pickup recovery remains for a later authorized phase. Only the existing
+  delivery statuses are used.
+- The one-off scheduled command expires offers and stale locations, then
+  retries ready delivery orders every minute. No database schema changes or
+  numbered schema proposals were needed.
+- Verification: focused backend `RiderDispatchTest` passed (9 tests, 48
+  assertions), including concurrent two-order dispatch through separate
+  processes. The full guarded suite passed (172 tests, 1,108 assertions,
+  37.16 seconds). Frontend Rider and App tests passed together (9 tests).
+  `npm run lint` and `npm run build` passed. A broader `npx vitest run` also
+  finds the existing `src/constants/voice.test.js`, which has no test suite;
+  that file is outside the configured `npm test` command and was not changed.
+  The test target was confirmed as MySQL `salo_test` by configuration and
+  read-only `SELECT DATABASE()`. Post-run read-only checks showed 0 users,
+  restaurants, and orders, 0 dispatch fixture rows, and retained `Morning`,
+  `Afternoon`, and `Evening` shifts plus `rider_ack_seconds=60` and
+  `rider_share_percent=80`. No migration, loader, DDL, seeder, or live `salo`
+  operation was run.
+- Responsive checklist: browser device-mode checks used the Rider demo account
+  at `http://127.0.0.1:5174/rider` in mock/demo mode at 360x800, 390x844,
+  412x915, 768x1024 portrait, 1024x768 landscape, 1024x900, 1280x800, and
+  1920x1080. The Rider tabs were also checked at 360px.
+  No horizontal overflow, overlap, or visible clipping was found; the 360px
+  greeting wrapped to two lines and the wide desktop content remained
+  centered. The temporary server was stopped. The requested 360x640 and 768
+  landscape sizes were not checked. These were mock-mode visual checks, not a
+  real-device or live API test.
 
 ### D4 — Map and live location
 
@@ -820,5 +855,31 @@ Use an Admin account and rider test accounts against `salo_test` only.
    portrait and 1024x768 landscape, plus 1280px and 1920px widths. These D2
    authenticated viewport checks were not run during implementation.
 
-**D2 is implemented and verified as recorded above. Stop here for review;
-D3 has not started.**
+### D3 manual checks
+
+1. Sign in as an approved, OTP-activated rider, switch to Driver mode, and
+   verify the assignment and current shift. Try Online with location denied,
+   then allow location and go Online; confirm a single snapshot is cached.
+2. Move a COD delivery order to `ready`. Confirm the nearest eligible rider
+   receives exactly one offer with no customer name, phone, street address, or
+   delivery note. Decline or let it expire and verify the next untried rider
+   gets the offer before dispatch widens to another zone.
+3. Accept the offer and verify only that rider sees pickup details, customer
+   name/phone, exact delivery address, note, and order items. End the delivery
+   in the authorized later-phase workflow and confirm the rider can no longer
+   retrieve those details.
+4. With no untried eligible rider, confirm the delivery stays `offered` with
+   no assigned rider and the customer, restaurant, and Admin each receive one
+   notice. Bring a rider Online or add an eligible assignment and verify the
+   scheduled retry can offer it.
+5. Switch away from Driver mode, go Offline, suspend the rider, expire the
+   location, cancel a ready order, and cross the shift boundary; confirm
+   ineligible riders receive no new offers and pre-pickup offers are released.
+   Confirm an accepted delivery remains assigned after `picked_up`.
+6. Check the Rider page at 360x640 and 768x1024 landscape, which were not
+   covered in the implementation browser check. Then repeat GPS permission,
+   offline recovery, reduced-motion, reduced-transparency, safe-area, and offer
+   countdown checks on a real phone.
+
+**D3 is implemented and verified as recorded above. Stop here for review;
+D4 has not started.**
