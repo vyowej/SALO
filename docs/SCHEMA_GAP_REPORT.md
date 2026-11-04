@@ -80,6 +80,36 @@ CREATE TABLE rider_shift_rosters (
 ) ENGINE=InnoDB;
 ```
 
+### Proposal 2 — Persist the last known rider location
+
+**Status:** Proposed; not approved or implemented.
+
+The Admin Riders UI previously showed a `last_position` value, but
+`database/salo_db.sql` has no persistent rider-location table or columns. The
+dispatch service keeps the latest coordinates in cache, which is not a
+database-backed or durable source for the Admin directory. The API therefore
+returns `last_position: null` rather than presenting home coordinates or
+delivery-proof coordinates as a live position.
+
+**Proposal:** Approve a durable per-rider last-location record containing
+latitude, longitude, and update time, with a rider foreign key and an index
+supporting latest-location reads. No schema change is authorized by this
+proposal.
+
+### Proposal 3 — Persist rider activation time
+
+**Status:** Proposed; not approved or implemented.
+
+`rider_profiles` has `approved_at` but no activation timestamp. Approval time
+is not activation time. Successful OTP activation writes a
+`rider_activation_verified` audit row, but audit logs are subject to retention
+and pruning, so they are not a durable activation-time source. The directory
+returns `activated_at: null` when that event is unavailable.
+
+**Proposal:** Add a nullable activation timestamp to `rider_profiles`, set
+only when the existing OTP activation succeeds. No schema change is
+authorized by this proposal.
+
 ## Next-step boundary
 
 F1 was documentation and read-only verification. F2 added a guarded test-schema

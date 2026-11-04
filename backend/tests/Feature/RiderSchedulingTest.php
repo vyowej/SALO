@@ -218,6 +218,7 @@ class RiderSchedulingTest extends TestCase
         $zone = $this->zone('Suspension release zone', 6.90, 122.06, $shift, 1);
         $suspendedRider = $this->rider('suspension-release@example.test', $shift, 6.90, 122.06);
         $waitlistedRider = $this->rider('suspension-waitlist@example.test', $shift, 6.90, 122.06);
+        $suspendedRider->forceFill(['status' => 'active'])->save();
         $service = app(RiderSchedulingService::class);
         $initial = $service->assignRiderForShift((int) $suspendedRider->getKey(), (int) $shift->getKey());
         $waiting = $service->assignRiderForShift((int) $waitlistedRider->getKey(), (int) $shift->getKey());

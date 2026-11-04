@@ -238,7 +238,7 @@ function FormFields({ resource, values, onChange, errors = {}, editing }) {
   );
 }
 
-function RecordDetails({ record, resource, onPhoto, onDocument }) {
+function RecordDetails({ record, resource, onPhoto, onDocument, onProof }) {
   const photoReferences = [];
   const entries = [];
   const visit = (value, prefix = '') => {
@@ -277,7 +277,7 @@ function RecordDetails({ record, resource, onPhoto, onDocument }) {
           <div className="admin-photo-list">
             {record.documents.map((document) => (
               <button type="button" className="btn btn--secondary btn--sm" key={document.id} onClick={() => (
-                document.photo_ref ? onPhoto(document.photo_ref) : onDocument(document.id)
+                document.photo_ref ? onPhoto(document.photo_ref) : onDocument(document.id, resource === 'riders' ? record.id : null)
               )}>
                 <Eye aria-hidden="true" size={16} />{humanize(document.doc_type)}
               </button>
@@ -290,7 +290,9 @@ function RecordDetails({ record, resource, onPhoto, onDocument }) {
           <h3>{ADMIN_COPY.deliveryProofs}</h3>
           <div className="admin-photo-list">
             {record.proofs.map((proof) => (
-              <button type="button" className="btn btn--secondary btn--sm" key={proof.id} onClick={() => onPhoto(proof.photo_ref)}>
+              <button type="button" className="btn btn--secondary btn--sm" key={proof.id} onClick={() => (
+                proof.photo_ref ? onPhoto(proof.photo_ref) : onProof(record.id, proof.id)
+              )}>
                 <Eye aria-hidden="true" size={16} />{`${proof.order_number} · ${humanize(proof.stage)}`}
               </button>
             ))}
@@ -448,20 +450,38 @@ function AdminWorkspace({ pageKey }) {
 
   const reload = () => setRetry((value) => value + 1);
   const closePhoto = useCallback(() => setPhotoRef(''), []);
-  const openApplicationDocument = useCallback(async (documentId) => {
+  const openDocument = useCallback(async (documentId, riderId = null) => {
     const newTab = window.open('about:blank', '_blank');
     if (!newTab) {
-      setError('Allow pop-ups to open the authorized application document.');
+      setError('Allow pop-ups to open the authorized private document.');
       return;
     }
     newTab.opener = null;
     try {
-      const result = await adminService.getApplicationDocumentUrl(documentId);
+      const result = riderId
+        ? await adminService.getRiderDocumentUrl(riderId, documentId)
+        : await adminService.getApplicationDocumentUrl(documentId);
       if (!result?.url) throw new Error('The authorized document link was not returned.');
       newTab.location.replace(result.url);
     } catch (documentError) {
       newTab.close();
-      setError(documentError.message || 'Unable to open this application document.');
+      setError(documentError.message || 'Unable to open this private document.');
+    }
+  }, []);
+  const openRiderProof = useCallback(async (riderId, deliveryId) => {
+    const newTab = window.open('about:blank', '_blank');
+    if (!newTab) {
+      setError('Allow pop-ups to open the authorized delivery proof.');
+      return;
+    }
+    newTab.opener = null;
+    try {
+      const result = await adminService.getRiderProofUrl(riderId, deliveryId);
+      if (!result?.url) throw new Error('The authorized proof link was not returned.');
+      newTab.location.replace(result.url);
+    } catch (proofError) {
+      newTab.close();
+      setError(proofError.message || 'Unable to open this delivery proof.');
     }
   }, []);
   const cancelConfirmation = useCallback(() => setDialog(null), []);
@@ -669,7 +689,7 @@ function AdminWorkspace({ pageKey }) {
               })}>{ADMIN_COPY.reject}</button> : null}
             </>
           ) : null}
-          {target === 'riders' ? (
+          {target === 'riders' && ['active', 'suspended'].includes(record.status) ? (
             <button type="button" className="admin-icon-button" onClick={() => openConfirmation({
               title: ADMIN_COPY.changeRiderStatusTitle,
               message: ADMIN_COPY.confirmMessage,
@@ -917,7 +937,7 @@ function AdminWorkspace({ pageKey }) {
               <div><h2 id="admin-detail-title">{ADMIN_COPY.detailsTitle}</h2><p>{ADMIN_COPY.resourceLabels[detail.resource]}</p></div>
               <button type="button" className="admin-icon-button" aria-label={ADMIN_COPY.close} onClick={() => setDetail(null)}><X aria-hidden="true" size={18} /></button>
             </div>
-            <RecordDetails record={dataForDetail} resource={detail.resource} onPhoto={setPhotoRef} onDocument={openApplicationDocument} />
+            <RecordDetails record={dataForDetail} resource={detail.resource} onPhoto={setPhotoRef} onDocument={openDocument} onProof={openRiderProof} />
             {detail.resource === 'restaurants' ? (
               <div className="admin-detail-action-row">
                 <button type="button" className="btn btn--secondary" onClick={() => changeDetailStatus({

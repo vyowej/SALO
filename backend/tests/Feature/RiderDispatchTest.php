@@ -8,9 +8,11 @@ use App\Models\DeliveryOffer;
 use App\Models\PlatformSetting;
 use App\Models\RiderProfile;
 use App\Services\RiderDispatchService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\Process\Process;
 use Tests\Support\RiderApplicationFixtures;
 use Tests\Support\RiderDispatchFixtures;
@@ -67,6 +69,118 @@ class RiderDispatchTest extends TestCase
 
         $delivery->forceFill(['status' => 'delivered'])->save();
         $this->assertNull($service->currentFor($rider['user']));
+    }
+
+    public function test_rider_can_go_online_during_the_assigned_morning_shift_in_manila(): void
+    {
+        [, $rider] = $this->dispatchScenario();
+        $shift = $rider['profile']->shiftAssignments()->firstOrFail()->shift;
+        $shift->forceFill([
+            'start_time' => '06:00:00',
+            'end_time' => '12:00:00',
+        ])->save();
+        Carbon::setTestNow(Carbon::parse('2026-11-04 09:00:00', 'Asia/Manila'));
+
+        try {
+            $service = app(RiderDispatchService::class);
+            $home = $service->home($rider['user']);
+
+            $this->assertTrue($home['can_go_online']);
+            $this->assertSame($shift->name, $home['assignment']['shift']);
+            $this->assertSame('online', $service->setAvailability(
+                $rider['user'],
+                'online',
+                14.6001,
+                121.0001,
+            )['availability']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_rider_cannot_go_online_outside_the_assigned_shift(): void
+    {
+        [, $rider] = $this->dispatchScenario();
+        $shift = $rider['profile']->shiftAssignments()->firstOrFail()->shift;
+        $shift->forceFill(['start_time' => '06:00:00', 'end_time' => '12:00:00'])->save();
+        Carbon::setTestNow(Carbon::parse('2026-11-04 13:00:00', 'Asia/Manila'));
+
+        try {
+            $service = app(RiderDispatchService::class);
+            $this->assertFalse($service->home($rider['user'])['can_go_online']);
+
+            try {
+                $service->setAvailability($rider['user'], 'online', 14.6001, 121.0001);
+                $this->fail('A rider outside the assigned shift should not be allowed online.');
+            } catch (ValidationException $exception) {
+                $this->assertSame(
+                    ['You can go online only during an assigned shift.'],
+                    $exception->errors()['availability'],
+                );
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_shift_start_is_inclusive_and_shift_end_is_exclusive(): void
+    {
+        [, $rider] = $this->dispatchScenario();
+        $shift = $rider['profile']->shiftAssignments()->firstOrFail()->shift;
+        $shift->forceFill(['start_time' => '06:00:00', 'end_time' => '12:00:00'])->save();
+        $service = app(RiderDispatchService::class);
+
+        try {
+            Carbon::setTestNow(Carbon::parse('2026-11-04 06:00:00', 'Asia/Manila'));
+            $this->assertTrue($service->home($rider['user'])['can_go_online']);
+            $this->assertSame('online', $service->setAvailability(
+                $rider['user'],
+                'online',
+                14.6001,
+                121.0001,
+            )['availability']);
+
+            $service->setAvailability($rider['user'], 'offline', null, null);
+            Carbon::setTestNow(Carbon::parse('2026-11-04 12:00:00', 'Asia/Manila'));
+            $this->assertFalse($service->home($rider['user'])['can_go_online']);
+
+            try {
+                $service->setAvailability($rider['user'], 'online', 14.6001, 121.0001);
+                $this->fail('The shift end time should not be included in the shift window.');
+            } catch (ValidationException $exception) {
+                $this->assertSame(
+                    ['You can go online only during an assigned shift.'],
+                    $exception->errors()['availability'],
+                );
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_shift_eligibility_uses_manila_time_when_the_server_timezone_is_utc(): void
+    {
+        [, $rider] = $this->dispatchScenario();
+        $shift = $rider['profile']->shiftAssignments()->firstOrFail()->shift;
+        $shift->forceFill(['start_time' => '06:00:00', 'end_time' => '12:00:00'])->save();
+        Carbon::setTestNow(Carbon::parse('2026-11-04 01:00:00', 'UTC'));
+
+        try {
+            $this->assertSame('UTC', config('app.timezone'));
+            $this->assertSame('01:00:00', now()->format('H:i:s'));
+            $this->assertSame('09:00:00', now('Asia/Manila')->format('H:i:s'));
+
+            $service = app(RiderDispatchService::class);
+            $this->assertTrue($service->home($rider['user'])['can_go_online']);
+            $this->assertSame('online', $service->setAvailability(
+                $rider['user'],
+                'online',
+                14.6001,
+                121.0001,
+            )['availability']);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_nearest_eligible_rider_in_the_zone_receives_the_offer(): void

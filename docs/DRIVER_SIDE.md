@@ -374,6 +374,12 @@ or phone check that was not run.
   only in Laravel cache for two minutes; they are not stored in the database
   or updated continuously. Offline, mode exit, suspension, shift ineligibility,
   or location expiry clears the cached point.
+- Rider shift windows are evaluated using `Asia/Manila` local time even though
+  Laravel's application timezone is UTC. The shift start is inclusive and the
+  shift end is exclusive; Driver readiness, Go Online validation, and dispatch
+  eligibility use the same local-time comparison. Overnight windows are
+  handled as wrapping midnight if present, although the authoritative schema
+  currently disallows shifts whose end is earlier than their start.
 - Only delivery orders with a COD payment are dispatched at `ready`. Active
   zones matching the restaurant PSGC are prioritized; if none match, zones
   containing the restaurant within their configured radius are prioritized.

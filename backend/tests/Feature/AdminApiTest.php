@@ -173,16 +173,33 @@ class AdminApiTest extends TestCase
         self::assertNotContains('driver', $applicant->fresh()->capabilities);
         self::assertSame('pending_activation', $profile->fresh()->status);
         Notification::assertSentTo($applicant, RiderActivationNotification::class);
+        $this->getJson('/api/v1/admin/riders')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => (string) $profile->getKey(),
+                'application_status' => 'approved',
+                'status' => 'pending_activation',
+            ]);
     }
 
     public function test_rider_status_and_proofs_endpoints_work_and_validate_status(): void
     {
         $this->asAdmin();
-        $id = AdminFixtures::id(103);
-        $this->getJson('/api/v1/admin/riders')->assertOk();
-        $this->getJson("/api/v1/admin/riders/{$id}/proofs")->assertOk()->assertJsonStructure(['data']);
+        $user = RiderApplicationFixtures::user('admin-api-directory-rider@example.test');
+        $profile = RiderApplicationFixtures::pendingActivation($user);
+        $profile->forceFill(['status' => 'active'])->save();
+        $id = (string) $profile->getKey();
+
+        $this->getJson('/api/v1/admin/riders')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $id, 'application_status' => 'approved', 'status' => 'active']);
+        $this->getJson("/api/v1/admin/riders/{$id}/proofs")->assertOk()->assertJsonStructure(['data', 'meta']);
         $this->patchJson("/api/v1/admin/riders/{$id}/status", ['status' => 'offline'])->assertUnprocessable();
-        $this->patchJson("/api/v1/admin/riders/{$id}/status", ['status' => 'suspended'])->assertOk()->assertJsonPath('data.status', 'suspended');
+        $this->patchJson("/api/v1/admin/riders/{$id}/status", ['status' => 'suspended'])
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.status', 'suspended');
+        $this->assertDatabaseHas('rider_profiles', ['id' => $id, 'status' => 'suspended']);
     }
 
     public function test_order_cancel_happy_path_and_invalid_terminal_status(): void

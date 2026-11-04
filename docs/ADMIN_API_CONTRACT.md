@@ -1,8 +1,6 @@
 # SALO Admin API Contract (v1, draft)
 
-Source of truth for the admin feature set. The backend (`/api/v1/admin/*`) and the frontend mock adapters must return the **same JSON**. If either side needs a change, update this file first and say so in the report.
-
-No database yet: the backend uses in-memory repository stubs; the frontend mock keeps state in memory for the session. Both load the same fabricated fixture records (see section 4).
+Source of truth for the admin feature set. The backend (`/api/v1/admin/*`) and the frontend mock adapters should preserve the same resource contract where applicable. Some backend resources remain in-memory stubs; the rider directory and rider-specific actions use the existing database records. The frontend mock continues to use its own session-scoped fixtures.
 
 ## 1. Conventions
 
@@ -135,31 +133,53 @@ Partner `details`: `business_name, business_type, business_address, city_code, l
 
 ### Rider
 
-`GET /riders` (filters: `status`), `GET /riders/{id}`, `PATCH /riders/{id}/status` (`{ "status": "active" | "suspended" }`), `GET /riders/{id}/proofs`
+`GET /riders` (filters: operating `status`; supports `search`, `sort`, and pagination), `GET /riders/{id}`, `PATCH /riders/{id}/status` (`{ "status": "active" | "suspended" }`), `GET /riders/{id}/proofs`.
+
+In API mode the directory reads approved records from `rider_profiles` and
+their related `users`. `application_status` describes application review;
+`status` is the operating/activation state. Pending applications stay in the
+review queue and approved riders remain `pending_activation` until their
+existing OTP activation flow completes. The directory also includes suspended
+and resigned approved riders. Earnings are aggregated from delivered rows in
+`deliveries`; `is_online` reflects active rider availability. A status change
+uses the rider scheduling service and is limited to already activated riders,
+so Admin status changes cannot bypass OTP activation.
 
 ```json
 {
   "id": "00000000-0000-4000-8000-000000000020", "name": "Sample Rider", "email": "rider.sample@example.test",
   "phone": "09000000002", "status": "active",
   "vehicle_type": "motorcycle", "plate_no": "ABC 1234", "is_online": true,
-  "last_position": { "latitude": 6.93, "longitude": 122.08, "seen_at": "2026-10-29T08:10:00Z" },
+  "last_position": null,
   "earnings": { "total": 3200.0, "this_week": 640.0, "deliveries_count": 41 },
-  "activated_at": "2026-10-21T09:00:00Z", "resigned_at": null,
+  "activated_at": null, "resigned_at": null,
+  "application_status": "approved",
   "created_at": "2026-10-20T10:00:00Z"
 }
 ```
 
-`status`: `pending_activation | active | resigned | suspended`. `last_position` may be null.
+`status`: `pending_activation | active | resigned | suspended`. `application_status`
+is `approved` for records in this directory. `last_position` is null because
+the current database schema does not persist live rider locations.
+`activated_at` is read from the activation audit event while retained; it may
+be null for older activations because audit logs are pruned.
 
-Proofs (`GET /riders/{id}/proofs`, plain list, paginated):
+Proofs (`GET /riders/{id}/proofs`, paginated) are loaded from the rider's
+`deliveries` and omit private storage paths:
 
 ```json
 {
   "id": "00000000-0000-4000-8000-000000000005", "delivery_id": "00000000-0000-4000-8000-000000000031", "order_number": "SALO-0031", "stage": "dropoff",
-  "photo_ref": "photo:proof-31-dropoff", "latitude": 6.93, "longitude": 122.08,
+  "latitude": 6.93, "longitude": 122.08,
   "taken_at": "2026-10-29T08:20:00Z"
 }
 ```
+
+Open a delivery proof with
+`GET /riders/{id}/proofs/{delivery_id}/download-url`. The short-lived signed
+URL streams only a validated image from the existing private local disk and
+requires an authorized Admin. Rider application documents continue to use
+`GET /riders/{id}/documents/{document_id}/download-url`.
 
 ### Order and reservation (read only except cancel / status change)
 
@@ -344,7 +364,7 @@ Algorithm: for each active rider without a shift in the slot, pick the nearest a
 | Users | GET, POST `/users`; GET, PUT, DELETE `/users/{id}`; POST `/users/{id}/suspend`, `/reactivate` |
 | Restaurants | GET, POST `/restaurants`; GET, PUT, DELETE `/restaurants/{id}`; PATCH `/restaurants/{id}/status` |
 | Applications | GET `/applications`; GET `/applications/{type}/{id}`; POST `.../approve`, `.../reject` |
-| Riders | GET `/riders`; GET `/riders/{id}`; PATCH `/riders/{id}/status`; GET `/riders/{id}/proofs` |
+| Riders | GET `/riders`; GET `/riders/{id}`; PATCH `/riders/{id}/status`; GET `/riders/{id}/proofs`; GET `/riders/{id}/proofs/{delivery_id}/download-url` |
 | Orders | GET `/orders`; GET `/orders/{id}`; POST `/orders/{id}/cancel` |
 | Reservations | GET `/reservations`; GET `/reservations/{id}`; PATCH `/reservations/{id}/status` |
 | Reports | GET `/reports/sales`, `/reports/orders-by-status`, `/reports/restaurant-ranking`, `/reports/rider-performance` |

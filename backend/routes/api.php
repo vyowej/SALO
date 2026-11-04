@@ -76,6 +76,10 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
         Route::get('/private/rider-documents/{document}', [RiderApplicationController::class, 'download'])
             ->middleware('signed')
             ->name('api.v1.private-rider-documents.download');
+        Route::get('/private/delivery-proofs/{delivery}', [AdminController::class, 'downloadRiderProof'])
+            ->middleware('signed')
+            ->whereNumber('delivery')
+            ->name('api.v1.private-delivery-proofs.download');
         Route::post('/auth/email/verification/send', [EmailVerificationController::class, 'send'])
             ->middleware('throttle:auth-otp');
         Route::post('/auth/email/verification/verify', [EmailVerificationController::class, 'verify'])
@@ -248,6 +252,9 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::patch('/rider-scheduling/riders/{rider}/status', [RiderSchedulingController::class, 'setRiderStatus'])
                 ->whereNumber('rider');
             Route::get('/riders/{id}/proofs', [AdminController::class, 'riderProofs']);
+            Route::get('/riders/{rider}/proofs/{delivery}/download-url', [AdminController::class, 'riderProofDownloadUrl'])
+                ->whereNumber('rider')
+                ->whereNumber('delivery');
             Route::get('/riders/{rider}/documents/{document}/download-url', [AdminController::class, 'riderDocumentUrl'])
                 ->whereNumber('rider')
                 ->whereNumber('document');
