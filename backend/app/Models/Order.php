@@ -98,4 +98,9 @@ class Order extends Model
     {
         return $this->hasOne(RestaurantReview::class);
     }
+
+    public function delivery(): HasOne
+    {
+        return $this->hasOne(Delivery::class);
+    }
 }

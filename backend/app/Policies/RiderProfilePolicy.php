@@ -44,4 +44,12 @@ class RiderProfilePolicy
     {
         return $this->review($user);
     }
+
+    public function accessDispatch(User $user, RiderProfile $profile): bool
+    {
+        return (int) $profile->user_id === (int) $user->getKey()
+            && $user->status === 'active'
+            && $profile->application_status === 'approved'
+            && $profile->status === 'active';
+    }
 }

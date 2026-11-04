@@ -69,6 +69,16 @@ class RiderProfile extends Model
         return $this->hasMany(RiderShiftAssignment::class, 'rider_id');
     }
 
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(Delivery::class, 'rider_id');
+    }
+
+    public function deliveryOffers(): HasMany
+    {
+        return $this->hasMany(DeliveryOffer::class, 'rider_id');
+    }
+
     public function preferredShifts(): BelongsToMany
     {
         return $this->belongsToMany(Shift::class, 'rider_preferred_shifts', 'rider_id', 'shift_id');
