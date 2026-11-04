@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Admin\ApplicationDocumentController;
 use App\Http\Controllers\Api\V1\Admin\RiderSchedulingController;
 use App\Http\Controllers\Api\V1\Applications\RestaurantApplicationController;
 use App\Http\Controllers\Api\V1\Applications\RiderApplicationController;
+use App\Http\Controllers\Api\V1\Rider\RiderDispatchController;
 use App\Http\Controllers\Api\V1\Business\BusinessWorkspaceController;
 use App\Http\Controllers\Api\V1\Business\BusinessDiscountController;
 use App\Http\Controllers\Api\V1\Business\BusinessReportController;
@@ -114,6 +115,16 @@ Route::prefix('v1')->middleware('force.json')->group(function (): void {
             Route::post('/{rider}/activation/verify', [RiderApplicationController::class, 'verifyActivation'])
                 ->whereNumber('rider')
                 ->middleware('throttle:auth-otp');
+        });
+
+        Route::middleware('capability:driver')->prefix('driver')->group(function (): void {
+            Route::get('/home', [RiderDispatchController::class, 'home']);
+            Route::patch('/availability', [RiderDispatchController::class, 'setAvailability']);
+            Route::get('/current-delivery', [RiderDispatchController::class, 'current']);
+            Route::post('/delivery-offers/{offer}/accept', [RiderDispatchController::class, 'accept'])
+                ->whereNumber('offer');
+            Route::post('/delivery-offers/{offer}/decline', [RiderDispatchController::class, 'decline'])
+                ->whereNumber('offer');
         });
 
         Route::middleware('capability:customer')->prefix('customer')->group(function (): void {
