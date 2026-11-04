@@ -29,6 +29,7 @@ export const ADMIN_COPY = {
   pageLabels: {
     dashboard: 'Overview',
     users: 'Users',
+    adminAccounts: 'Admin accounts',
     restaurants: 'Restaurants',
     applications: 'Applications',
     riderApplications: 'Rider applications',
@@ -36,13 +37,14 @@ export const ADMIN_COPY = {
     orders: 'Orders',
     reservations: 'Reservations',
     reports: 'Reports',
-    schedule: 'Schedule',
+    schedule: 'Rider zones and shifts',
     history: 'History',
     settings: 'Settings',
   },
   pageDescriptions: {
     dashboard: 'A clear view of activity across SALO.',
     users: 'Review accounts and access status.',
+    adminAccounts: 'Create and manage platform Admin access.',
     restaurants: 'Manage restaurant details and operating status.',
     applications: 'Review partner and rider applications.',
     riderApplications: 'Review rider applications and private documents.',
@@ -50,7 +52,7 @@ export const ADMIN_COPY = {
     orders: 'Review orders and cancel eligible orders.',
     reservations: 'Review reservations and update their status.',
     reports: 'Explore platform performance for a selected period.',
-    schedule: 'Plan rider shifts and service-area capacity.',
+    schedule: 'Manage recurring rider assignments and zone capacity.',
     history: 'Review administrative activity.',
     settings: 'Update platform defaults.',
   },
@@ -233,7 +235,6 @@ export const ADMIN_COPY = {
   },
   capabilityOptions: {
     customer: 'Customer',
-    admin: 'Admin',
     driver: 'Rider',
   },
   userStatusOptions: ['active', 'suspended'],
@@ -299,6 +300,7 @@ export const ADMIN_COPY = {
 export const ADMIN_NAV_ITEMS = [
   { key: 'dashboard', path: '/admin', icon: 'layout', group: 'overview' },
   { key: 'users', path: '/admin/users', icon: 'users', group: 'management' },
+  { key: 'adminAccounts', path: '/admin/admin-accounts', icon: 'users', group: 'management' },
   { key: 'restaurants', path: '/admin/restaurants', icon: 'store', group: 'management' },
   { key: 'riderApplications', path: '/admin/applications/riders', icon: 'bike', group: 'management' },
   { key: 'applications', path: '/admin/applications', icon: 'clipboard', group: 'management' },
