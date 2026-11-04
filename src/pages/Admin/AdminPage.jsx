@@ -33,7 +33,9 @@ import './AdminPage.css';
 
 const AdminChartCard = lazy(() => import('../../components/admin/AdminChartCard'));
 const AdminScheduleCalendar = lazy(() => import('../../components/admin/AdminScheduleCalendar'));
+const AdminAccountsAdminPage = lazy(() => import('./AdminAccountsAdminPage'));
 const RiderApplicationsAdminPage = lazy(() => import('./RiderApplicationsAdminPage'));
+const RiderSchedulingAdminPage = lazy(() => import('./RiderSchedulingAdminPage'));
 
 const resourceForPage = {
   users: 'users',
@@ -314,8 +316,14 @@ function RecordDetails({ record, resource, onPhoto, onDocument }) {
 
 function AdminPage() {
   const location = useLocation();
+  if (location.pathname === '/admin/admin-accounts') {
+    return <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><AdminAccountsAdminPage /></Suspense>;
+  }
   if (location.pathname === '/admin/applications/riders') {
     return <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><RiderApplicationsAdminPage /></Suspense>;
+  }
+  if (location.pathname === '/admin/schedule') {
+    return <Suspense fallback={<div className="section-shell"><div className="skeleton-card" /></div>}><RiderSchedulingAdminPage /></Suspense>;
   }
   const pageKey = location.pathname === '/admin' ? 'dashboard' : location.pathname.split('/')[2] || 'dashboard';
   return <AdminWorkspace key={pageKey} pageKey={pageKey} />;
