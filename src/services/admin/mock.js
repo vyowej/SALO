@@ -46,6 +46,22 @@ const assertRoleCombination = (capabilities, memberships) => {
     failure(422, 'The submitted data is invalid.', { capabilities: ['A user cannot have an owner membership and the driver capability at the same time.'] });
   }
 };
+const adminStatuses = new Map(users.filter((user) => user.capabilities.includes('admin')).map((user) => [user.id, 'active']));
+const adminAccountView = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+  status: adminStatuses.get(user.id) || 'active',
+  account_status: user.status,
+});
+const assertNotAdminUser = (id) => {
+  const user = find(users, id);
+  if (user.capabilities.includes('admin')) {
+    failure(422, 'Admin accounts must be managed through Admin account management.', { user: ['Use Admin account management for this account.'] });
+  }
+  return user;
+};
 const uniqueEmail = (email, exceptId) => {
   if (users.some((user) => user.email.toLocaleLowerCase() === email.toLocaleLowerCase() && user.id !== exceptId)) {
     failure(422, 'The submitted data is invalid.', { email: ['This email address is already in use.'] });
@@ -62,6 +78,80 @@ const page = (items, params = {}) => {
       return item;
     }),
   };
+};
+const mockRiderShifts = [
+  { id: 'mock-shift-morning', name: 'Morning', start_time: '06:00', end_time: '12:00' },
+  { id: 'mock-shift-afternoon', name: 'Afternoon', start_time: '12:00', end_time: '18:00' },
+  { id: 'mock-shift-evening', name: 'Evening', start_time: '18:00', end_time: '23:59' },
+];
+const mockRiderZones = serviceAreas.map((area) => ({
+  id: area.id,
+  psgc_code: area.city_code,
+  name: area.name,
+  center_lat: area.latitude,
+  center_lng: area.longitude,
+  radius_km: 5,
+  is_active: area.is_active,
+  capacities: mockRiderShifts.map((shift) => ({
+    shift_id: shift.id,
+    shift_name: shift.name,
+    start_time: shift.start_time,
+    end_time: shift.end_time,
+    max_riders: area.max_riders,
+    assigned_riders: schedules.filter((item) => item.service_area.id === area.id
+      && (item.start_time === shift.start_time || item.start_time === '08:00' && shift.id === 'mock-shift-morning')).length,
+    available_slots: 0,
+  })),
+}));
+mockRiderZones.forEach((zone) => zone.capacities.forEach((capacity) => {
+  capacity.available_slots = Math.max(0, capacity.max_riders - capacity.assigned_riders);
+}));
+const mockRiderAssignments = schedules.map((schedule) => {
+  const shift = mockRiderShifts.find((item) => (
+    schedule.start_time === item.start_time
+    || schedule.start_time === '08:00' && item.id === 'mock-shift-morning'
+    || schedule.start_time === '14:00' && item.id === 'mock-shift-afternoon'
+  )) || mockRiderShifts[0];
+  return {
+    id: schedule.id,
+    rider_id: schedule.rider.id,
+    rider_name: schedule.rider.name,
+    rider_status: riders.find((rider) => rider.id === schedule.rider.id)?.status || 'active',
+    application_status: 'approved',
+    zone_id: schedule.service_area.id,
+    zone_name: schedule.service_area.name,
+    shift_id: shift.id,
+    shift_name: shift.name,
+    shift_start_time: shift.start_time,
+    shift_end_time: shift.end_time,
+    status: 'assigned',
+    assigned_by: 'system',
+    reason: null,
+  };
+});
+const mockRiderSchedulingOverview = () => ({
+  zones: copy(mockRiderZones),
+  shifts: copy(mockRiderShifts),
+  max_zone_distance_km: 10,
+});
+const recheckMockRiderWaitlist = () => {
+  mockRiderAssignments.filter((assignment) => assignment.status === 'waitlisted').forEach((assignment) => {
+    const zone = mockRiderZones.find((candidate) => (
+      candidate.is_active
+      && candidate.capacities.some((capacity) => (
+        capacity.shift_id === assignment.shift_id && capacity.available_slots > 0
+      ))
+    ));
+    if (!zone) return;
+    const capacity = zone.capacities.find((item) => item.shift_id === assignment.shift_id);
+    capacity.available_slots -= 1;
+    capacity.assigned_riders += 1;
+    assignment.zone_id = zone.id;
+    assignment.zone_name = zone.name;
+    assignment.status = 'assigned';
+    assignment.assigned_by = 'system';
+    assignment.reason = null;
+  });
 };
 const photoRefs = () => {
   const refs = [];
@@ -101,12 +191,15 @@ export const adminMock = {
       },
     });
   },
-  async listUsers(params = {}) { await wait(); return listRecords('users', users, params); },
-  async getUser(id) { await wait(); return copy(find(users, id)); },
+  async listUsers(params = {}) { await wait(); return listRecords('users', users.filter((user) => !user.capabilities.includes('admin')), params); },
+  async getUser(id) { await wait(); return copy(assertNotAdminUser(id)); },
   async createUser(body) {
     await wait();
     if (!body.name || !body.email || !body.password || !Array.isArray(body.capabilities)) {
       failure(422, 'The submitted data is invalid.', { name: !body.name ? ['This field is required.'] : undefined, email: !body.email ? ['This field is required.'] : undefined, password: !body.password ? ['This field is required.'] : undefined });
+    }
+    if (body.capabilities.includes('admin')) {
+      failure(422, 'Create Admin accounts through Admin account management.', { capabilities: ['Admin capability cannot be assigned through generic user management.'] });
     }
     uniqueEmail(body.email);
     const capabilities = [...new Set(['customer', ...body.capabilities])];
@@ -122,7 +215,10 @@ export const adminMock = {
   },
   async updateUser(id, body) {
     await wait();
-    const current = find(users, id);
+    const current = assertNotAdminUser(id);
+    if (body.capabilities?.includes('admin')) {
+      failure(422, 'Manage Admin capability through Admin account management.', { capabilities: ['Admin capability cannot be assigned through generic user management.'] });
+    }
     if (body.email && body.email !== current.email) uniqueEmail(body.email, id);
     const capabilities = body.capabilities ? [...new Set(['customer', ...body.capabilities])] : current.capabilities;
     assertRoleCombination(capabilities, body.memberships || current.memberships || []);
@@ -131,9 +227,81 @@ export const adminMock = {
     addHistory('user', id, 'updated', { fields: Object.keys(safeBody) });
     return copy(current);
   },
-  async deleteUser(id) { await wait(); find(users, id); users.splice(users.findIndex((item) => item.id === id), 1); addHistory('user', id, 'deleted'); return null; },
-  async suspendUser(id, body = {}) { await wait(); return changeUserStatus(id, 'suspended', body.reason); },
-  async reactivateUser(id) { await wait(); return changeUserStatus(id, 'active'); },
+  async deleteUser(id) { await wait(); assertNotAdminUser(id); users.splice(users.findIndex((item) => item.id === id), 1); addHistory('user', id, 'deleted'); return null; },
+  async suspendUser(id, body = {}) { await wait(); assertNotAdminUser(id); return changeUserStatus(id, 'suspended', body.reason); },
+  async reactivateUser(id) { await wait(); assertNotAdminUser(id); return changeUserStatus(id, 'active'); },
+  async listAdminAccounts(params = {}) {
+    await wait();
+    const records = users
+      .filter((user) => user.capabilities.includes('admin'))
+      .map(adminAccountView);
+    return page(records, params);
+  },
+  async getAdminAccount(id) {
+    await wait();
+    const user = find(users, id);
+    if (!user.capabilities.includes('admin')) failure(404, 'The requested Admin account was not found.');
+    return copy(adminAccountView(user));
+  },
+  async createAdminAccount(body) {
+    await wait();
+    if (!body.name?.trim() || !body.email?.trim() || !body.password || body.password !== body.password_confirmation) {
+      failure(422, 'The submitted data is invalid.', { password: ['Provide an email, name, and matching password confirmation.'] });
+    }
+    if (body.password.length < 8 || !/[A-Za-z]/.test(body.password) || !/\d/.test(body.password)) {
+      failure(422, 'The submitted data is invalid.', { password: ['Use at least eight characters with a letter and a number.'] });
+    }
+    uniqueEmail(body.email);
+    const user = {
+      id: newId(),
+      name: body.name.trim(),
+      email: body.email.trim(),
+      phone: body.phone || null,
+      avatar_url: null,
+      status: 'active',
+      capabilities: ['customer', 'admin'],
+      memberships: [],
+      driver_state: null,
+      email_verified_at: null,
+      created_at: new Date().toISOString(),
+    };
+    users.unshift(user);
+    adminStatuses.set(user.id, 'active');
+    addHistory('platform_admin', user.id, 'created', { email: user.email });
+    return copy(adminAccountView(user));
+  },
+  async updateAdminAccount(id, body) {
+    await wait();
+    const user = find(users, id);
+    if (!user.capabilities.includes('admin')) failure(404, 'The requested Admin account was not found.');
+    if (body.email && body.email !== user.email) uniqueEmail(body.email, id);
+    Object.assign(user, {
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.email !== undefined ? { email: body.email } : {}),
+      ...(body.phone !== undefined ? { phone: body.phone } : {}),
+    });
+    addHistory('platform_admin', id, 'updated', { fields: Object.keys(body) });
+    return copy(adminAccountView(user));
+  },
+  async setAdminAccountStatus(id, body) {
+    await wait();
+    if (!['active', 'suspended'].includes(body.status)) failure(422, 'Choose a valid Admin status.', { status: ['Choose active or suspended.'] });
+    const user = find(users, id);
+    if (!user.capabilities.includes('admin')) failure(404, 'The requested Admin account was not found.');
+    if (body.status === 'suspended') {
+      const activeAdmins = users.filter((item) => (
+        item.capabilities.includes('admin')
+        && item.status === 'active'
+        && adminStatuses.get(item.id) === 'active'
+      ));
+      if (adminStatuses.get(id) === 'active' && activeAdmins.length <= 1) {
+        failure(422, 'The last active Admin account cannot be deactivated.', { status: ['At least one active Admin account must remain.'] });
+      }
+    }
+    adminStatuses.set(id, body.status);
+    addHistory('platform_admin', id, 'status_changed', { status: body.status });
+    return copy(adminAccountView(user));
+  },
   async listRestaurants(params = {}) { await wait(); return listRecords('restaurants', restaurants, params); },
   async getRestaurant(id) { await wait(); return copy(find(restaurants, id)); },
   async createRestaurant(body) {
@@ -201,6 +369,129 @@ export const adminMock = {
     const previous = rider.status;
     rider.status = body.status;
     addHistory('rider', id, 'status_changed', { status: { from: previous, to: body.status } });
+    return copy(rider);
+  },
+  async getRiderScheduling() { await wait(); return mockRiderSchedulingOverview(); },
+  async listRiderAssignments(params = {}) {
+    await wait();
+    const filtered = mockRiderAssignments.filter((assignment) => (
+      (!params.status || assignment.status === params.status)
+      && (!params.shift_id || assignment.shift_id === params.shift_id)
+    ));
+    return page(filtered, params);
+  },
+  async createRiderZone(body) {
+    await wait();
+    if (!body.name?.trim() || !Number.isFinite(Number(body.center_lat)) || !Number.isFinite(Number(body.center_lng))
+      || !Number.isFinite(Number(body.radius_km)) || Number(body.radius_km) <= 0
+      || !Array.isArray(body.capacities) || body.capacities.length !== mockRiderShifts.length) {
+      failure(422, 'The submitted data is invalid.', { name: ['Complete the zone details and capacity for each shift.'] });
+    }
+    const zone = {
+      id: newId(),
+      psgc_code: body.psgc_code || null,
+      name: body.name.trim(),
+      center_lat: Number(body.center_lat),
+      center_lng: Number(body.center_lng),
+      radius_km: Number(body.radius_km),
+      is_active: body.is_active ?? true,
+      capacities: body.capacities.map((capacity) => {
+        const shift = find(mockRiderShifts, capacity.shift_id);
+        const maxRiders = Number(capacity.max_riders);
+        if (!Number.isInteger(maxRiders) || maxRiders < 1) failure(422, 'The submitted data is invalid.', { capacities: ['Enter a positive capacity for each shift.'] });
+        return { shift_id: shift.id, shift_name: shift.name, start_time: shift.start_time, end_time: shift.end_time, max_riders: maxRiders, assigned_riders: 0, available_slots: maxRiders };
+      }),
+    };
+    mockRiderZones.push(zone);
+    addHistory('rider_zone', zone.id, 'created');
+    return copy(zone);
+  },
+  async updateRiderZone(id, body) {
+    await wait();
+    const zone = find(mockRiderZones, id);
+    const wasActive = zone.is_active;
+    Object.assign(zone, body);
+    if (wasActive && zone.is_active === false) {
+      mockRiderAssignments.filter((assignment) => assignment.zone_id === id && assignment.status === 'assigned').forEach((assignment) => {
+        const capacity = zone.capacities.find((item) => item.shift_id === assignment.shift_id);
+        if (capacity) {
+          capacity.assigned_riders = Math.max(0, capacity.assigned_riders - 1);
+          capacity.available_slots = Math.max(0, capacity.max_riders - capacity.assigned_riders);
+        }
+        assignment.zone_id = null;
+        assignment.zone_name = null;
+        assignment.status = 'waitlisted';
+        assignment.reason = 'Zone deactivated';
+      });
+      recheckMockRiderWaitlist();
+    }
+    addHistory('rider_zone', id, 'updated', { fields: Object.keys(body) });
+    return copy(zone);
+  },
+  async setRiderZoneCapacity(zoneId, shiftId, body) {
+    await wait();
+    const zone = find(mockRiderZones, zoneId);
+    const capacity = zone.capacities.find((item) => item.shift_id === shiftId);
+    if (!capacity) failure(404, 'The requested record was not found.');
+    const maxRiders = Number(body.max_riders);
+    if (!Number.isInteger(maxRiders) || maxRiders < 1) failure(422, 'The submitted data is invalid.', { max_riders: ['Enter a positive capacity.'] });
+    const increased = maxRiders > capacity.max_riders;
+    capacity.max_riders = maxRiders;
+    capacity.available_slots = Math.max(0, maxRiders - capacity.assigned_riders);
+    addHistory('zone_shift_capacity', `${zoneId}:${shiftId}`, 'updated', { max_riders: maxRiders });
+    if (increased) recheckMockRiderWaitlist();
+    return mockRiderSchedulingOverview();
+  },
+  async overrideRiderAssignment(riderId, assignmentId, body) {
+    await wait();
+    const assignment = find(mockRiderAssignments, assignmentId);
+    const zone = find(mockRiderZones, body.zone_id);
+    const capacity = zone.capacities.find((item) => item.shift_id === body.shift_id);
+    if (assignment.rider_id !== riderId) failure(404, 'The requested record was not found.');
+    if (!zone.is_active || !capacity || capacity.available_slots < 1 || !body.reason?.trim()) {
+      failure(422, 'The submitted data is invalid.', { zone_id: ['Choose an active zone and shift with capacity and provide a reason.'] });
+    }
+    const previousZone = mockRiderZones.find((item) => item.id === assignment.zone_id);
+    const previousCapacity = previousZone?.capacities.find((item) => item.shift_id === assignment.shift_id);
+    if (previousCapacity && assignment.status === 'assigned') {
+      previousCapacity.assigned_riders = Math.max(0, previousCapacity.assigned_riders - 1);
+      previousCapacity.available_slots = Math.max(0, previousCapacity.max_riders - previousCapacity.assigned_riders);
+    }
+    capacity.assigned_riders += 1;
+    capacity.available_slots = Math.max(0, capacity.max_riders - capacity.assigned_riders);
+    Object.assign(assignment, {
+      zone_id: zone.id,
+      zone_name: zone.name,
+      shift_id: body.shift_id,
+      shift_name: mockRiderShifts.find((item) => item.id === body.shift_id)?.name,
+      status: 'assigned',
+      assigned_by: 'admin',
+      reason: body.reason.trim(),
+    });
+    addHistory('rider_shift_assignment', assignment.id, 'overridden', { reason: body.reason.trim() });
+    return copy(assignment);
+  },
+  async setRiderOperatingStatus(id, body) {
+    await wait();
+    const rider = find(riders, id);
+    if (rider.status === 'pending_activation' && body.status === 'active') failure(409, 'OTP activation is required before this rider can become active.');
+    rider.status = body.status;
+    if (body.status === 'suspended') {
+      mockRiderAssignments.filter((assignment) => assignment.rider_id === id && assignment.status === 'assigned').forEach((assignment) => {
+        const zone = mockRiderZones.find((item) => item.id === assignment.zone_id);
+        const capacity = zone?.capacities.find((item) => item.shift_id === assignment.shift_id);
+        if (capacity) {
+          capacity.assigned_riders = Math.max(0, capacity.assigned_riders - 1);
+          capacity.available_slots = Math.max(0, capacity.max_riders - capacity.assigned_riders);
+        }
+        assignment.zone_id = null;
+        assignment.zone_name = null;
+        assignment.status = 'waitlisted';
+        assignment.reason = 'Rider suspended';
+      });
+      recheckMockRiderWaitlist();
+    }
+    addHistory('rider', id, 'status_changed', { status: body.status });
     return copy(rider);
   },
   async listRiderProofs(id, params = {}) { await wait(); find(riders, id); return page(proofs.filter((proof) => proof.rider_id === id), params); },
