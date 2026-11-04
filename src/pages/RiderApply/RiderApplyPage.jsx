@@ -23,6 +23,30 @@ const DOCUMENT_TYPES = [
   { key: 'or_cr', title: 'OR/CR', description: 'Motorcycle riders only. JPG, PNG, WebP, or PDF.', image: false },
 ];
 
+function ShiftAssignmentCard({ assignments = [] }) {
+  return (
+    <Card className="rider-application__assignments">
+      <h2>My zone and shifts</h2>
+      {assignments.length ? (
+        <ul>
+          {assignments.map((assignment) => (
+            <li key={assignment.id}>
+              <div>
+                <strong>{assignment.shift_name}</strong>
+                <span>{assignment.start_time}–{assignment.end_time}</span>
+              </div>
+              <p>{assignment.status === 'assigned' ? assignment.zone_name : 'Waitlisted'}</p>
+              {assignment.reason ? <small>{assignment.reason}</small> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Zone and shift assignments will appear here after your application is approved.</p>
+      )}
+    </Card>
+  );
+}
+
 const emptyAddress = {
   country_code: 'PH',
   label: 'Home',
@@ -502,6 +526,7 @@ export default function RiderApplyPage() {
           <p className="rider-application__eyebrow">Approved</p>
           <h1>{statusTitle(profile)}</h1>
           <p>Your application is approved. Verify the six-digit code sent to <strong>{profile.applicant.email}</strong> to activate Driver mode.</p>
+          <ShiftAssignmentCard assignments={profile.shift_assignments} />
           <div className="rider-application__activation">
             <Input
               id="rider-activation-code"
@@ -541,6 +566,7 @@ export default function RiderApplyPage() {
           <p className="rider-application__eyebrow">Activated</p>
           <h1>{statusTitle(profile)}</h1>
           <p>Your rider profile is active. The rider dashboard will be available when your rider setup is complete.</p>
+          <ShiftAssignmentCard assignments={profile.shift_assignments} />
           <Link className="rider-application__sign-in" to="/rider">Continue</Link>
         </Card>
       </main>
