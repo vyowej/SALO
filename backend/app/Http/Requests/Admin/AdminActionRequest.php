@@ -21,7 +21,7 @@ class AdminActionRequest extends FormRequest
                 'email' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'email', 'max:190'],
                 'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
                 'capabilities' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'array'],
-                'capabilities.*' => ['in:customer,driver,admin'],
+                'capabilities.*' => ['in:customer,driver'],
                 'password' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'string', 'min:8'],
                 'role' => ['prohibited'],
             ];
