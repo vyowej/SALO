@@ -1,0 +1,207 @@
+.rider-scheduling-admin {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.rider-scheduling-admin__heading,
+.rider-scheduling-admin__section-heading,
+.rider-scheduling-admin__zone-heading,
+.rider-scheduling-admin__assignment-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rider-scheduling-admin__heading h2,
+.rider-scheduling-admin__section-heading h3,
+.rider-scheduling-admin__zone-heading h4,
+.rider-scheduling-admin__assignment-summary h4 {
+  margin: 0;
+}
+
+.rider-scheduling-admin__heading p,
+.rider-scheduling-admin__section-heading p,
+.rider-scheduling-admin__zone-heading p,
+.rider-scheduling-admin__assignment-summary p,
+.rider-scheduling-admin__assignment > p {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+}
+
+.rider-scheduling-admin__panel,
+.rider-scheduling-admin__zone,
+.rider-scheduling-admin__assignment {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.rider-scheduling-admin__panel h3 {
+  margin: 0;
+}
+
+.rider-scheduling-admin__zone-form,
+.rider-scheduling-admin__override {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.rider-scheduling-admin label {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.rider-scheduling-admin input,
+.rider-scheduling-admin select {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+
+.rider-scheduling-admin__message {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.rider-scheduling-admin__message--error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.rider-scheduling-admin__zones,
+.rider-scheduling-admin__assignments {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.rider-scheduling-admin__section-heading {
+  align-items: end;
+}
+
+.rider-scheduling-admin__section-heading > span {
+  color: var(--muted);
+}
+
+.rider-scheduling-admin__capacity-grid,
+.rider-scheduling-admin__assignment-list {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.rider-scheduling-admin__capacity {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.rider-scheduling-admin__capacity > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.rider-scheduling-admin__capacity small {
+  color: var(--muted);
+}
+
+.rider-scheduling-admin__capacity p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
+.rider-scheduling-admin__status {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  background: var(--surface);
+  text-transform: capitalize;
+}
+
+.rider-scheduling-admin__status--waitlisted {
+  border-color: var(--warning);
+}
+
+.rider-scheduling-admin__status--assigned {
+  border-color: var(--success);
+}
+
+.rider-scheduling-admin details {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.rider-scheduling-admin summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.rider-scheduling-admin__override {
+  padding-top: var(--space-2);
+}
+
+.rider-scheduling-admin__override-reason {
+  grid-column: 1 / -1;
+}
+
+.rider-scheduling-admin button {
+  min-height: 48px;
+  touch-action: manipulation;
+}
+
+.rider-scheduling-admin :focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+@media (min-width: 30rem) {
+  .rider-scheduling-admin__zone-form,
+  .rider-scheduling-admin__override {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 48rem) {
+  .rider-scheduling-admin__capacity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .rider-scheduling-admin__zone-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rider-scheduling-admin__capacity-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
