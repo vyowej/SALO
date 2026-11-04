@@ -12,6 +12,7 @@ use App\Models\RestaurantApplication;
 use App\Models\RiderProfile;
 use App\Services\AdminService;
 use App\Services\RiderApplicationService;
+use App\Services\RiderAdminService;
 use App\Services\ScheduleGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,9 +28,16 @@ class AdminController extends Controller
         AdminListRequest $request,
         AdminService $service,
         RiderApplicationService $riders,
+        RiderAdminService $riderDirectory,
     ): AdminCollection
     {
         $resource = (string) $request->route('resource');
+        if ($resource === 'riders') {
+            $this->authorize('review', RiderProfile::class);
+            $result = $riderDirectory->list($request->validated());
+
+            return new AdminCollection($result['data'], $result['meta']);
+        }
         if ($resource === 'applications') {
             if ($request->validated('type') === 'rider') {
                 $this->authorize('review', RiderProfile::class);
@@ -44,9 +52,19 @@ class AdminController extends Controller
         return new AdminCollection($result['data'], $result['meta']);
     }
 
-    public function show(Request $request, AdminService $service, RiderApplicationService $riders): mixed
+    public function show(
+        Request $request,
+        AdminService $service,
+        RiderApplicationService $riders,
+        RiderAdminService $riderDirectory,
+    ): mixed
     {
         $resource = (string) $request->route('resource');
+        if ($resource === 'riders') {
+            $this->authorize('review', RiderProfile::class);
+
+            return AdminResource::make($riderDirectory->find((string) $request->route('id')));
+        }
         if ($resource === 'applications') {
             if ((string) $request->route('type') === 'rider') {
                 $this->authorize('review', RiderProfile::class);
@@ -191,19 +209,41 @@ class AdminController extends Controller
         ));
     }
 
-    public function riderStatus(AdminActionRequest $request, AdminService $service): AdminResource
+    public function riderStatus(AdminActionRequest $request, RiderAdminService $riders): AdminResource
     {
-        return AdminResource::make($service->setRiderStatus((string) $request->route('id'), $request->validated('status'), $request->user()));
+        $this->authorize('review', RiderProfile::class);
+
+        return AdminResource::make($riders->changeStatus(
+            (int) $request->route('id'),
+            $request->validated('status'),
+            $request->user(),
+        ));
     }
 
-    public function riderProofs(AdminListRequest $request, AdminService $service): AdminCollection
+    public function riderProofs(AdminListRequest $request, RiderAdminService $riders): AdminCollection
     {
-        $params = $request->validated();
-        $params['rider_id'] = (string) $request->route('id');
-        $paged = $service->list('proofs', $params);
-        $paged['data'] = array_map(fn ($proof) => array_diff_key($proof, ['rider_id' => true]), $paged['data']);
+        $this->authorize('review', RiderProfile::class);
+        $paged = $riders->proofs((string) $request->route('id'), $request->validated());
 
         return new AdminCollection($paged['data'], $paged['meta']);
+    }
+
+    public function riderProofDownloadUrl(
+        int $rider,
+        int $delivery,
+        RiderAdminService $riders,
+    ): JsonResponse {
+        $this->authorize('review', RiderProfile::class);
+        $url = $riders->createProofDownloadUrl($rider, $delivery);
+
+        return response()->json(['data' => ['url' => $url, 'expires_in_seconds' => 300]]);
+    }
+
+    public function downloadRiderProof(int $delivery, RiderAdminService $riders): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorize('review', RiderProfile::class);
+
+        return $riders->streamProof($delivery);
     }
 
     public function riderDocumentUrl(Request $request, RiderApplicationService $riders): JsonResponse

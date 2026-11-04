@@ -13,6 +13,10 @@ class AdminListRequest extends FormRequest
 
     public function rules(): array
     {
+        $statusRule = $this->route('resource') === 'riders'
+            ? ['sometimes', 'in:pending_activation,active,suspended,resigned']
+            : ['sometimes', 'string', 'max:40'];
+
         return [
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
@@ -21,7 +25,7 @@ class AdminListRequest extends FormRequest
             'direction' => ['sometimes', 'in:asc,desc'],
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date', 'after_or_equal:from'],
-            'status' => ['sometimes', 'string', 'max:40'],
+            'status' => $statusRule,
             'capability' => ['sometimes', 'in:customer,driver,admin'],
             'restaurant_id' => ['sometimes', 'string'],
             'city_code' => ['sometimes', 'string'],

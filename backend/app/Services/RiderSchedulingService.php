@@ -326,11 +326,8 @@ class RiderSchedulingService
         $profile = DB::transaction(function () use ($riderId, $status, $admin, &$released): RiderProfile {
             $profile = $this->scheduling->profiles()->whereKey($riderId)->lockForUpdate()->firstOrFail();
             if ($profile->application_status !== 'approved'
-                || ! in_array($profile->status, ['active', 'suspended', 'pending_activation'], true)) {
+                || ! in_array($profile->status, ['active', 'suspended'], true)) {
                 abort(409, 'Only approved riders can have their operating status changed.');
-            }
-            if ($status === 'active' && $profile->status === 'pending_activation') {
-                abort(409, 'The rider must complete OTP activation before becoming active.');
             }
             if ($profile->status === $status) {
                 return $profile;

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Zone;
 use App\Repositories\Contracts\PlatformSettingsRepository;
 use App\Repositories\Contracts\RiderDispatchRepository;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -35,15 +36,8 @@ class RiderDispatchService
             $profile->refresh();
         }
 
-        $now = now();
-        $assignment = $this->dispatch->assignments()
+        $assignment = $this->currentShiftAssignments((int) $profile->getKey())
             ->with(['zone', 'shift'])
-            ->where('rider_id', $profile->getKey())
-            ->where('status', 'assigned')
-            ->whereHas('zone', fn ($query) => $query->where('is_active', true))
-            ->whereHas('shift', fn ($query) => $query
-                ->where('start_time', '<=', $now->format('H:i:s'))
-                ->where('end_time', '>', $now->format('H:i:s')))
             ->orderBy('shift_id')
             ->first();
 
@@ -548,13 +542,11 @@ class RiderDispatchService
 
     private function nearestEligibleRider(Order $order, Zone $zone, Delivery $delivery): ?array
     {
-        $time = now()->format('H:i:s');
+        $time = $this->currentManilaShiftTime();
         $riderIds = $this->dispatch->assignments()
             ->where('zone_id', $zone->getKey())
             ->where('status', 'assigned')
-            ->whereHas('shift', fn ($query) => $query
-                ->where('start_time', '<=', $time)
-                ->where('end_time', '>', $time))
+            ->whereHas('shift', fn (Builder $query) => $this->whereShiftIsActiveAt($query, $time))
             ->whereHas('rider', fn ($query) => $query
                 ->where('application_status', 'approved')
                 ->where('status', 'active')
@@ -628,16 +620,14 @@ class RiderDispatchService
         $zoneIds = $zoneId === null
             ? $this->orderedZonesFor($order)->pluck('id')
             : collect([$zoneId]);
-        $time = now()->format('H:i:s');
+        $time = $this->currentManilaShiftTime();
 
         return $this->dispatch->assignments()
             ->where('rider_id', $profile->getKey())
             ->where('status', 'assigned')
             ->whereIn('zone_id', $zoneIds)
             ->whereHas('zone', fn ($query) => $query->where('is_active', true))
-            ->whereHas('shift', fn ($query) => $query
-                ->where('start_time', '<=', $time)
-                ->where('end_time', '>', $time))
+            ->whereHas('shift', fn (Builder $query) => $this->whereShiftIsActiveAt($query, $time))
             ->exists();
     }
 
@@ -694,16 +684,40 @@ class RiderDispatchService
 
     private function hasCurrentShiftAssignment(int $profileId): bool
     {
-        $time = now()->format('H:i:s');
+        return $this->currentShiftAssignments($profileId)->exists();
+    }
+
+    private function currentShiftAssignments(int $profileId): Builder
+    {
+        $time = $this->currentManilaShiftTime();
 
         return $this->dispatch->assignments()
             ->where('rider_id', $profileId)
             ->where('status', 'assigned')
             ->whereHas('zone', fn ($query) => $query->where('is_active', true))
-            ->whereHas('shift', fn ($query) => $query
-                ->where('start_time', '<=', $time)
-                ->where('end_time', '>', $time))
-            ->exists();
+            ->whereHas('shift', fn (Builder $query) => $this->whereShiftIsActiveAt($query, $time));
+    }
+
+    private function currentManilaShiftTime(): string
+    {
+        return now('Asia/Manila')->format('H:i:s');
+    }
+
+    private function whereShiftIsActiveAt(Builder $query, string $time): Builder
+    {
+        return $query->where(function (Builder $query) use ($time): void {
+            $query->where(function (Builder $query) use ($time): void {
+                $query->whereColumn('start_time', '<=', 'end_time')
+                    ->where('start_time', '<=', $time)
+                    ->where('end_time', '>', $time);
+            })->orWhere(function (Builder $query) use ($time): void {
+                $query->whereColumn('start_time', '>', 'end_time')
+                    ->where(function (Builder $query) use ($time): void {
+                        $query->where('start_time', '<=', $time)
+                            ->orWhere('end_time', '>', $time);
+                    });
+            });
+        });
     }
 
     private function hasActiveDelivery(int $profileId, ?int $exceptDeliveryId = null): bool
