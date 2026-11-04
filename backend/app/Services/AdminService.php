@@ -20,6 +20,7 @@ class AdminService
         private readonly RestaurantApplicationRepository $applications,
         private readonly PlatformSettingsRepository $platformSettings,
         private readonly AuditLogRepository $audit,
+        private readonly AdminAccountService $adminAccounts,
     ) {}
 
     public function list(string $resource, array $params): array
@@ -29,6 +30,12 @@ class AdminService
         }
 
         $items = $this->repository->all($resource);
+        if ($resource === 'users') {
+            $items = array_values(array_filter(
+                $items,
+                fn (array $item): bool => ! in_array('admin', $item['capabilities'] ?? [], true),
+            ));
+        }
         foreach ($params as $key => $value) {
             if ($value === null || $value === '' || in_array($key, ['page', 'per_page', 'search', 'sort', 'direction'], true)) {
                 continue;
@@ -110,6 +117,9 @@ class AdminService
         }
 
         $record = $this->repository->find($resource, $id) ?? abort(404);
+        if ($resource === 'users') {
+            $this->adminAccounts->assertGenericUserIsNotAdmin($id, $record);
+        }
 
         return $resource === 'users' ? $this->safeUser($record) : $record;
     }
@@ -117,6 +127,7 @@ class AdminService
     public function create(string $resource, array $data, object $actor): array
     {
         if ($resource === 'users') {
+            $this->assertNoAdminCapability($data['capabilities'] ?? []);
             $data['capabilities'] = array_values(array_unique(array_merge(['customer'], $data['capabilities'] ?? [])));
             $this->assertValidCombination($data['capabilities'], $data['memberships'] ?? []);
             $this->assertUniqueEmail($data['email']);
@@ -160,6 +171,7 @@ class AdminService
     {
         $current = $this->find($resource, $id);
         if ($resource === 'users') {
+            $this->assertNoAdminCapability($data['capabilities'] ?? []);
             if (isset($data['capabilities'])) {
                 $data['capabilities'] = array_values(array_unique(array_merge(['customer'], $data['capabilities'])));
             }
@@ -181,6 +193,9 @@ class AdminService
     public function delete(string $resource, string $id, object $actor): void
     {
         $record = $this->find($resource, $id);
+        if ($resource === 'users') {
+            $this->adminAccounts->assertGenericUserIsNotAdmin($id, $record);
+        }
         abort_unless($this->repository->delete($resource, $id), 404);
         $this->history($actor, $resource, $id, 'deleted', ['id' => $record['id']]);
     }
@@ -188,6 +203,7 @@ class AdminService
     public function setUserStatus(string $id, string $status, object $actor, ?string $reason = null): array
     {
         $user = $this->find('users', $id);
+        $this->adminAccounts->assertGenericUserIsNotAdmin($id, $user);
         $updated = $this->repository->update('users', $id, ['status' => $status]);
         $this->history($actor, 'user', $id, 'status_changed', ['status' => ['from' => $user['status'], 'to' => $status], 'reason' => $reason]);
 
@@ -488,6 +504,15 @@ class AdminService
         $ownsRestaurant = collect($memberships)->contains(fn ($membership) => ($membership['role'] ?? null) === 'owner');
         if ($ownsRestaurant && in_array('driver', $capabilities, true)) {
             throw ValidationException::withMessages(['capabilities' => ['A user cannot have an owner membership and the driver capability at the same time.']]);
+        }
+    }
+
+    private function assertNoAdminCapability(array $capabilities): void
+    {
+        if (in_array('admin', $capabilities, true)) {
+            throw ValidationException::withMessages([
+                'capabilities' => ['Create and manage Admin accounts through Admin account management.'],
+            ]);
         }
     }
 

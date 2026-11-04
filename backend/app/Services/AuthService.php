@@ -18,6 +18,7 @@ class AuthService
         private readonly UserRepository $users,
         private readonly AuthTokenService $tokens,
         private readonly SessionRepository $sessions,
+        private readonly PlatformAdminProtection $adminProtection,
     ) {}
 
     private function ensureSession(Request $request): void
@@ -119,9 +120,11 @@ class AuthService
             ]);
         }
 
-        $this->users->update($user, [
-            'status' => 'deactivated',
-        ]);
+        $this->adminProtection->whilePreservingLastActiveAdmin($user, function () use ($user): User {
+            $user->platformAdmin()->where('status', 'active')->update(['status' => 'suspended']);
+
+            return $this->users->update($user, ['status' => 'deactivated']);
+        });
         $this->sessions->deleteForUser((int) $user->getAuthIdentifier());
         $this->logout($request);
     }
