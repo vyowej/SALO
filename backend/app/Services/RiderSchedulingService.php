@@ -18,6 +18,7 @@ class RiderSchedulingService
     public function __construct(
         private readonly RiderSchedulingRepository $scheduling,
         private readonly PlatformSettingsRepository $settings,
+        private readonly RiderDispatchService $riderDispatch,
     ) {}
 
     public function overview(): array
@@ -358,6 +359,8 @@ class RiderSchedulingService
         if ($status === 'active') {
             $this->assignApprovedRider($profile);
             $released = true;
+        } elseif ($status === 'suspended') {
+            $this->riderDispatch->forceOfflineForProfile($riderId, 'Rider suspended');
         }
         if ($released) {
             $this->recheckWaitlist();
