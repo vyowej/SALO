@@ -25,6 +25,7 @@ class BusinessOrderService
         private readonly RestaurantPageRepository $restaurants,
         private readonly AuditLogRepository $audit,
         private readonly CustomerNotificationService $notifications,
+        private readonly RiderDispatchService $riderDispatch,
     ) {}
 
     public function list(Restaurant $restaurant, array $filters, bool $includeActors): array
@@ -103,6 +104,11 @@ class BusinessOrderService
                 $toStatus,
                 $normalizedReason,
             );
+            if ($toStatus === 'ready' && $order->order_type === 'delivery') {
+                $this->riderDispatch->dispatchReadyOrder((int) $order->getKey());
+            } elseif ($toStatus === 'cancelled') {
+                $this->riderDispatch->cancelForOrder((int) $order->getKey());
+            }
             $this->notifications->orderStatusChanged($order, $toStatus);
             $this->audit->record([
                 'actor_user_id' => $actor->getKey(),

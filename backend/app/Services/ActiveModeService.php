@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 
 class ActiveModeService
 {
+    public function __construct(private readonly RiderDispatchService $riderDispatch) {}
+
     public function activate(User $user, string $mode, ?string $restaurantId, Request $request): User
     {
         if (! in_array($mode, $user->capabilities, true)) {
@@ -32,6 +34,9 @@ class ActiveModeService
             $request->session()->forget('salo.selected_restaurant_id');
         }
 
+        if ($mode !== 'driver') {
+            $this->riderDispatch->forceOfflineForUser((int) $user->getKey(), 'Driver mode ended');
+        }
         $request->session()->put('salo.active_mode', $mode);
 
         return $user->refresh();
