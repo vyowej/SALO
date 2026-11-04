@@ -61,7 +61,29 @@ Mock adapters must implement the same search, sort, filter and pagination behavi
 }
 ```
 
-The existing user resource fields remain unchanged: `id, name, email, phone, avatar_url, status, capabilities, memberships, email_verified_at, driver_state`; this admin representation adds `created_at`. `capabilities` uses the existing platform capabilities (`customer`, `driver`, `admin`). Restaurant roles (including `owner`) remain membership roles and use the existing membership shape. `status`: `active | deactivated | suspended | pending_activation`. Create body: `name, email, phone?, capabilities, password`. Update body: those fields are optional; `password` is optional.
+The existing user resource fields remain unchanged: `id, name, email, phone, avatar_url, status, capabilities, memberships, email_verified_at, driver_state`; this admin representation adds `created_at`. `capabilities` uses the existing platform capabilities (`customer`, `driver`, `admin`) in resource responses. Generic user-management requests may assign `customer` or `driver`, but may not grant or change `admin`. Restaurant roles (including `owner`) remain membership roles and use the existing membership shape. `status`: `active | deactivated | suspended | pending_activation`. Create body: `name, email, phone?, capabilities, password`. Update body: those fields are optional; `password` is optional.
+
+Generic user-management endpoints do not create or mutate Admin accounts.
+Admin capability changes use the dedicated Admin-account endpoints below;
+Admin accounts are omitted from the generic user-management list.
+
+### Admin accounts
+
+These endpoints use durable `users` and `platform_admins` records and require
+the existing authenticated Admin capability and Admin active mode:
+
+- `GET /admin-accounts` (optional `search`, `status`, `page`, `per_page`)
+- `GET /admin-accounts/{user_id}`
+- `POST /admin-accounts` (`name, email, phone?, password, password_confirmation`)
+- `PUT /admin-accounts/{user_id}` (permitted identity fields: `name, email, phone`)
+- `PATCH /admin-accounts/{user_id}/status` (`status: active | suspended`)
+
+Admin-account responses contain `id, name, email, phone, status, account_status`
+and never contain a password or hash. Deactivation suspends Admin capability
+without deleting the User account. The last active Admin cannot be suspended
+or deactivated; there is no Admin-account delete endpoint. See
+[Admin account provisioning](./ADMIN_ACCOUNT_PROVISIONING.md) for the initial
+operator command and security behavior.
 
 ### Restaurant
 

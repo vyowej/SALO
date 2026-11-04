@@ -45,8 +45,8 @@ These database rules apply to every rider phase:
   and `SELECT DATABASE()` must end in `_test`; a mismatch must fail closed.
 - Files uploaded by riders are private local-disk files. Do not put an image,
   file data URL, or image blob in browser `localStorage`.
-- D0 is complete and approved. Each subsequent phase remains separately gated;
-  D1 completion does not authorize starting D2.
+- D0 and D1 are complete. D2 implementation is recorded below; D3 and later
+  phases remain separately gated.
 
 ## 2. D0 prerequisite audit
 
@@ -330,21 +330,39 @@ or phone check that was not run.
 
 ### D2 — Zones, shifts, and automatic scheduling
 
-- Reuse Admin zone, shift, and capacity pages where they are database-backed;
-  D0 found the current equivalents are fixture-backed and need persistence
-  on the root schema.
-- On approval, for each preferred shift, choose the nearest active zone with
-  capacity, then the next-nearest within `max_zone_distance_km`; otherwise
-  persist a waitlist assignment. Tie-break deterministically by zone ID.
-- Lock the zone/shift capacity row and count assigned riders in one
-  transaction. Recheck waitlist after resignation, suspension, or capacity
-  increase and through a retry-safe scheduled job. Do not evict riders merely
-  because capacity was lowered.
-- Admin may override a rider's zone/shift with a reason; write an audit log.
-- Rider sees assigned/waitlisted zones and shifts.
-- D2 tests: full zone, nearest zone and deterministic tie-break, waitlist,
-  waitlist recheck, override audit, and concurrent assignments never
-  exceeding capacity.
+- Uses the existing `zones`, `shifts`, `zone_shift_capacities`,
+  `rider_preferred_shifts`, `rider_shift_assignments`, `platform_settings`,
+  and `audit_logs` tables. No table, column, status, or migration was added;
+  recurring rider/shift assignments remain in use.
+- Replaced the fixture-backed Admin schedule view with database-backed zone,
+  shift capacity, assignment, override, and rider operating-status controls.
+  Admin routes require the scheduling policy and write an audit record for
+  zone, capacity, override, and rider-status changes.
+- On approval and activation, preferred shifts are scheduled by distance to
+  each active zone with capacity within `max_zone_distance_km`; exact distance
+  ties are resolved by zone ID. Missing coordinates, no eligible capacity,
+  or full zones create a waitlisted assignment with a reason.
+- Assignment locks the zone/shift capacity row and checks assigned riders
+  within a transaction. Increasing capacity or activating a zone retries the
+  waitlist; suspending a rider releases assigned slots and retries it.
+  Lowering capacity does not evict riders. The retry command is scheduled
+  every five minutes.
+- The rider's own profile/status resource includes assigned and waitlisted
+  recurring shifts. This phase does not implement online delivery dispatch,
+  offers, or delivery-job handling; those remain D3.
+- Verification: focused `RiderSchedulingTest` passed (10 tests, 32
+  assertions). The full backend suite passed (154 tests, 988 assertions).
+  `npm run lint`, `npm run build`, and PHP syntax checks for changed PHP files
+  passed. The test database was verified as `salo_test`; post-run counts were
+  zero for `users`, `rider_profiles`, `zones`, `rider_shift_assignments`,
+  `zone_shift_capacities`, and `audit_logs`. The existing
+  `max_zone_distance_km=10` setting and all 3 shifts remained.
+- Responsive checklist: the Admin scheduling stylesheet was reviewed and the
+  production frontend build passed. Its base layout is single-column, with
+  token-based breakpoints at 30rem, 48rem, and 64rem and 48px controls.
+  No D2 authenticated page was visually checked at a matrix viewport; the
+  available browser session was signed out, so no viewport width is claimed
+  as verified for this D2 interface.
 
 ### D3 — Rider shell, availability, and automatic dispatch
 
@@ -781,4 +799,26 @@ or sample rows were created by D1.
    camera/GPS permission denial, offline recovery, reduced motion, and
    orientation changes.
 
-**D1 is complete. Stop here for review; D2 has not started.**
+### D2 manual checks
+
+Use an Admin account and rider test accounts against `salo_test` only.
+
+1. Create a zone and verify its per-shift capacity, then deactivate and
+   reactivate it. Confirm existing assignments are waitlisted on deactivation
+   and reconsidered on activation.
+2. Approve a rider with a preferred shift and home coordinates. Verify the
+   nearest eligible zone is assigned, distance ties use zone ID, and a full
+   or too-distant set of zones produces a reasoned waitlist entry.
+3. Increase capacity and run `php artisan salo:recheck-rider-waitlist`;
+   confirm the oldest eligible waitlisted rider is assigned. Lower capacity
+   and confirm existing assignments are not removed.
+4. Override an assignment with a reason and confirm the audit entry. Suspend
+   a rider and confirm its assigned capacity is released and waitlisted riders
+   are reconsidered. Confirm an OTP-pending rider cannot be promoted to active
+   by the Admin scheduling control.
+5. Check the Admin scheduling page at 360x640, 390x844, 412x915, 768x1024
+   portrait and 1024x768 landscape, plus 1280px and 1920px widths. These D2
+   authenticated viewport checks were not run during implementation.
+
+**D2 is implemented and verified as recorded above. Stop here for review;
+D3 has not started.**
