@@ -1,41 +1,117 @@
+import config from '../config';
 import { riderDashboardSeed } from '../mock/dashboardData';
-import { config } from '../config';
+import apiRequest, { setApiRequestContext } from './apiClient';
 
-const wait = () => new Promise((resolve) => setTimeout(resolve, config.mockDelay));
+const delay = () => new Promise((resolve) => window.setTimeout(resolve, config.mockDelay));
+const mockState = {
+  availability: riderDashboardSeed.online ? 'online' : 'offline',
+  current: null,
+};
+
+function createMockOffer() {
+  const seed = riderDashboardSeed.offers[0];
+  return {
+    type: 'offer',
+    offer: {
+      id: seed.id,
+      reference_code: seed.id,
+      pickup_name: seed.pickup,
+      pickup_distance_km: 3.2,
+      dropoff_area: 'Quezon City',
+      estimated_earning: String(seed.payout.toFixed(2)),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      ack_seconds: 60,
+    },
+  };
+}
+
+function setDriverContext() {
+  setApiRequestContext('driver');
+}
 
 export const riderService = {
-  async getOverview(range = 'Today') {
-    await wait();
-    const seed = riderDashboardSeed.overview;
-    const multiplier = seed.rangeMultipliers[range] || seed.rangeMultipliers.Today;
-    return {
-      online: riderDashboardSeed.online,
-      earnings: seed.earnings * multiplier,
-      deliveries: seed.deliveries * multiplier,
-      acceptanceRate: seed.acceptanceRate,
-      cashToRemit: seed.cashToRemit,
-      earningsChange: seed.earningsChange,
-      averageRating: seed.averageRating,
-      settlementDeadline: seed.settlementDeadline,
-      weeklyEarnings: riderDashboardSeed.earnings,
-      offers: riderDashboardSeed.offers,
-      deliveriesList: riderDashboardSeed.deliveries,
-      completedRoute: seed.completedRoute,
-    };
+  async getHome() {
+    if (config.useMock) {
+      await delay();
+      return {
+        availability: mockState.availability,
+        can_go_online: true,
+        disabled_reason: null,
+        assignment: { zone: 'Demo zone', shift: 'Demo shift', start_time: '09:00', end_time: '17:00' },
+        next_action: mockState.availability === 'online' ? 'Wait for a delivery offer.' : 'Go online during an assigned shift.',
+      };
+    }
+
+    setDriverContext();
+    return apiRequest('/driver/home');
   },
 
-  async setOnline(value) {
-    await wait();
-    riderDashboardSeed.online = value;
-    return value;
+  async setAvailability(availability, latitude = null, longitude = null) {
+    if (config.useMock) {
+      await delay();
+      mockState.availability = availability;
+      if (availability === 'online' && !mockState.current) mockState.current = createMockOffer();
+      if (availability === 'offline') mockState.current = null;
+      return this.getHome();
+    }
+
+    setDriverContext();
+    return apiRequest('/driver/availability', {
+      method: 'PATCH',
+      body: { availability, latitude, longitude },
+    });
   },
 
-  async respondToOffer(id, accepted) {
-    await wait();
-    const offerIndex = riderDashboardSeed.offers.findIndex((offer) => offer.id === id);
-    if (offerIndex < 0) return { error: 'Delivery offer not found.' };
-    const [offer] = riderDashboardSeed.offers.splice(offerIndex, 1);
-    return { offer, accepted };
+  async getCurrent() {
+    if (config.useMock) {
+      await delay();
+      if (mockState.current?.type === 'offer'
+        && new Date(mockState.current.offer.expires_at).getTime() <= Date.now()) {
+        mockState.current = null;
+      }
+      return mockState.current;
+    }
+
+    setDriverContext();
+    return apiRequest('/driver/current-delivery');
+  },
+
+  async respondToOffer(offerId, accept) {
+    if (config.useMock) {
+      await delay();
+      if (mockState.current?.offer?.id !== offerId) return { status: 'unavailable' };
+      if (accept) {
+        mockState.current = {
+          type: 'active_delivery',
+          delivery: {
+            id: offerId,
+            status: 'accepted',
+            reference_code: offerId,
+            pickup: {
+              name: mockState.current.offer.pickup_name,
+              address: 'Demo pickup address',
+            },
+            customer: {
+              name: 'Demo customer',
+              phone: '+63 900 000 0000',
+              address: 'Demo delivery address',
+              delivery_note: '',
+            },
+            items: [{ name: 'Demo meal', quantity: 1, note: '' }],
+          },
+        };
+        mockState.availability = 'busy';
+      } else {
+        mockState.current = null;
+      }
+      return { status: accept ? 'accepted' : 'declined' };
+    }
+
+    setDriverContext();
+    return apiRequest(`/driver/delivery-offers/${encodeURIComponent(offerId)}/${accept ? 'accept' : 'decline'}`, {
+      method: 'POST',
+      body: {},
+    });
   },
 };
 
